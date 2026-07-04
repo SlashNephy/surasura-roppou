@@ -189,9 +189,6 @@ Run:
 
 ```bash
 mise install
-corepack enable
-corepack prepare pnpm@latest --activate
-pnpm pkg set packageManager="pnpm@$(pnpm --version)"
 pnpm add @tanstack/react-router react react-dom lucide-react class-variance-authority clsx tailwind-merge tw-animate-css
 pnpm add -D @vitejs/plugin-react @tailwindcss/vite tailwindcss @eslint/js @testing-library/jest-dom @testing-library/react @types/node @types/react @types/react-dom eslint eslint-plugin-react-hooks eslint-plugin-react-refresh globals jsdom prettier typescript typescript-eslint vite vitest
 ```
@@ -1103,7 +1100,6 @@ Append to `README.md`:
 
 ```bash
 mise install
-corepack enable
 pnpm install
 pnpm dev
 ```
@@ -1171,12 +1167,6 @@ jobs:
 
       - name: Setup mise
         uses: jdx/mise-action@v4
-
-      - name: Enable corepack
-        run: corepack enable
-
-      - name: Activate pnpm
-        run: corepack prepare pnpm@11.7.0 --activate
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
