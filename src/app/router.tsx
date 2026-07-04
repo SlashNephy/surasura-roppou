@@ -1,10 +1,11 @@
-import { Outlet, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
+import { createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 import type { RouterHistory } from "@tanstack/react-router";
 
+import { AppShell } from "./AppShell";
 import { HomePage, JumpPage, LawsPage, ScannerPage, SettingsPage, StudyPage } from "./pages";
 
 const rootRoute = createRootRoute({
-  component: Outlet,
+  component: AppShell,
 });
 
 const indexRoute = createRoute({
