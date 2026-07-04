@@ -44,6 +44,7 @@
 ## Task 1: Toolchain and Package Scripts
 
 **Files:**
+
 - Create: `.mise.toml`
 - Create: `.npmrc`
 - Create: `package.json`
@@ -112,10 +113,7 @@ Create `tsconfig.json`:
 ```json
 {
   "files": [],
-  "references": [
-    { "path": "./tsconfig.app.json" },
-    { "path": "./tsconfig.node.json" }
-  ]
+  "references": [{ "path": "./tsconfig.app.json" }, { "path": "./tsconfig.node.json" }]
 }
 ```
 
@@ -210,6 +208,7 @@ git commit -m "chore: フロントエンドのツールチェーンを追加"
 ## Task 2: Vite, Tailwind, Test Setup, and `cn`
 
 **Files:**
+
 - Create: `index.html`
 - Create: `vite.config.ts`
 - Create: `eslint.config.js`
@@ -419,6 +418,7 @@ git commit -m "chore: Vite と品質チェックの基盤を追加"
 ## Task 3: Router and Route Rendering
 
 **Files:**
+
 - Create: `src/main.tsx`
 - Create: `src/app/router.tsx`
 - Create: `src/app/router.test.tsx`
@@ -540,21 +540,9 @@ export const SettingsPage = () => (
 Create `src/app/router.tsx`:
 
 ```tsx
-import {
-  Outlet,
-  createRootRoute,
-  createRoute,
-  createRouter,
-} from "@tanstack/react-router";
+import { Outlet, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 
-import {
-  HomePage,
-  JumpPage,
-  LawsPage,
-  ScannerPage,
-  SettingsPage,
-  StudyPage,
-} from "./pages";
+import { HomePage, JumpPage, LawsPage, ScannerPage, SettingsPage, StudyPage } from "./pages";
 
 const Root = () => <Outlet />;
 
@@ -665,6 +653,7 @@ git commit -m "feat: 主要画面のルーティングを追加"
 ## Task 4: shadcn/ui Foundation
 
 **Files:**
+
 - Create: `components.json`
 - Create: `src/shared/ui/*`
 - Modify: `src/index.css`
@@ -738,6 +727,7 @@ git commit -m "feat: shadcn/ui の基盤を追加"
 ## Task 5: AppShell Skeleton
 
 **Files:**
+
 - Modify: `src/app/router.tsx`
 - Create: `src/app/AppShell.tsx`
 - Create: `src/app/AppShell.test.tsx`
@@ -793,15 +783,7 @@ Create `src/app/AppShell.tsx`:
 
 ```tsx
 import { Link, Outlet } from "@tanstack/react-router";
-import {
-  BookOpen,
-  Camera,
-  GraduationCap,
-  Home,
-  Search,
-  Settings,
-  Sparkles,
-} from "lucide-react";
+import { BookOpen, Camera, GraduationCap, Home, Search, Settings, Sparkles } from "lucide-react";
 
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
@@ -841,12 +823,12 @@ export const AppShell = () => (
     </header>
 
     <div className="mx-auto hidden h-[calc(100vh-4rem)] max-w-7xl grid-cols-[18rem_minmax(0,1fr)_18rem] md:grid">
-      <aside
-        aria-label="ナビゲーションパネル"
-        className="border-r border-zinc-200 bg-white/70 p-4"
-      >
+      <aside aria-label="ナビゲーションパネル" className="border-r border-zinc-200 bg-white/70 p-4">
         <nav aria-label="デスクトップナビゲーション" className="grid gap-2">
-          <Link to="/" className="flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-zinc-100">
+          <Link
+            to="/"
+            className="flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-zinc-100"
+          >
             <Home className="size-4" aria-hidden="true" />
             ホーム
           </Link>
@@ -865,7 +847,10 @@ export const AppShell = () => (
         <Separator className="my-4" />
         <div className="grid gap-2">
           {desktopPanelItems.map((item) => (
-            <div key={item} className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm">
+            <div
+              key={item}
+              className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm"
+            >
               {item}
             </div>
           ))}
@@ -879,7 +864,10 @@ export const AppShell = () => (
       <aside aria-label="学習パネル" className="border-l border-zinc-200 bg-white/70 p-4">
         <div className="grid gap-2">
           {studyPanelItems.map((item) => (
-            <div key={item} className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm">
+            <div
+              key={item}
+              className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm"
+            >
               {item}
             </div>
           ))}
@@ -919,14 +907,7 @@ Modify the root part of `src/app/router.tsx`:
 import { createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
 
 import { AppShell } from "./AppShell";
-import {
-  HomePage,
-  JumpPage,
-  LawsPage,
-  ScannerPage,
-  SettingsPage,
-  StudyPage,
-} from "./pages";
+import { HomePage, JumpPage, LawsPage, ScannerPage, SettingsPage, StudyPage } from "./pages";
 
 const rootRoute = createRootRoute({
   component: AppShell,
@@ -959,6 +940,7 @@ git commit -m "feat: AppShell の雛形を追加"
 ## Task 6: PWA Manifest and Documentation
 
 **Files:**
+
 - Create: `public/manifest.webmanifest`
 - Create: `public/pwa.svg`
 - Modify: `README.md`
@@ -1077,6 +1059,7 @@ git commit -m "feat: PWA manifest の雛形を追加"
 ## Task 7: GitHub Actions CI
 
 **Files:**
+
 - Create: `.github/workflows/check.yml`
 
 - [ ] **Step 1: Add CI workflow**
@@ -1147,6 +1130,7 @@ git commit -m "ci: フロントエンドの品質チェックを追加"
 ## Task 8: Browser Verification and PR Preparation
 
 **Files:**
+
 - Modify: files touched by formatting only if verification reveals a fix.
 
 - [ ] **Step 1: Start the dev server**

@@ -37,10 +37,10 @@ Repository: `SlashNephy/surasura-roppou`
 
 ### 3.1 ときどき六法との関係
 
-| アプリ | 主な役割 | 得意領域 |
-| --- | --- | --- |
+| アプリ       | 主な役割                         | 得意領域                                                  |
+| ------------ | -------------------------------- | --------------------------------------------------------- |
 | ときどき六法 | 条文通知・Android ネイティブ体験 | WorkManager、ローカル通知、ネイティブ通知、オフライン通知 |
-| すらすら六法 | 法令閲覧・検索・OCR・学習 | Web/PWA、PC/スマホ横断、条文ジャンプ、復習、クイズ |
+| すらすら六法 | 法令閲覧・検索・OCR・学習        | Web/PWA、PC/スマホ横断、条文ジャンプ、復習、クイズ        |
 
 通知機能は Android ネイティブの強みが大きいため、PWA では無理に完全再現しない。Web 側では「今日の復習」「最近見た条文」「OCR から復習化」といったアプリ内学習導線を主軸にする。
 
@@ -441,30 +441,30 @@ BFF が担う候補:
 
 ### 9.4 Storage Strategy
 
-| Data | Storage | Notes |
-| --- | --- | --- |
-| App shell | Cache Storage | HTML/CSS/JS/icon |
-| API responses | Cache Storage + IndexedDB | Raw response と normalized data を分ける |
-| Law metadata | IndexedDB | lawId, title, aliases, versions |
-| Law nodes | IndexedDB | Article/Paragraph/Item 単位 |
-| Search index | IndexedDB | 保存済み法令対象 |
-| Bookmarks | IndexedDB | lawId + path |
-| Notes/annotations | IndexedDB | articlePath + text anchor |
-| Study cards | IndexedDB | dueAt, interval, history |
-| User settings | IndexedDB/localStorage | 大きな設定は IndexedDB |
-| OCR images | Memory / temporary Blob | デフォルト保存しない |
+| Data              | Storage                   | Notes                                    |
+| ----------------- | ------------------------- | ---------------------------------------- |
+| App shell         | Cache Storage             | HTML/CSS/JS/icon                         |
+| API responses     | Cache Storage + IndexedDB | Raw response と normalized data を分ける |
+| Law metadata      | IndexedDB                 | lawId, title, aliases, versions          |
+| Law nodes         | IndexedDB                 | Article/Paragraph/Item 単位              |
+| Search index      | IndexedDB                 | 保存済み法令対象                         |
+| Bookmarks         | IndexedDB                 | lawId + path                             |
+| Notes/annotations | IndexedDB                 | articlePath + text anchor                |
+| Study cards       | IndexedDB                 | dueAt, interval, history                 |
+| User settings     | IndexedDB/localStorage    | 大きな設定は IndexedDB                   |
+| OCR images        | Memory / temporary Blob   | デフォルト保存しない                     |
 
 ### 9.5 Caching Strategy
 
-| Request | Strategy |
-| --- | --- |
-| App shell | precache |
-| Static assets | cache first |
-| Law metadata | stale-while-revalidate |
-| Opened law data | network first, fallback to cache |
-| Offline saved law data | cache/IndexedDB first |
-| AI requests | network only |
-| OCR language model | cache first after user opt-in/download |
+| Request                | Strategy                               |
+| ---------------------- | -------------------------------------- |
+| App shell              | precache                               |
+| Static assets          | cache first                            |
+| Law metadata           | stale-while-revalidate                 |
+| Opened law data        | network first, fallback to cache       |
+| Offline saved law data | cache/IndexedDB first                  |
+| AI requests            | network only                           |
+| OCR language model     | cache first after user opt-in/download |
 
 ## 10. Data Model Draft
 
@@ -637,21 +637,21 @@ Confirmation UI
 
 初期辞書例:
 
-| Alias | Law |
-| --- | --- |
-| 憲法 | 日本国憲法 |
-| 民法 / 民 | 民法 |
-| 商法 / 商 | 商法 |
-| 刑法 / 刑 | 刑法 |
-| 民訴 | 民事訴訟法 |
-| 刑訴 | 刑事訴訟法 |
-| 行手法 | 行政手続法 |
-| 行審法 | 行政不服審査法 |
-| 行訴法 | 行政事件訴訟法 |
-| 国賠法 / 国賠 | 国家賠償法 |
-| 地自法 | 地方自治法 |
-| 個情法 | 個人情報の保護に関する法律 |
-| 会社法 | 会社法 |
+| Alias         | Law                        |
+| ------------- | -------------------------- |
+| 憲法          | 日本国憲法                 |
+| 民法 / 民     | 民法                       |
+| 商法 / 商     | 商法                       |
+| 刑法 / 刑     | 刑法                       |
+| 民訴          | 民事訴訟法                 |
+| 刑訴          | 刑事訴訟法                 |
+| 行手法        | 行政手続法                 |
+| 行審法        | 行政不服審査法             |
+| 行訴法        | 行政事件訴訟法             |
+| 国賠法 / 国賠 | 国家賠償法                 |
+| 地自法        | 地方自治法                 |
+| 個情法        | 個人情報の保護に関する法律 |
+| 会社法        | 会社法                     |
 
 辞書はアプリ内固定 + BFF 配信で更新可能にする。
 
@@ -687,14 +687,14 @@ Scoring signals:
 
 ### 12.2 Conversion Examples
 
-| Raw | Display |
-| --- | --- |
-| 第一条 | 第1条 |
-| 第十二条の二 | 第12条の2 |
-| 第三項 | 第3項 |
-| 第一号 | 第1号 |
-| 別表第一 | 別表1 |
-| 令和六年四月一日 | 令和6年4月1日 |
+| Raw                    | Display           |
+| ---------------------- | ----------------- |
+| 第一条                 | 第1条             |
+| 第十二条の二           | 第12条の2         |
+| 第三項                 | 第3項             |
+| 第一号                 | 第1号             |
+| 別表第一               | 別表1             |
+| 令和六年四月一日       | 令和6年4月1日     |
 | 平成五年法律第八十八号 | 平成5年法律第88号 |
 
 ### 12.3 Avoided Conversions
@@ -1015,16 +1015,16 @@ BFF は MVP では optional だが、AI・全法令検索・API proxy・sync を
 
 ## 19. Risks and Mitigations
 
-| Risk | Impact | Mitigation |
-| --- | --- | --- |
-| OCR 精度が低い | 条文ジャンプ体験が壊れる | 候補確認 UI、手入力 fallback、画像前処理 |
-| 日本語 OCR モデルが重い | 初回体験が重い | OCR は lazy load、必要時 download、Web Worker |
-| PWA storage eviction | オフライン保存が消える | 保存状態表示、export、再同期、StorageManager persisted 検討 |
-| e-Gov API 仕様変更 | 取得処理が壊れる | BFF で吸収、schema validation、integration test |
-| 加工表示の誤変換 | 法的正確性リスク | 原文保持、変換対象制限、テスト、原文コピーを既定にする |
-| AI 出力の誤り | 学習上の誤解 | 根拠条文必須、AI は補助、ユーザー確認 |
-| 通知を PWA で再現しすぎる | ブラウザ差で不安定 | 通知は Android 側に委譲、Web はアプリ内復習中心 |
-| スキャン画像の扱い | プライバシー/著作権リスク | ローカル処理、デフォルト保存なし、同意制 |
+| Risk                      | Impact                    | Mitigation                                                  |
+| ------------------------- | ------------------------- | ----------------------------------------------------------- |
+| OCR 精度が低い            | 条文ジャンプ体験が壊れる  | 候補確認 UI、手入力 fallback、画像前処理                    |
+| 日本語 OCR モデルが重い   | 初回体験が重い            | OCR は lazy load、必要時 download、Web Worker               |
+| PWA storage eviction      | オフライン保存が消える    | 保存状態表示、export、再同期、StorageManager persisted 検討 |
+| e-Gov API 仕様変更        | 取得処理が壊れる          | BFF で吸収、schema validation、integration test             |
+| 加工表示の誤変換          | 法的正確性リスク          | 原文保持、変換対象制限、テスト、原文コピーを既定にする      |
+| AI 出力の誤り             | 学習上の誤解              | 根拠条文必須、AI は補助、ユーザー確認                       |
+| 通知を PWA で再現しすぎる | ブラウザ差で不安定        | 通知は Android 側に委譲、Web はアプリ内復習中心             |
+| スキャン画像の扱い        | プライバシー/著作権リスク | ローカル処理、デフォルト保存なし、同意制                    |
 
 ## 20. Open Questions
 
