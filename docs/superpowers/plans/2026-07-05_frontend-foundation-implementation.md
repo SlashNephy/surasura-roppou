@@ -23,6 +23,7 @@
 - Create: `tsconfig.node.json`
 - Create: `eslint.config.js`
 - Create: `.prettierrc.json`
+- Create: `.prettierignore`
 - Create: `components.json`
 - Create: `public/manifest.webmanifest`
 - Create: `public/pwa.svg`
@@ -49,6 +50,7 @@
 - Create: `.npmrc`
 - Create: `package.json`
 - Create: `.prettierrc.json`
+- Create: `.prettierignore`
 - Create: `tsconfig.json`
 - Create: `tsconfig.app.json`
 - Create: `tsconfig.node.json`
@@ -104,6 +106,19 @@ Create `.prettierrc.json`:
   "singleQuote": false,
   "trailingComma": "all"
 }
+```
+
+Create `.prettierignore`:
+
+```gitignore
+.mise.toml
+.npmrc
+pnpm-lock.yaml
+.specstory/
+.superpowers/
+dist/
+coverage/
+node_modules/
 ```
 
 - [ ] **Step 3: Add TypeScript project references**
@@ -201,7 +216,7 @@ Expected: FAIL because app source files do not exist yet. The failure should be 
 Run:
 
 ```bash
-git add .mise.toml .npmrc package.json pnpm-lock.yaml .prettierrc.json tsconfig.json tsconfig.app.json tsconfig.node.json
+git add .mise.toml .npmrc package.json pnpm-lock.yaml .prettierrc.json .prettierignore tsconfig.json tsconfig.app.json tsconfig.node.json
 git commit -m "chore: フロントエンドのツールチェーンを追加"
 ```
 
