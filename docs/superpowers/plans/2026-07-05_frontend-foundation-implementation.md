@@ -143,8 +143,7 @@ Create `tsconfig.app.json`:
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
-    },
-    "types": ["vitest/globals", "@testing-library/jest-dom"]
+    }
   },
   "include": ["src"]
 }
