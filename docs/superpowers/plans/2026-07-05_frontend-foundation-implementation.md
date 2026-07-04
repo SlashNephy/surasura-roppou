@@ -227,6 +227,7 @@ git commit -m "chore: フロントエンドのツールチェーンを追加"
 - Create: `index.html`
 - Create: `vite.config.ts`
 - Create: `eslint.config.js`
+- Create: `src/main.tsx`
 - Create: `src/index.css`
 - Create: `src/vite-env.d.ts`
 - Create: `src/test/setup.ts`
@@ -295,9 +296,8 @@ Create `index.html`:
     <meta name="theme-color" content="#4f46e5" />
     <meta
       name="description"
-      content="すらすら六法は、法令を読みやすく閲覧し、条文参照をすぐ確認できる Web/PWA アプリです。"
+      content="すらすら六法は、法令を読みやすく閲覧し、条文参照をすぐ確認できる Web アプリです。"
     />
-    <link rel="manifest" href="/manifest.webmanifest" />
     <title>すらすら六法</title>
   </head>
   <body>
@@ -317,6 +317,33 @@ Create `src/test/setup.ts`:
 
 ```ts
 import "@testing-library/jest-dom/vitest";
+```
+
+Create `src/main.tsx`:
+
+```tsx
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+
+import "./index.css";
+
+const root = document.getElementById("root");
+
+if (root === null) {
+  throw new Error("Root element was not found.");
+}
+
+createRoot(root).render(
+  <StrictMode>
+    <main className="grid min-h-screen place-items-center px-6 text-center">
+      <div className="grid gap-3">
+        <p className="text-sm font-medium text-indigo-700">Frontend foundation</p>
+        <h1 className="text-3xl font-semibold text-zinc-950">すらすら六法</h1>
+        <p className="text-base text-zinc-700">法令を、読みやすく。覚えやすく。</p>
+      </div>
+    </main>
+  </StrictMode>,
+);
 ```
 
 - [ ] **Step 4: Add Tailwind CSS entrypoint**
@@ -417,16 +444,17 @@ pnpm test src/shared/utils/cn.test.ts
 pnpm run typecheck
 pnpm run lint
 pnpm run format:check
+pnpm run build
 ```
 
-Expected: `cn` test passes. `typecheck`, `lint`, and `format:check` pass after formatting any generated file with `pnpm format`.
+Expected: `cn` test passes. `typecheck`, `lint`, `format:check`, and `build` pass after formatting any generated file with `pnpm format`.
 
 - [ ] **Step 8: Commit**
 
 Run:
 
 ```bash
-git add index.html vite.config.ts eslint.config.js src/index.css src/vite-env.d.ts src/test/setup.ts src/shared/utils/cn.ts src/shared/utils/cn.test.ts
+git add index.html vite.config.ts eslint.config.js src/main.tsx src/index.css src/vite-env.d.ts src/test/setup.ts src/shared/utils/cn.ts src/shared/utils/cn.test.ts
 git commit -m "chore: Vite と品質チェックの基盤を追加"
 ```
 
@@ -434,7 +462,7 @@ git commit -m "chore: Vite と品質チェックの基盤を追加"
 
 **Files:**
 
-- Create: `src/main.tsx`
+- Modify: `src/main.tsx`
 - Create: `src/app/router.tsx`
 - Create: `src/app/router.test.tsx`
 - Create: `src/app/pages.tsx`
@@ -621,7 +649,7 @@ declare module "@tanstack/react-router" {
 }
 ```
 
-Create `src/main.tsx`:
+Replace `src/main.tsx`:
 
 ```tsx
 import { RouterProvider } from "@tanstack/react-router";
@@ -958,6 +986,7 @@ git commit -m "feat: AppShell の雛形を追加"
 
 - Create: `public/manifest.webmanifest`
 - Create: `public/pwa.svg`
+- Modify: `index.html`
 - Modify: `README.md`
 
 - [ ] **Step 1: Add manifest smoke test**
@@ -1025,7 +1054,32 @@ Create `public/pwa.svg`:
 </svg>
 ```
 
-- [ ] **Step 4: Update README**
+- [ ] **Step 4: Link the manifest from HTML**
+
+Modify `index.html`:
+
+```html
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#4f46e5" />
+    <meta
+      name="description"
+      content="すらすら六法は、法令を読みやすく閲覧し、条文参照をすぐ確認できる Web/PWA アプリです。"
+    />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>すらすら六法</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+```
+
+- [ ] **Step 5: Update README**
 
 Append to `README.md`:
 
@@ -1049,7 +1103,7 @@ pnpm test
 ```
 ````
 
-- [ ] **Step 5: Run tests and checks**
+- [ ] **Step 6: Run tests and checks**
 
 Run:
 
@@ -1062,12 +1116,12 @@ pnpm run format:check
 
 Expected: all checks pass.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 Run:
 
 ```bash
-git add public/manifest.webmanifest public/pwa.svg src/app/manifest.test.ts README.md
+git add public/manifest.webmanifest public/pwa.svg src/app/manifest.test.ts index.html README.md
 git commit -m "feat: PWA manifest の雛形を追加"
 ```
 
