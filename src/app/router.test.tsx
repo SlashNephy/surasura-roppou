@@ -1,4 +1,4 @@
-import { RouterProvider } from "@tanstack/react-router";
+import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -25,9 +25,9 @@ describe("app router", () => {
   });
 
   it.each(routes)("renders %s", async (path, heading) => {
-    window.history.pushState({}, "", path);
+    const history = createMemoryHistory({ initialEntries: [path] });
 
-    render(<RouterProvider router={createAppRouter()} />);
+    render(<RouterProvider router={createAppRouter({ history })} />);
 
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();

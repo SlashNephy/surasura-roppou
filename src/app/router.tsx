@@ -1,4 +1,5 @@
 import { Outlet, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
+import type { RouterHistory } from "@tanstack/react-router";
 
 import { HomePage, JumpPage, LawsPage, ScannerPage, SettingsPage, StudyPage } from "./pages";
 
@@ -51,7 +52,12 @@ const routeTree = rootRoute.addChildren([
   settingsRoute,
 ]);
 
-export const createAppRouter = () => createRouter({ routeTree });
+interface CreateAppRouterOptions {
+  history?: RouterHistory;
+}
+
+export const createAppRouter = ({ history }: CreateAppRouterOptions = {}) =>
+  createRouter({ routeTree, history });
 
 export const router = createAppRouter();
 

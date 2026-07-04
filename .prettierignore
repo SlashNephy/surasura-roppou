@@ -6,3 +6,4 @@ pnpm-lock.yaml
 dist/
 coverage/
 node_modules/
+.playwright-cli/
