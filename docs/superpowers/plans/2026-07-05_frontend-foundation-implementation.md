@@ -119,6 +119,7 @@ pnpm-lock.yaml
 dist/
 coverage/
 node_modules/
+.playwright-cli/
 ```
 
 - [ ] **Step 3: Add TypeScript project references**
@@ -472,11 +473,13 @@ git commit -m "chore: Vite と品質チェックの基盤を追加"
 Create `src/app/router.test.tsx`:
 
 ```tsx
-import { RouterProvider } from "@tanstack/react-router";
+import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createAppRouter } from "./router";
+
+const scrollTo = window.scrollTo;
 
 const routes = [
   ["/", "今日の条文へ進む"],
@@ -488,10 +491,18 @@ const routes = [
 ] as const;
 
 describe("app router", () => {
-  it.each(routes)("renders %s", async (path, heading) => {
-    window.history.pushState({}, "", path);
+  beforeAll(() => {
+    window.scrollTo = () => undefined;
+  });
 
-    render(<RouterProvider router={createAppRouter()} />);
+  afterAll(() => {
+    window.scrollTo = scrollTo;
+  });
+
+  it.each(routes)("renders %s", async (path, heading) => {
+    const history = createMemoryHistory({ initialEntries: [path] });
+
+    render(<RouterProvider router={createAppRouter({ history })} />);
 
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
@@ -584,13 +595,12 @@ Create `src/app/router.tsx`:
 
 ```tsx
 import { Outlet, createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
+import type { RouterHistory } from "@tanstack/react-router";
 
 import { HomePage, JumpPage, LawsPage, ScannerPage, SettingsPage, StudyPage } from "./pages";
 
-const Root = () => <Outlet />;
-
 const rootRoute = createRootRoute({
-  component: Root,
+  component: Outlet,
 });
 
 const indexRoute = createRoute({
@@ -638,7 +648,12 @@ const routeTree = rootRoute.addChildren([
   settingsRoute,
 ]);
 
-export const createAppRouter = () => createRouter({ routeTree });
+interface CreateAppRouterOptions {
+  history?: RouterHistory;
+}
+
+export const createAppRouter = ({ history }: CreateAppRouterOptions = {}) =>
+  createRouter({ routeTree, history });
 
 export const router = createAppRouter();
 
