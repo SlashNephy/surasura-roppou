@@ -84,7 +84,7 @@ describe("EgovLawRepository", () => {
     });
   });
 
-  it("fetches law text as JSON and flattens structural nodes", async () => {
+  it("fetches law text as JSON and normalizes structural nodes", async () => {
     const { calls, fetcher } = createJsonFetchStub(lawDataFixture);
     const repository = createEgovLawRepository({ fetcher, now });
 
@@ -129,6 +129,8 @@ describe("EgovLawRepository", () => {
         path: "part:1/chapter:1/article:1",
         number: "1",
         rawText: "第一条私権は、公共の福祉に適合しなければならない。",
+        plainText: "第一条 私権は、公共の福祉に適合しなければならない。",
+        normalizedText: "第一条 私権は、公共の福祉に適合しなければならない。",
         children: [
           "129AC0000000089:129AC0000000089_20260624_508AC0000000045:part:1/chapter:1/article:1/paragraph:1",
         ],
@@ -138,11 +140,15 @@ describe("EgovLawRepository", () => {
         path: "part:1/chapter:1/article:1/paragraph:1",
         number: "1",
         rawText: "私権は、公共の福祉に適合しなければならない。",
+        plainText: "私権は、公共の福祉に適合しなければならない。",
+        normalizedText: "私権は、公共の福祉に適合しなければならない。",
       }),
       expect.objectContaining({
         type: "Article",
         path: "part:1/chapter:1/article:2",
         rawText: "第二条権利の行使及び義務の履行は、信義に従い誠実に行わなければならない。",
+        plainText: "第二条 権利の行使及び義務の履行は、信義に従い誠実に行わなければならない。",
+        normalizedText: "第二条 権利の行使及び義務の履行は、信義に従い誠実に行わなければならない。",
         children: [
           "129AC0000000089:129AC0000000089_20260624_508AC0000000045:part:1/chapter:1/article:2/paragraph:1",
         ],
@@ -151,6 +157,8 @@ describe("EgovLawRepository", () => {
         type: "Paragraph",
         path: "part:1/chapter:1/article:2/paragraph:1",
         rawText: "権利の行使及び義務の履行は、信義に従い誠実に行わなければならない。",
+        plainText: "権利の行使及び義務の履行は、信義に従い誠実に行わなければならない。",
+        normalizedText: "権利の行使及び義務の履行は、信義に従い誠実に行わなければならない。",
       }),
     ]);
     expect(document.raw).toEqual(lawDataFixture);

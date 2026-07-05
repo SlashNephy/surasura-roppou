@@ -148,6 +148,7 @@ describe("domain model contracts", () => {
       number: "709",
       title: "不法行為による損害賠償",
       rawText: "故意又は過失によって他人の権利又は法律上保護される利益を侵害した者は...",
+      plainText: "故意又は過失によって他人の権利又は法律上保護される利益を侵害した者は...",
       normalizedText: "故意又は過失によって他人の権利又は法律上保護される利益を侵害した者は...",
       children: [],
     } satisfies LawNode;
