@@ -20,15 +20,20 @@ const unitByKanji = new Map([
 ]);
 
 const kanjiNumberPattern = "[一二三四五六七八九十百千]+";
+const eraYearPattern = `${kanjiNumberPattern}|元`;
+const branchNumberPattern = `${kanjiNumberPattern}(?:の${kanjiNumberPattern})*`;
 const articleNumberRegex = new RegExp(`第(${kanjiNumberPattern})(条|項|号)`, "g");
-const branchArticleNumberRegex = new RegExp(`(第\\d+条の)(${kanjiNumberPattern})`, "g");
-const appendixTableNumberRegex = new RegExp(`(別表)第?(${kanjiNumberPattern})`, "g");
+const branchNumberRegex = new RegExp(
+  `(第\\d+(?:条|項|号)|別表\\d+|別記様式\\d+)の(${branchNumberPattern})`,
+  "g",
+);
+const appendixTableNumberRegex = new RegExp(`(別表|別記様式)第?(${kanjiNumberPattern})`, "g");
 const eraDateRegex = new RegExp(
-  `(令和|平成|昭和|大正|明治)(${kanjiNumberPattern})年(${kanjiNumberPattern})月(${kanjiNumberPattern})日`,
+  `(令和|平成|昭和|大正|明治)(${eraYearPattern})年(${kanjiNumberPattern})月(${kanjiNumberPattern})日`,
   "g",
 );
 const lawNumberRegex = new RegExp(
-  `(令和|平成|昭和|大正|明治)(${kanjiNumberPattern})年法律第(${kanjiNumberPattern})号`,
+  `(令和|平成|昭和|大正|明治)(${eraYearPattern})年法律第(${kanjiNumberPattern})号`,
   "g",
 );
 
@@ -87,8 +92,8 @@ const transformArticleNumbers = (text: string): string =>
     .replace(articleNumberRegex, (_match, kanjiNumber: string, suffix: string) => {
       return `第${replaceKanjiNumber(kanjiNumber)}${suffix}`;
     })
-    .replace(branchArticleNumberRegex, (_match, prefix: string, branchNumber: string) => {
-      return `${prefix}${replaceKanjiNumber(branchNumber)}`;
+    .replace(branchNumberRegex, (_match, prefix: string, branchNumbers: string) => {
+      return `${prefix}の${branchNumbers.split("の").map(replaceKanjiNumber).join("の")}`;
     })
     .replace(appendixTableNumberRegex, (_match, prefix: string, tableNumber: string) => {
       return `${prefix}${replaceKanjiNumber(tableNumber)}`;

@@ -183,7 +183,7 @@ const LawViewerReadyState = ({
 
   return (
     <section className="mx-auto grid w-full max-w-6xl gap-5 px-4 py-6 md:px-6 md:py-8">
-      <div className="grid gap-4 rounded-md border bg-card p-4 text-card-foreground shadow-xs lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-end">
+      <div className="grid gap-4 rounded-md border bg-card p-4 text-card-foreground shadow-xs md:grid-cols-[auto_minmax(0,1fr)] md:items-end lg:grid-cols-[auto_minmax(0,1fr)_auto]">
         <div className="grid min-w-0 gap-2">
           <span className="text-sm font-medium text-foreground">表示</span>
           <div
@@ -254,7 +254,9 @@ const LawViewerReadyState = ({
           目次
         </Button>
 
-        {hasArticleError ? <div className="lg:col-span-3">{notFoundAlert}</div> : null}
+        {hasArticleError ? (
+          <div className="md:col-span-2 lg:col-span-3">{notFoundAlert}</div>
+        ) : null}
       </div>
 
       <div

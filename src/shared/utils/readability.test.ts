@@ -33,6 +33,16 @@ describe("readability", () => {
   });
 
   it.each([
+    ["第一号の二", "第1号の2"],
+    ["第十二条の二の二", "第12条の2の2"],
+    ["令和元年五月一日", "令和元年5月1日"],
+    ["平成元年法律第十一号", "平成元年法律第11号"],
+    ["別記様式第一", "別記様式1"],
+  ])("transforms common legal notation: %s", (input, expected) => {
+    expect(transformReadableText(input)).toBe(expected);
+  });
+
+  it.each([
     ["一", 1],
     ["十", 10],
     ["十一", 11],
