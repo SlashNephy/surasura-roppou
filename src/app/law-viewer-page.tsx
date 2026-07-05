@@ -4,7 +4,11 @@ import { LawDocumentView } from "@/core/viewer";
 import { Button } from "@/shared/ui/button";
 import { Skeleton } from "@/shared/ui/skeleton";
 
-import { sampleLawViewerDocument } from "./law-viewer-sample";
+import {
+  offlineDemoLawId,
+  sampleLawViewerDocument,
+  sampleLawViewerLawId,
+} from "./law-viewer-sample";
 import type { LawViewerDocument } from "./law-viewer-sample";
 
 export type LawViewerState =
@@ -14,11 +18,11 @@ export type LawViewerState =
   | ({ status: "ready" } & LawViewerDocument);
 
 const getLawViewerDocument = (lawId: string): LawViewerState => {
-  if (lawId === "offline-demo") {
+  if (lawId === offlineDemoLawId) {
     return { status: "offline-unavailable", lawTitle: "民法" };
   }
 
-  if (lawId !== "129AC0000000089") {
+  if (lawId !== sampleLawViewerLawId) {
     return { status: "error", message: "法令が見つかりません。" };
   }
 

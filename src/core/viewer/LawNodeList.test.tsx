@@ -176,4 +176,24 @@ describe("LawNodeList", () => {
 
     expect(within(article).getByText("空文字の子を持つ親本文。")).toBeInTheDocument();
   });
+
+  it("renders untitled heading node text as body copy", () => {
+    render(
+      <LawNodeList
+        nodes={[
+          node({
+            id: "section:1",
+            type: "Section",
+            path: "section:1",
+            plainText: "見出しを持たない節の本文。",
+          }),
+        ]}
+      />,
+    );
+
+    expect(
+      screen.queryByRole("heading", { name: "見出しを持たない節の本文。" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("見出しを持たない節の本文。")).toBeInTheDocument();
+  });
 });

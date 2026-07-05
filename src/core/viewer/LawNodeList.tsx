@@ -1,3 +1,5 @@
+import { useMemo } from "react";
+
 import type { LawNode, LawNodeType } from "@/core/domain";
 import { cn } from "@/shared/utils/cn";
 
@@ -19,8 +21,8 @@ const headingClassNameByType: Record<HeadingLawNodeType, string> = {
 };
 
 export const LawNodeList = ({ nodes }: LawNodeListProps) => {
-  const nodeById = new Map(nodes.map((node) => [node.id, node]));
-  const topLevelNodes = nodes.filter((node) => node.parentId === undefined);
+  const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
+  const topLevelNodes = useMemo(() => nodes.filter((node) => node.parentId === undefined), [nodes]);
 
   return (
     <div className="grid gap-5">
@@ -88,15 +90,16 @@ const LawNodeBlock = ({ node, nodeById }: { node: LawNode; nodeById: Map<string,
   }
 
   const headingClassName = headingClassNameByType[node.type];
-  const title = node.title ?? node.plainText;
-  const bodyText =
-    node.title === undefined
-      ? ""
-      : stripTrailingChildPlainTexts(stripLeadingMarker(node.plainText, node.title), children);
+  const bodyText = stripTrailingChildPlainTexts(
+    stripLeadingMarker(node.plainText, node.title),
+    children,
+  );
 
   return (
     <section className="grid gap-3">
-      <h2 className={cn("text-foreground break-words", headingClassName)}>{title}</h2>
+      {node.title !== undefined ? (
+        <h2 className={cn("text-foreground break-words", headingClassName)}>{node.title}</h2>
+      ) : null}
       {bodyText !== "" ? <p className="leading-8 text-foreground break-words">{bodyText}</p> : null}
       {children.map((child) => (
         <LawNodeBlock key={child.id} node={child} nodeById={nodeById} />

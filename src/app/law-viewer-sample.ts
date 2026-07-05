@@ -7,7 +7,10 @@ export interface LawViewerDocument {
   isSaved: boolean;
 }
 
-const lawId = "129AC0000000089";
+export const sampleLawViewerLawId = "129AC0000000089";
+export const offlineDemoLawId = "offline-demo";
+
+const lawId = sampleLawViewerLawId;
 const revisionId = "129AC0000000089_20260624_508AC0000000045";
 
 const node = (overrides: Partial<LawNode> & Pick<LawNode, "id" | "path" | "type">): LawNode => ({
