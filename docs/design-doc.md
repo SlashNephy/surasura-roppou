@@ -1,8 +1,13 @@
 # すらすら六法 Design Doc
 
-Status: Draft  
-Last updated: 2026-07-04  
+Status: Draft
+Last updated: 2026-07-05
 Repository: `SlashNephy/surasura-roppou`
+
+Related docs:
+
+- [Task index](tasks.md)
+- [ADR index](adr/README.md)
 
 ## 1. Summary
 
@@ -898,17 +903,23 @@ Examples:
 
 Open question: e-Gov の lawId / 法令番号 / 独自 ID のどれを canonical URL に使うか。
 
-## 17. Tech Stack Candidates
+## 17. Tech Stack
 
 ### 17.1 Frontend
 
-Preferred candidate:
+Adopted baseline:
 
 - TypeScript。
 - React。
-- Vite or TanStack Start / Next.js。
-- TanStack Router or React Router。
-- Zustand / Jotai。
+- Vite。
+- TanStack Router。
+- Tailwind CSS。
+- radix-ui / shadcn/ui style の共通 UI。
+- lucide-react。
+
+Future candidates:
+
+- Zustand / Jotai for client state。
 - Dexie.js for IndexedDB。
 - Workbox or framework-native PWA plugin。
 - MiniSearch / FlexSearch for local search。
@@ -936,11 +947,13 @@ BFF は MVP では optional だが、AI・全法令検索・API proxy・sync を
 
 ### M0: Repository Foundation
 
-- Project scaffold。
-- Lint/format/test。
-- Basic CI。
-- PWA manifest skeleton。
-- Design doc / ADRs。
+- Project scaffold: done。
+- Lint/format/test: done。
+- Basic CI: done。
+- PWA manifest skeleton: done。
+- Domain model and article path foundation: done。
+- e-Gov data repository foundation: done。
+- Design doc / task index / ADR directory: in progress。
 
 ### M1: Viewer MVP
 
