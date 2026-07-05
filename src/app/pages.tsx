@@ -6,9 +6,9 @@ interface Page {
 
 const PagePanel = ({ title, description, eyebrow }: Page) => (
   <section className="mx-auto flex min-h-[calc(100dvh-10rem)] w-full max-w-3xl flex-col justify-center gap-4 px-5 py-10 md:min-h-[calc(100dvh-4rem)]">
-    <p className="text-sm font-medium text-indigo-700">{eyebrow}</p>
-    <h1 className="text-3xl font-semibold tracking-normal text-zinc-950 md:text-4xl">{title}</h1>
-    <p className="max-w-2xl text-base leading-7 text-zinc-700">{description}</p>
+    <p className="text-sm font-medium text-primary">{eyebrow}</p>
+    <h1 className="text-3xl font-semibold tracking-normal text-foreground md:text-4xl">{title}</h1>
+    <p className="max-w-2xl text-base leading-7 text-muted-foreground">{description}</p>
   </section>
 );
 

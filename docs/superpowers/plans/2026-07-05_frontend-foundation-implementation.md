@@ -61,7 +61,8 @@ Create `.mise.toml`:
 
 ```toml
 [tools]
-node = "22.12.0"
+node = "24.16.0"
+pnpm = "11.7.0"
 ```
 
 Create `.npmrc`:

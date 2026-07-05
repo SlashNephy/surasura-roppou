@@ -25,8 +25,9 @@ const desktopPanelItems = ["目次", "検索結果", "保存済み"] as const;
 const studyPanelItems = ["メモ", "定義語", "復習カード"] as const;
 
 const navLinkClassName =
-  "flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground";
+  "flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium transition-colors hover:bg-accent hover:text-foreground";
 const activeNavLinkClassName = "bg-accent text-foreground";
+const inactiveNavLinkClassName = "text-muted-foreground";
 
 const Header = () => (
   <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur md:px-6">
@@ -76,6 +77,7 @@ const DesktopNavigation = () => (
           to={item.to}
           className={navLinkClassName}
           activeProps={{ className: activeNavLinkClassName }}
+          inactiveProps={{ className: inactiveNavLinkClassName }}
         >
           <item.icon className="size-4" aria-hidden="true" />
           <span>{item.label}</span>
@@ -125,10 +127,11 @@ const MobileNavigation = () => (
         key={item.to}
         to={item.to}
         className={cn(
-          "flex h-12 flex-col items-center justify-center gap-1 rounded-md text-xs font-medium text-muted-foreground",
+          "flex h-12 flex-col items-center justify-center gap-1 rounded-md text-xs font-medium",
           "transition-colors hover:bg-accent hover:text-foreground",
         )}
         activeProps={{ className: activeNavLinkClassName }}
+        inactiveProps={{ className: inactiveNavLinkClassName }}
       >
         <item.icon className="size-4" aria-hidden="true" />
         <span>{item.label}</span>

@@ -12,7 +12,6 @@
 
 ```bash
 mise install
-corepack enable
 pnpm install
 pnpm dev
 ```

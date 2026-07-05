@@ -41,4 +41,26 @@ describe("AppShell", () => {
       expect(screen.getByRole("complementary", { name: "学習パネル" })).toBeInTheDocument();
     });
   });
+
+  it("separates active and inactive navigation color classes", async () => {
+    const history = createMemoryHistory({ initialEntries: ["/laws"] });
+
+    render(<RouterProvider router={createAppRouter({ history })} />);
+
+    await waitFor(() => {
+      const activeLinks = screen.getAllByRole("link", { name: "法令" });
+      const inactiveLinks = screen.getAllByRole("link", { name: "設定" });
+
+      for (const link of activeLinks) {
+        expect(link).toHaveClass("bg-accent");
+        expect(link).toHaveClass("text-foreground");
+        expect(link).not.toHaveClass("text-muted-foreground");
+      }
+
+      for (const link of inactiveLinks) {
+        expect(link).toHaveClass("text-muted-foreground");
+        expect(link).not.toHaveClass("bg-accent");
+      }
+    });
+  });
 });

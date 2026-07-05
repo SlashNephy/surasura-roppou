@@ -33,4 +33,18 @@ describe("app router", () => {
       expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();
     });
   });
+
+  it("uses theme-aware text classes on route placeholder content", async () => {
+    const history = createMemoryHistory({ initialEntries: ["/laws"] });
+
+    render(<RouterProvider router={createAppRouter({ history })} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Laws")).toHaveClass("text-primary");
+      expect(screen.getByRole("heading", { name: "法令を探す" })).toHaveClass("text-foreground");
+      expect(
+        screen.getByText("法令名、略称、法令番号から目的の法令へ進むための入口です。"),
+      ).toHaveClass("text-muted-foreground");
+    });
+  });
 });
