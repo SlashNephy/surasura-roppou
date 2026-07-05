@@ -82,11 +82,11 @@ describe("LawNodeList", () => {
   it("renders LawNode hierarchy as readable legal text blocks", () => {
     render(<LawNodeList nodes={nodes} />);
 
-    expect(screen.getByRole("heading", { name: "第一編　総則" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "第一章　通則" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: "第一編　総則" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 3, name: "第一章　通則" })).toBeInTheDocument();
 
     const article = screen.getByRole("article", { name: "第一条" });
-    expect(within(article).getByRole("heading", { name: "第一条" })).toBeInTheDocument();
+    expect(within(article).getByRole("heading", { level: 4, name: "第一条" })).toBeInTheDocument();
     expect(
       within(article).getByText("私権は、公共の福祉に適合しなければならない。"),
     ).toBeInTheDocument();

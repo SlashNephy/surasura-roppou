@@ -2,6 +2,7 @@ import { createMemoryHistory, RouterProvider } from "@tanstack/react-router";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import { LawViewerPageContent } from "./law-viewer-page";
 import { createAppRouter } from "./router";
 
 const renderLawViewerRoute = (path: string) => {
@@ -11,6 +12,12 @@ const renderLawViewerRoute = (path: string) => {
 };
 
 describe("LawViewerPageContent", () => {
+  it("renders a loading state from the page state contract", () => {
+    render(<LawViewerPageContent state={{ status: "loading" }} />);
+
+    expect(screen.getByLabelText("法令本文を読み込み中")).toBeInTheDocument();
+  });
+
   it("renders an error state with a return link to law search", async () => {
     renderLawViewerRoute("/laws/not-found");
 

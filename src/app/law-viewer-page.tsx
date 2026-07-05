@@ -19,7 +19,7 @@ export type LawViewerState =
 
 const getLawViewerDocument = (lawId: string): LawViewerState => {
   if (lawId === offlineDemoLawId) {
-    return { status: "offline-unavailable", lawTitle: "民法" };
+    return { status: "offline-unavailable", lawTitle: sampleLawViewerDocument.law.title };
   }
 
   if (lawId !== sampleLawViewerLawId) {

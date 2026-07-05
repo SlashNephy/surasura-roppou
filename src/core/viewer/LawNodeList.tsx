@@ -20,6 +20,10 @@ const headingClassNameByType: Record<HeadingLawNodeType, string> = {
   AppdxStyle: "text-lg font-semibold",
 };
 
+type HeadingTag = "h2" | "h3" | "h4" | "h5" | "h6";
+
+const headingTags: HeadingTag[] = ["h2", "h3", "h4", "h5", "h6"];
+
 export const LawNodeList = ({ nodes }: LawNodeListProps) => {
   const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
   const topLevelNodes = useMemo(() => nodes.filter((node) => node.parentId === undefined), [nodes]);
@@ -27,16 +31,25 @@ export const LawNodeList = ({ nodes }: LawNodeListProps) => {
   return (
     <div className="grid gap-5">
       {topLevelNodes.map((node) => (
-        <LawNodeBlock key={node.id} node={node} nodeById={nodeById} />
+        <LawNodeBlock key={node.id} depth={1} node={node} nodeById={nodeById} />
       ))}
     </div>
   );
 };
 
-const LawNodeBlock = ({ node, nodeById }: { node: LawNode; nodeById: Map<string, LawNode> }) => {
+const LawNodeBlock = ({
+  depth,
+  node,
+  nodeById,
+}: {
+  depth: number;
+  node: LawNode;
+  nodeById: Map<string, LawNode>;
+}) => {
   const children = node.children
     .map((childId) => nodeById.get(childId))
     .filter((child): child is LawNode => child !== undefined);
+  const Heading = headingTags[Math.min(depth - 1, headingTags.length - 1)];
 
   switch (node.type) {
     case "Article":
@@ -45,11 +58,13 @@ const LawNodeBlock = ({ node, nodeById }: { node: LawNode; nodeById: Map<string,
           aria-label={node.title ?? `条文 ${node.number ?? node.path}`}
           className="rounded-md border bg-background p-4 shadow-xs md:p-5"
         >
-          <h2 className="text-lg font-semibold text-foreground">{node.title ?? node.number}</h2>
+          <Heading className="text-lg font-semibold text-foreground">
+            {node.title ?? node.number}
+          </Heading>
           <div className="mt-4 grid gap-3">
             {children.length > 0 ? (
               children.map((child) => (
-                <LawNodeBlock key={child.id} node={child} nodeById={nodeById} />
+                <LawNodeBlock key={child.id} depth={depth + 1} node={child} nodeById={nodeById} />
               ))
             ) : (
               <p className="leading-8 text-foreground break-words">{node.plainText}</p>
@@ -82,7 +97,7 @@ const LawNodeBlock = ({ node, nodeById }: { node: LawNode; nodeById: Map<string,
             <span className="min-w-0 break-words">{bodyText}</span>
           </p>
           {children.map((child) => (
-            <LawNodeBlock key={child.id} node={child} nodeById={nodeById} />
+            <LawNodeBlock key={child.id} depth={depth + 1} node={child} nodeById={nodeById} />
           ))}
         </div>
       );
@@ -98,11 +113,13 @@ const LawNodeBlock = ({ node, nodeById }: { node: LawNode; nodeById: Map<string,
   return (
     <section className="grid gap-3">
       {node.title !== undefined ? (
-        <h2 className={cn("text-foreground break-words", headingClassName)}>{node.title}</h2>
+        <Heading className={cn("text-foreground break-words", headingClassName)}>
+          {node.title}
+        </Heading>
       ) : null}
       {bodyText !== "" ? <p className="leading-8 text-foreground break-words">{bodyText}</p> : null}
       {children.map((child) => (
-        <LawNodeBlock key={child.id} node={child} nodeById={nodeById} />
+        <LawNodeBlock key={child.id} depth={depth + 1} node={child} nodeById={nodeById} />
       ))}
     </section>
   );
