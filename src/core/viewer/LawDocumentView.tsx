@@ -1,6 +1,8 @@
 import type { Law, LawNode, LawRevision } from "@/core/domain";
 import { Badge } from "@/shared/ui/badge";
 
+import { applyLawTextDisplayMode } from "./displayMode";
+import type { LawTextDisplayMode } from "./displayMode";
 import { LawNodeList } from "./LawNodeList";
 
 interface LawDocumentViewProps {
@@ -9,10 +11,12 @@ interface LawDocumentViewProps {
   nodes: LawNode[];
   isSaved: boolean;
   activeArticleNumber?: string;
+  displayMode?: LawTextDisplayMode;
 }
 
 export const LawDocumentView = ({
   activeArticleNumber,
+  displayMode = "readable",
   law,
   revision,
   nodes,
@@ -30,7 +34,9 @@ export const LawDocumentView = ({
             {law.title}
           </h1>
           {law.lawNumber !== undefined ? (
-            <p className="text-sm leading-6 text-muted-foreground break-words">{law.lawNumber}</p>
+            <p className="text-sm leading-6 text-muted-foreground break-words">
+              {getDisplayLawNumber(law.lawNumber, displayMode)}
+            </p>
           ) : null}
         </div>
       </div>
@@ -49,6 +55,13 @@ export const LawDocumentView = ({
       </dl>
     </header>
 
-    <LawNodeList activeArticleNumber={activeArticleNumber} nodes={nodes} />
+    <LawNodeList
+      activeArticleNumber={activeArticleNumber}
+      displayMode={displayMode}
+      nodes={nodes}
+    />
   </article>
 );
+
+const getDisplayLawNumber = (lawNumber: string, displayMode: LawTextDisplayMode): string =>
+  applyLawTextDisplayMode(lawNumber, displayMode, "law-number");

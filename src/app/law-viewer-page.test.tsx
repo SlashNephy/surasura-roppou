@@ -131,6 +131,52 @@ describe("LawViewerPageContent", () => {
     expect(screen.getByText("未保存")).toBeInTheDocument();
   });
 
+  it("renders readable display mode by default", async () => {
+    renderLawViewerRoute("/laws/129AC0000000089");
+
+    expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "読みやすい表示" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    const article = screen.getByRole("article", { name: "第一条" });
+
+    expect(within(article).getByRole("heading", { name: "第1条" })).toBeInTheDocument();
+    expect(
+      within(article).getByText("私権は、公共の福祉(公共の利益を含む。)に適合しなければならない。"),
+    ).toBeInTheDocument();
+  });
+
+  it("switches between readable and original display modes", async () => {
+    const { user } = renderLawViewerRoute("/laws/129AC0000000089");
+
+    await screen.findByRole("article", { name: "民法" });
+    await user.click(screen.getByRole("button", { name: "原文表示" }));
+
+    expect(screen.getByRole("button", { name: "原文表示" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    const article = screen.getByRole("article", { name: "第一条" });
+
+    expect(within(article).getByRole("heading", { name: "第一条" })).toBeInTheDocument();
+    expect(
+      within(article).getByText(
+        "私権は、公共の福祉（公共の利益を含む。）に適合しなければならない。",
+      ),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "読みやすい表示" }));
+
+    expect(screen.getByRole("button", { name: "読みやすい表示" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(within(article).getByRole("heading", { name: "第1条" })).toBeInTheDocument();
+  });
+
   it("activates and scrolls to the article from the URL", async () => {
     renderLawViewerRoute("/laws/129AC0000000089/articles/1");
 

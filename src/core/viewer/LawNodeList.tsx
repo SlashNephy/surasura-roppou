@@ -3,11 +3,13 @@ import { useMemo } from "react";
 import type { LawNode, LawNodeType } from "@/core/domain";
 import { cn } from "@/shared/utils/cn";
 
+import { applyLawTextDisplayMode, type LawTextDisplayMode } from "./displayMode";
 import { articleAnchorId, computeChildArticleContext } from "./lawToc";
 
 interface LawNodeListProps {
   nodes: LawNode[];
   activeArticleNumber?: string;
+  displayMode?: LawTextDisplayMode;
 }
 
 type HeadingLawNodeType = Exclude<LawNodeType, "Article" | "Paragraph" | "Item" | "Subitem">;
@@ -27,7 +29,11 @@ type HeadingTag = "h2" | "h3" | "h4" | "h5" | "h6";
 
 const headingTags: HeadingTag[] = ["h2", "h3", "h4", "h5", "h6"];
 
-export const LawNodeList = ({ activeArticleNumber, nodes }: LawNodeListProps) => {
+export const LawNodeList = ({
+  activeArticleNumber,
+  displayMode = "readable",
+  nodes,
+}: LawNodeListProps) => {
   const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
   const topLevelNodes = useMemo(() => nodes.filter((node) => node.parentId === undefined), [nodes]);
 
@@ -38,6 +44,7 @@ export const LawNodeList = ({ activeArticleNumber, nodes }: LawNodeListProps) =>
           key={node.id}
           activeArticleNumber={activeArticleNumber}
           depth={1}
+          displayMode={displayMode}
           isUrlAddressableArticleContext={true}
           node={node}
           nodeById={nodeById}
@@ -50,12 +57,14 @@ export const LawNodeList = ({ activeArticleNumber, nodes }: LawNodeListProps) =>
 const LawNodeBlock = ({
   activeArticleNumber,
   depth,
+  displayMode,
   isUrlAddressableArticleContext,
   node,
   nodeById,
 }: {
   activeArticleNumber: string | undefined;
   depth: number;
+  displayMode: LawTextDisplayMode;
   isUrlAddressableArticleContext: boolean;
   node: LawNode;
   nodeById: Map<string, LawNode>;
@@ -75,6 +84,8 @@ const LawNodeBlock = ({
           : undefined;
       const isUrlAddressableArticle = articleId !== undefined;
       const isActiveArticle = isUrlAddressableArticle && node.number === activeArticleNumber;
+      const displayTitle = getDisplayInlineText(node.title ?? node.number, displayMode);
+      const displayText = getDisplayText(node, displayMode);
 
       return (
         <article
@@ -87,20 +98,19 @@ const LawNodeBlock = ({
             isActiveArticle && "border-primary/60 ring-2 ring-primary/20",
           )}
         >
-          <Heading className="text-lg font-semibold text-foreground">
-            {node.title ?? node.number}
-          </Heading>
+          <Heading className="text-lg font-semibold text-foreground">{displayTitle}</Heading>
           <div className="mt-4 grid gap-3">
             {children.length > 0 ? (
               renderChildBlocks({
                 activeArticleNumber,
                 children,
                 depth,
+                displayMode,
                 isUrlAddressableArticleContext: childArticleContext,
                 nodeById,
               })
             ) : (
-              <p className="leading-8 text-foreground break-words">{node.plainText}</p>
+              <p className="leading-8 text-foreground break-words">{displayText}</p>
             )}
           </div>
         </article>
@@ -111,9 +121,10 @@ const LawNodeBlock = ({
     case "Item":
     case "Subitem": {
       const marker = node.type === "Paragraph" ? node.title : (node.title ?? node.number);
+      const displayMarker = getDisplayInlineText(marker, displayMode);
       const bodyText = stripLeadingMarker(
-        stripTrailingChildPlainTexts(node.plainText, children),
-        marker,
+        stripTrailingChildPlainTexts(getDisplayText(node, displayMode), children, displayMode),
+        displayMarker,
       );
 
       return (
@@ -125,8 +136,8 @@ const LawNodeBlock = ({
           )}
         >
           <p className="flex min-w-0 gap-3 leading-8 text-foreground">
-            {marker !== undefined ? (
-              <span className="shrink-0 text-muted-foreground">{marker}</span>
+            {displayMarker !== undefined ? (
+              <span className="shrink-0 text-muted-foreground">{displayMarker}</span>
             ) : null}
             <span className="min-w-0 break-words">{bodyText}</span>
           </p>
@@ -134,6 +145,7 @@ const LawNodeBlock = ({
             activeArticleNumber,
             children,
             depth,
+            displayMode,
             isUrlAddressableArticleContext: childArticleContext,
             nodeById,
           })}
@@ -143,16 +155,18 @@ const LawNodeBlock = ({
   }
 
   const headingClassName = headingClassNameByType[node.type];
+  const displayTitle = getDisplayInlineText(node.title, displayMode);
   const bodyText = stripTrailingChildPlainTexts(
-    stripLeadingMarker(node.plainText, node.title),
+    stripLeadingMarker(getDisplayText(node, displayMode), displayTitle),
     children,
+    displayMode,
   );
 
   return (
     <section className="grid gap-3">
-      {node.title !== undefined ? (
+      {displayTitle !== undefined ? (
         <Heading className={cn("text-foreground break-words", headingClassName)}>
-          {node.title}
+          {displayTitle}
         </Heading>
       ) : null}
       {bodyText !== "" ? <p className="leading-8 text-foreground break-words">{bodyText}</p> : null}
@@ -160,6 +174,7 @@ const LawNodeBlock = ({
         activeArticleNumber,
         children,
         depth,
+        displayMode,
         isUrlAddressableArticleContext: childArticleContext,
         nodeById,
       })}
@@ -171,12 +186,14 @@ const renderChildBlocks = ({
   activeArticleNumber,
   children,
   depth,
+  displayMode,
   isUrlAddressableArticleContext,
   nodeById,
 }: {
   activeArticleNumber: string | undefined;
   children: LawNode[];
   depth: number;
+  displayMode: LawTextDisplayMode;
   isUrlAddressableArticleContext: boolean;
   nodeById: Map<string, LawNode>;
 }) =>
@@ -185,23 +202,30 @@ const renderChildBlocks = ({
       key={child.id}
       activeArticleNumber={activeArticleNumber}
       depth={depth + 1}
+      displayMode={displayMode}
       isUrlAddressableArticleContext={isUrlAddressableArticleContext}
       node={child}
       nodeById={nodeById}
     />
   ));
 
-const stripTrailingChildPlainTexts = (plainText: string, children: LawNode[]): string =>
+const stripTrailingChildPlainTexts = (
+  plainText: string,
+  children: LawNode[],
+  displayMode: LawTextDisplayMode,
+): string =>
   children.reduceRight((bodyText, child) => {
-    if (child.plainText === "") {
+    const childText = getDisplayText(child, displayMode);
+
+    if (childText === "") {
       return bodyText;
     }
 
-    if (!bodyText.endsWith(child.plainText)) {
+    if (!bodyText.endsWith(childText)) {
       return bodyText;
     }
 
-    return bodyText.slice(0, -child.plainText.length).trim();
+    return bodyText.slice(0, -childText.length).trim();
   }, plainText);
 
 const stripLeadingMarker = (plainText: string, marker: string | undefined): string => {
@@ -210,4 +234,21 @@ const stripLeadingMarker = (plainText: string, marker: string | undefined): stri
   }
 
   return plainText.startsWith(marker) ? plainText.slice(marker.length).trim() : plainText;
+};
+
+const getDisplayText = (node: LawNode, displayMode: LawTextDisplayMode): string => {
+  const text = displayMode === "original" ? node.rawText || node.plainText : node.plainText;
+
+  return applyLawTextDisplayMode(text, displayMode);
+};
+
+const getDisplayInlineText = (
+  text: string | undefined,
+  displayMode: LawTextDisplayMode,
+): string | undefined => {
+  if (text === undefined) {
+    return undefined;
+  }
+
+  return applyLawTextDisplayMode(text, displayMode);
 };

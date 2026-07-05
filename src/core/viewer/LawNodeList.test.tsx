@@ -79,6 +79,79 @@ const nodes: LawNode[] = [
 ];
 
 describe("LawNodeList", () => {
+  it("renders readable text by default", () => {
+    render(
+      <LawNodeList
+        nodes={[
+          node({
+            id: "article:12-2",
+            type: "Article",
+            path: "article:12-2",
+            number: "12の2",
+            title: "第十二条の二",
+            rawText: "第十二条の二　原文の本文（括弧）。",
+            plainText: "第十二条の二 原文の本文（括弧）。",
+          }),
+        ]}
+      />,
+    );
+
+    const article = screen.getByRole("article", { name: "第十二条の二" });
+
+    expect(within(article).getByRole("heading", { name: "第12条の2" })).toBeInTheDocument();
+    expect(within(article).getByText("第12条の2 原文の本文(括弧)。")).toBeInTheDocument();
+  });
+
+  it("renders original raw text when displayMode is original", () => {
+    render(
+      <LawNodeList
+        displayMode="original"
+        nodes={[
+          node({
+            id: "article:12-2",
+            type: "Article",
+            path: "article:12-2",
+            number: "12の2",
+            title: "第十二条の二",
+            rawText: "第十二条の二　原文の本文（括弧）。",
+            plainText: "第十二条の二 原文の本文（括弧）。",
+          }),
+        ]}
+      />,
+    );
+
+    const article = screen.getByRole("article", { name: "第十二条の二" });
+
+    expect(within(article).getByRole("heading", { name: "第十二条の二" })).toBeInTheDocument();
+    expect(
+      within(article).getByText((_, element) => {
+        return (
+          element?.tagName.toLowerCase() === "p" &&
+          element.textContent === "第十二条の二　原文の本文（括弧）。"
+        );
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("falls back to plainText in original mode when rawText is empty", () => {
+    render(
+      <LawNodeList
+        displayMode="original"
+        nodes={[
+          node({
+            id: "article:1",
+            type: "Article",
+            path: "article:1",
+            title: "第一条",
+            plainText: "第一条 rawTextが空の本文。",
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("第一条 rawTextが空の本文。")).toBeInTheDocument();
+  });
+
   it("renders LawNode hierarchy as readable legal text blocks", () => {
     render(<LawNodeList activeArticleNumber="1" nodes={nodes} />);
 
@@ -89,18 +162,18 @@ describe("LawNodeList", () => {
     expect(article).toHaveAttribute("id", "article-1");
     expect(article).toHaveAttribute("data-active", "true");
     expect(article).toHaveAttribute("aria-current", "location");
-    expect(within(article).getByRole("heading", { level: 4, name: "第一条" })).toBeInTheDocument();
+    expect(within(article).getByRole("heading", { level: 4, name: "第1条" })).toBeInTheDocument();
     expect(
       within(article).getByText("私権は、公共の福祉に適合しなければならない。"),
     ).toBeInTheDocument();
     expect(article).toHaveTextContent("私権は、公共の福祉に適合しなければならない。一");
     expect(article).not.toHaveTextContent("第一条1私権");
     expect(within(article).getByText("一")).toHaveClass("text-muted-foreground");
-    expect(within(article).getByText("第一号の本文。")).toBeInTheDocument();
+    expect(within(article).getByText("第1号の本文。")).toBeInTheDocument();
 
     expect(screen.getByRole("heading", { name: "附　則" })).toBeInTheDocument();
     expect(screen.getByText("この法律は、公布の日から施行する。")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "別表第一" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "別表1" })).toBeInTheDocument();
     expect(screen.getByText("項目")).toBeInTheDocument();
   });
 
@@ -193,9 +266,9 @@ describe("LawNodeList", () => {
 
     const article = screen.getByRole("article", { name: "第一条" });
 
-    expect(article).toHaveTextContent("第一号の本文。 親だけの本文。");
+    expect(article).toHaveTextContent("第1号の本文。 親だけの本文。");
     expect(within(article).getByText("一")).toHaveClass("text-muted-foreground");
-    expect(within(article).getByText("第一号の本文。")).toBeInTheDocument();
+    expect(within(article).getByText("第1号の本文。")).toBeInTheDocument();
   });
 
   it("keeps parent body text when child text is empty", () => {

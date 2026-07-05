@@ -47,7 +47,7 @@ Parent: [#2](https://github.com/SlashNephy/surasura-roppou/issues/2)
 | [#13](https://github.com/SlashNephy/surasura-roppou/issues/13) | 本文データをLawNodeツリーへ正規化する | Open   | `src/core/egov/lawText.ts` で e-Gov 由来本文を `LawNode[]` に正規化する。    |
 | [#14](https://github.com/SlashNephy/surasura-roppou/issues/14) | レスポンシブな本文ビューア画面を作る  | Open   | `/laws/:lawId` で fixture-backed な本文ビューア MVP を表示する。             |
 | [#15](https://github.com/SlashNephy/surasura-roppou/issues/15) | 目次と条文ナビゲーションを実装する    | Open   | `/laws/:lawId/articles/:article`、目次、条番号ジャンプ、本文 anchor の MVP。 |
-| [#16](https://github.com/SlashNephy/surasura-roppou/issues/16) | 表示モードと文字列正規化を実装する    | Open   | 原文保持と読みやすい表示の切替。                                             |
+| [#16](https://github.com/SlashNephy/surasura-roppou/issues/16) | 表示モードと文字列正規化を実装する    | Open   | 原文表示、読みやすい表示、条番号・日付・法令番号・かっこの表示変換。         |
 
 ## 5. M2: PWA・保存・オフライン
 
