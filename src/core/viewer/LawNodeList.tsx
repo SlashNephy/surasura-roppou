@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import type { LawNode, LawNodeType } from "@/core/domain";
 import { cn } from "@/shared/utils/cn";
 
-import { articleAnchorId } from "./lawToc";
+import { allowsArticleUrlTargets, articleAnchorId } from "./lawToc";
 
 interface LawNodeListProps {
   nodes: LawNode[];
@@ -26,12 +26,6 @@ const headingClassNameByType: Record<HeadingLawNodeType, string> = {
 type HeadingTag = "h2" | "h3" | "h4" | "h5" | "h6";
 
 const headingTags: HeadingTag[] = ["h2", "h3", "h4", "h5", "h6"];
-
-const nonUrlAddressableContainerTypes = new Set<LawNodeType>([
-  "SupplementaryProvision",
-  "AppdxTable",
-  "AppdxStyle",
-]);
 
 export const LawNodeList = ({ activeArticleNumber, nodes }: LawNodeListProps) => {
   const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
@@ -66,8 +60,7 @@ const LawNodeBlock = ({
   node: LawNode;
   nodeById: Map<string, LawNode>;
 }) => {
-  const childArticleContext =
-    isUrlAddressableArticleContext && !nonUrlAddressableContainerTypes.has(node.type);
+  const childArticleContext = isUrlAddressableArticleContext && allowsArticleUrlTargets(node.type);
   const children = node.children
     .map((childId) => nodeById.get(childId))
     .filter((child): child is LawNode => child !== undefined);

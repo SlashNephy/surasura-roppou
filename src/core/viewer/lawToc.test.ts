@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { LawNode } from "@/core/domain";
 
-import { articleAnchorId, buildLawTableOfContents } from "./lawToc";
+import { allowsArticleUrlTargets, articleAnchorId, buildLawTableOfContents } from "./lawToc";
 
 const node = (overrides: Partial<LawNode> & Pick<LawNode, "id" | "path" | "type">): LawNode => ({
   lawId: "129AC0000000089",
@@ -135,4 +135,18 @@ describe("lawToc", () => {
   ])("builds an article anchor id for article %s", (articleNumber, expected) => {
     expect(articleAnchorId(articleNumber)).toBe(expected);
   });
+
+  it.each([
+    ["Part", true],
+    ["Chapter", true],
+    ["Article", true],
+    ["SupplementaryProvision", false],
+    ["AppdxTable", false],
+    ["AppdxStyle", false],
+  ] satisfies [LawNode["type"], boolean][])(
+    "returns whether %s allows article URL targets",
+    (nodeType, expected) => {
+      expect(allowsArticleUrlTargets(nodeType)).toBe(expected);
+    },
+  );
 });
