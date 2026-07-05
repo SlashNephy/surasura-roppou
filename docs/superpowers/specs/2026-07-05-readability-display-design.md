@@ -82,7 +82,7 @@ export type LawTextDisplayMode = "original" | "readable";
 
 ```ts
 export type ReadabilityTransformMode =
-  "article-number" | "date" | "law-number" | "parentheses" | "all";
+  "article-number" | "date" | "law-number" | "parentheses" | "unchanged" | "all";
 
 export const transformReadableText: (text: string, mode?: ReadabilityTransformMode) => string;
 ```
