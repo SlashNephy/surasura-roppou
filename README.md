@@ -7,3 +7,20 @@
 ## Design Doc
 
 - [docs/design-doc.md](docs/design-doc.md)
+
+## Development
+
+```bash
+mise install
+pnpm install
+pnpm dev
+```
+
+Quality checks:
+
+```bash
+pnpm run typecheck
+pnpm run lint
+pnpm run format:check
+pnpm test
+```

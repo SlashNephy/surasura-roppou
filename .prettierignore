@@ -1,0 +1,9 @@
+.mise.toml
+.npmrc
+pnpm-lock.yaml
+.specstory/
+.superpowers/
+dist/
+coverage/
+node_modules/
+.playwright-cli/
