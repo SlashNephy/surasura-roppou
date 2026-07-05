@@ -80,12 +80,14 @@ const nodes: LawNode[] = [
 
 describe("LawNodeList", () => {
   it("renders LawNode hierarchy as readable legal text blocks", () => {
-    render(<LawNodeList nodes={nodes} />);
+    render(<LawNodeList activeArticleNumber="1" nodes={nodes} />);
 
     expect(screen.getByRole("heading", { level: 2, name: "第一編　総則" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 3, name: "第一章　通則" })).toBeInTheDocument();
 
     const article = screen.getByRole("article", { name: "第一条" });
+    expect(article).toHaveAttribute("id", "article-1");
+    expect(article).toHaveAttribute("data-active", "true");
     expect(within(article).getByRole("heading", { level: 4, name: "第一条" })).toBeInTheDocument();
     expect(
       within(article).getByText("私権は、公共の福祉に適合しなければならない。"),
@@ -99,6 +101,48 @@ describe("LawNodeList", () => {
     expect(screen.getByText("この法律は、公布の日から施行する。")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "別表第一" })).toBeInTheDocument();
     expect(screen.getByText("項目")).toBeInTheDocument();
+  });
+
+  it("does not make supplementary article duplicates URL addressable", () => {
+    render(
+      <LawNodeList
+        activeArticleNumber="1"
+        nodes={[
+          node({
+            id: "article:1",
+            type: "Article",
+            path: "article:1",
+            number: "1",
+            title: "第一条",
+            plainText: "第一条 本則の本文。",
+          }),
+          node({
+            id: "supplementary:1",
+            type: "SupplementaryProvision",
+            path: "supplementary-provision:1",
+            title: "附　則",
+            plainText: "附　則 第一条 附則の本文。",
+            children: ["supplementary-article:1"],
+          }),
+          node({
+            id: "supplementary-article:1",
+            type: "Article",
+            path: "supplementary-provision:1/article:1",
+            number: "1",
+            title: "第一条",
+            plainText: "第一条 附則の本文。",
+            parentId: "supplementary:1",
+          }),
+        ]}
+      />,
+    );
+
+    const [mainArticle, supplementaryArticle] = screen.getAllByRole("article", { name: "第一条" });
+
+    expect(mainArticle).toHaveAttribute("id", "article-1");
+    expect(mainArticle).toHaveAttribute("data-active", "true");
+    expect(supplementaryArticle).not.toHaveAttribute("id");
+    expect(supplementaryArticle).not.toHaveAttribute("data-active");
   });
 
   it("keeps parent body text when the same text appears before child text", () => {

@@ -3,8 +3,11 @@ import { useMemo } from "react";
 import type { LawNode, LawNodeType } from "@/core/domain";
 import { cn } from "@/shared/utils/cn";
 
+import { articleAnchorId } from "./lawToc";
+
 interface LawNodeListProps {
   nodes: LawNode[];
+  activeArticleNumber?: string;
 }
 
 type HeadingLawNodeType = Exclude<LawNodeType, "Article" | "Paragraph" | "Item" | "Subitem">;
@@ -24,39 +27,71 @@ type HeadingTag = "h2" | "h3" | "h4" | "h5" | "h6";
 
 const headingTags: HeadingTag[] = ["h2", "h3", "h4", "h5", "h6"];
 
-export const LawNodeList = ({ nodes }: LawNodeListProps) => {
+const nonUrlAddressableContainerTypes = new Set<LawNodeType>([
+  "SupplementaryProvision",
+  "AppdxTable",
+  "AppdxStyle",
+]);
+
+export const LawNodeList = ({ activeArticleNumber, nodes }: LawNodeListProps) => {
   const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
   const topLevelNodes = useMemo(() => nodes.filter((node) => node.parentId === undefined), [nodes]);
 
   return (
     <div className="grid gap-5">
       {topLevelNodes.map((node) => (
-        <LawNodeBlock key={node.id} depth={1} node={node} nodeById={nodeById} />
+        <LawNodeBlock
+          key={node.id}
+          activeArticleNumber={activeArticleNumber}
+          depth={1}
+          isUrlAddressableArticleContext={true}
+          node={node}
+          nodeById={nodeById}
+        />
       ))}
     </div>
   );
 };
 
 const LawNodeBlock = ({
+  activeArticleNumber,
   depth,
+  isUrlAddressableArticleContext,
   node,
   nodeById,
 }: {
+  activeArticleNumber: string | undefined;
   depth: number;
+  isUrlAddressableArticleContext: boolean;
   node: LawNode;
   nodeById: Map<string, LawNode>;
 }) => {
+  const childArticleContext =
+    isUrlAddressableArticleContext && !nonUrlAddressableContainerTypes.has(node.type);
   const children = node.children
     .map((childId) => nodeById.get(childId))
     .filter((child): child is LawNode => child !== undefined);
   const Heading = headingTags[Math.min(depth - 1, headingTags.length - 1)];
 
   switch (node.type) {
-    case "Article":
+    case "Article": {
+      const articleNumber = node.number;
+      const articleId =
+        articleNumber !== undefined && isUrlAddressableArticleContext
+          ? articleAnchorId(articleNumber)
+          : undefined;
+      const isUrlAddressableArticle = articleId !== undefined;
+      const isActiveArticle = isUrlAddressableArticle && node.number === activeArticleNumber;
+
       return (
         <article
+          id={articleId}
+          data-active={isActiveArticle ? "true" : undefined}
           aria-label={node.title ?? `条文 ${node.number ?? node.path}`}
-          className="rounded-md border bg-background p-4 shadow-xs md:p-5"
+          className={cn(
+            "scroll-mt-20 rounded-md border bg-background p-4 shadow-xs md:p-5",
+            isActiveArticle && "border-primary/60 ring-2 ring-primary/20",
+          )}
         >
           <Heading className="text-lg font-semibold text-foreground">
             {node.title ?? node.number}
@@ -64,7 +99,14 @@ const LawNodeBlock = ({
           <div className="mt-4 grid gap-3">
             {children.length > 0 ? (
               children.map((child) => (
-                <LawNodeBlock key={child.id} depth={depth + 1} node={child} nodeById={nodeById} />
+                <LawNodeBlock
+                  key={child.id}
+                  activeArticleNumber={activeArticleNumber}
+                  depth={depth + 1}
+                  isUrlAddressableArticleContext={childArticleContext}
+                  node={child}
+                  nodeById={nodeById}
+                />
               ))
             ) : (
               <p className="leading-8 text-foreground break-words">{node.plainText}</p>
@@ -72,6 +114,7 @@ const LawNodeBlock = ({
           </div>
         </article>
       );
+    }
 
     case "Paragraph":
     case "Item":
@@ -97,7 +140,14 @@ const LawNodeBlock = ({
             <span className="min-w-0 break-words">{bodyText}</span>
           </p>
           {children.map((child) => (
-            <LawNodeBlock key={child.id} depth={depth + 1} node={child} nodeById={nodeById} />
+            <LawNodeBlock
+              key={child.id}
+              activeArticleNumber={activeArticleNumber}
+              depth={depth + 1}
+              isUrlAddressableArticleContext={childArticleContext}
+              node={child}
+              nodeById={nodeById}
+            />
           ))}
         </div>
       );
@@ -119,7 +169,14 @@ const LawNodeBlock = ({
       ) : null}
       {bodyText !== "" ? <p className="leading-8 text-foreground break-words">{bodyText}</p> : null}
       {children.map((child) => (
-        <LawNodeBlock key={child.id} depth={depth + 1} node={child} nodeById={nodeById} />
+        <LawNodeBlock
+          key={child.id}
+          activeArticleNumber={activeArticleNumber}
+          depth={depth + 1}
+          isUrlAddressableArticleContext={childArticleContext}
+          node={child}
+          nodeById={nodeById}
+        />
       ))}
     </section>
   );

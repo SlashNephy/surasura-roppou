@@ -34,6 +34,7 @@ describe("LawDocumentView", () => {
   it("renders law metadata, unsaved state, and article body", () => {
     render(
       <LawDocumentView
+        activeArticleNumber="1"
         isSaved={false}
         law={law}
         nodes={[
@@ -70,6 +71,8 @@ describe("LawDocumentView", () => {
 
     const article = within(document).getByRole("article", { name: "第一条" });
 
+    expect(article).toHaveAttribute("id", "article-1");
+    expect(article).toHaveAttribute("data-active", "true");
     expect(within(article).getByRole("heading", { name: "第一条" })).toBeInTheDocument();
     expect(
       within(article).getByText("私権は、公共の福祉に適合しなければならない。"),
