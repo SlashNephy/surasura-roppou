@@ -32,7 +32,7 @@ Last updated: 2026-07-05
 | -------------------------------------------------------------- | ---------------------------------- | ------ | ----------------------------------------------------------------------------------------------- |
 | [#8](https://github.com/SlashNephy/surasura-roppou/issues/8)   | フロントエンド基盤とCIを構築する   | Closed | Vite、React、TypeScript、TanStack Router、Tailwind CSS、shadcn/ui style primitives、CI の入口。 |
 | [#9](https://github.com/SlashNephy/surasura-roppou/issues/9)   | ドメインモデルと条文パスを定義する | Closed | `src/core/domain` の基礎型と条文参照キー。                                                      |
-| [#10](https://github.com/SlashNephy/surasura-roppou/issues/10) | テスト基盤とfixtureを整備する      | Open   | Vitest 導入済み。fixture 置き場、文字列正規化、参照パーサー、normalizer の検証を拡充する。      |
+| [#10](https://github.com/SlashNephy/surasura-roppou/issues/10) | テスト基盤とfixtureを整備する      | Open   | Vitest/CI 導入済み。`src/test/fixtures/` に e-Gov、条文参照、読みやすさ変換 fixture を置く。    |
 | [#11](https://github.com/SlashNephy/surasura-roppou/issues/11) | 初期ドキュメントとREADMEを整備する | Open   | README、design doc、task index、ADR 入口を整える。                                              |
 | [#12](https://github.com/SlashNephy/surasura-roppou/issues/12) | データ取得層を実装する             | Closed | `src/core/egov` の e-Gov API 取得層。                                                           |
 
