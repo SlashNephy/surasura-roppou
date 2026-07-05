@@ -64,6 +64,17 @@ describe("loadLawViewerDocument", () => {
     });
   });
 
+  it("does not request the repository when the law ID is empty", async () => {
+    const { calls, fetcher } = createJsonFetchStub(lawDataFixture);
+    const repository = createEgovLawRepository({ fetcher, now });
+
+    await expect(loadLawViewerDocument("", repository)).resolves.toEqual({
+      status: "error",
+      message: "法令が見つかりません。",
+    });
+    expect(calls).toEqual([]);
+  });
+
   it("maps temporary API failures to a retrieval error state", async () => {
     const { fetcher } = createJsonFetchStub(
       {

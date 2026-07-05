@@ -10,6 +10,10 @@ export const loadLawViewerDocument = async (
   lawId: string,
   repository: LawRepository = defaultLawViewerRepository,
 ): Promise<LawViewerState> => {
+  if (lawId.trim() === "") {
+    return { status: "error", message: "法令が見つかりません。" };
+  }
+
   if (lawId === offlineDemoLawId) {
     return { status: "offline-unavailable", lawTitle: sampleLawViewerDocument.law.title };
   }
