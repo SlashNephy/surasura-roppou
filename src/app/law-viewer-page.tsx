@@ -1,7 +1,16 @@
-import { Link, useParams } from "@tanstack/react-router";
+import { type SyntheticEvent, useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useParams } from "@tanstack/react-router";
+import { ListTree } from "lucide-react";
 
-import { LawDocumentView } from "@/core/viewer";
+import {
+  LawDocumentView,
+  LawTableOfContents,
+  articleAnchorId,
+  buildLawTableOfContents,
+} from "@/core/viewer";
+import type { LawTocItem } from "@/core/viewer";
 import { Button } from "@/shared/ui/button";
+import { Input } from "@/shared/ui/input";
 import { Skeleton } from "@/shared/ui/skeleton";
 
 import {
@@ -17,6 +26,19 @@ export type LawViewerState =
   | { status: "offline-unavailable"; lawTitle: string }
   | ({ status: "ready" } & LawViewerDocument);
 
+const useLawViewerParams = () => {
+  const baseParams = useParams({ from: "/laws/$lawId", shouldThrow: false });
+  const articleParams = useParams({
+    from: "/laws/$lawId/articles/$article",
+    shouldThrow: false,
+  });
+
+  return {
+    lawId: articleParams?.lawId ?? baseParams?.lawId ?? "",
+    article: articleParams?.article,
+  };
+};
+
 const getLawViewerDocument = (lawId: string): LawViewerState => {
   if (lawId === offlineDemoLawId) {
     return { status: "offline-unavailable", lawTitle: sampleLawViewerDocument.law.title };
@@ -30,12 +52,26 @@ const getLawViewerDocument = (lawId: string): LawViewerState => {
 };
 
 export const LawViewerPage = () => {
-  const { lawId } = useParams({ from: "/laws/$lawId" });
+  const { article, lawId } = useLawViewerParams();
 
-  return <LawViewerPageContent state={getLawViewerDocument(lawId)} />;
+  return (
+    <LawViewerPageContent
+      activeArticleNumber={article}
+      lawId={lawId}
+      state={getLawViewerDocument(lawId)}
+    />
+  );
 };
 
-export const LawViewerPageContent = ({ state }: { state: LawViewerState }) => {
+export const LawViewerPageContent = ({
+  activeArticleNumber,
+  lawId = "",
+  state,
+}: {
+  activeArticleNumber?: string;
+  lawId?: string;
+  state: LawViewerState;
+}) => {
   switch (state.status) {
     case "loading":
       return <LawViewerLoadingState />;
@@ -48,17 +84,155 @@ export const LawViewerPageContent = ({ state }: { state: LawViewerState }) => {
 
     case "ready":
       return (
-        <section className="mx-auto grid w-full max-w-4xl gap-6 px-4 py-6 md:px-6 md:py-8">
-          <LawDocumentView
-            isSaved={state.isSaved}
-            law={state.law}
-            nodes={state.nodes}
-            revision={state.revision}
-          />
-        </section>
+        <LawViewerReadyState
+          activeArticleNumber={activeArticleNumber}
+          lawId={lawId}
+          state={state}
+        />
       );
   }
 };
+
+const LawViewerReadyState = ({
+  activeArticleNumber: routeArticleNumber,
+  lawId,
+  state,
+}: {
+  activeArticleNumber?: string;
+  lawId: string;
+  state: Extract<LawViewerState, { status: "ready" }>;
+}) => {
+  const navigate = useNavigate();
+  const [isMobileTocOpen, setIsMobileTocOpen] = useState(false);
+  const [jumpArticleNumber, setJumpArticleNumber] = useState("");
+  const [hasJumpError, setHasJumpError] = useState(false);
+  const tocItems = useMemo(() => buildLawTableOfContents(state.nodes), [state.nodes]);
+  const articleNumbers = useMemo(() => new Set(collectTocArticleNumbers(tocItems)), [tocItems]);
+  const isRouteArticleKnown =
+    routeArticleNumber === undefined || articleNumbers.has(routeArticleNumber);
+  const activeArticleNumber = isRouteArticleKnown ? routeArticleNumber : undefined;
+  const tocPanelId = "law-viewer-mobile-toc";
+
+  useEffect(() => {
+    if (activeArticleNumber === undefined) {
+      return;
+    }
+
+    document
+      .getElementById(articleAnchorId(activeArticleNumber))
+      ?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [activeArticleNumber]);
+
+  const navigateToArticle = (articleNumber: string) => {
+    setHasJumpError(false);
+    void navigate({
+      to: "/laws/$lawId/articles/$article",
+      params: { lawId, article: articleNumber },
+    });
+  };
+
+  const handleJumpSubmit = (event: SyntheticEvent<HTMLFormElement, SubmitEvent>) => {
+    event.preventDefault();
+
+    const nextArticleNumber = jumpArticleNumber.trim();
+    if (nextArticleNumber === "") {
+      return;
+    }
+
+    if (!articleNumbers.has(nextArticleNumber)) {
+      setHasJumpError(true);
+      return;
+    }
+
+    navigateToArticle(nextArticleNumber);
+  };
+
+  const notFoundAlert = (
+    <p
+      role="alert"
+      className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-6 text-destructive"
+    >
+      指定された条文が見つかりません。
+    </p>
+  );
+
+  return (
+    <section className="mx-auto grid w-full max-w-6xl gap-5 px-4 py-6 md:px-6 md:py-8">
+      <div className="grid gap-4 rounded-md border bg-card p-4 text-card-foreground shadow-xs md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+        <form
+          className="grid gap-2 sm:grid-cols-[minmax(0,12rem)_auto]"
+          onSubmit={handleJumpSubmit}
+        >
+          <label className="grid min-w-0 gap-1 text-sm font-medium text-foreground">
+            条番号
+            <Input
+              inputMode="numeric"
+              onChange={(event) => {
+                setJumpArticleNumber(event.target.value);
+                setHasJumpError(false);
+              }}
+              placeholder="例: 1"
+              value={jumpArticleNumber}
+            />
+          </label>
+          <Button className="w-fit self-end" type="submit">
+            移動
+          </Button>
+        </form>
+
+        <Button
+          aria-controls={tocPanelId}
+          aria-expanded={isMobileTocOpen}
+          className="w-fit gap-2 md:hidden"
+          onClick={() => {
+            setIsMobileTocOpen((current) => !current);
+          }}
+          type="button"
+          variant="outline"
+        >
+          <ListTree className="size-4" />
+          目次
+        </Button>
+
+        {hasJumpError ? <div className="md:col-span-2">{notFoundAlert}</div> : null}
+        {!isRouteArticleKnown ? <div className="md:col-span-2">{notFoundAlert}</div> : null}
+      </div>
+
+      {isMobileTocOpen ? (
+        <div id={tocPanelId} className="rounded-md border bg-card p-3 shadow-xs md:hidden">
+          <LawTableOfContents
+            activeArticleNumber={activeArticleNumber}
+            items={tocItems}
+            onSelectArticle={navigateToArticle}
+          />
+        </div>
+      ) : null}
+
+      <div className="grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-start">
+        <aside className="hidden rounded-md border bg-card p-3 shadow-xs lg:block">
+          <LawTableOfContents
+            activeArticleNumber={activeArticleNumber}
+            items={tocItems}
+            onSelectArticle={navigateToArticle}
+          />
+        </aside>
+        <LawDocumentView
+          activeArticleNumber={activeArticleNumber}
+          isSaved={state.isSaved}
+          law={state.law}
+          nodes={state.nodes}
+          revision={state.revision}
+        />
+      </div>
+    </section>
+  );
+};
+
+const collectTocArticleNumbers = (items: LawTocItem[]): string[] =>
+  items.flatMap((item) => [
+    ...(item.articleNumber === undefined ? [] : [item.articleNumber]),
+    ...collectTocArticleNumbers(item.children),
+  ]);
 
 const LawViewerLoadingState = () => (
   <section
