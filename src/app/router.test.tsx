@@ -9,6 +9,7 @@ const scrollTo = window.scrollTo;
 const routes = [
   ["/", "今日の条文へ進む"],
   ["/laws", "法令を探す"],
+  ["/laws/129AC0000000089", "民法"],
   ["/jump", "条文参照を開く"],
   ["/scanner", "条文参照を撮る"],
   ["/study", "復習を始める"],

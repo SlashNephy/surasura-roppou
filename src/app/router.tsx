@@ -2,7 +2,15 @@ import { createRootRoute, createRoute, createRouter } from "@tanstack/react-rout
 import type { RouterHistory } from "@tanstack/react-router";
 
 import { AppShell } from "./AppShell";
-import { HomePage, JumpPage, LawsPage, ScannerPage, SettingsPage, StudyPage } from "./pages";
+import {
+  HomePage,
+  JumpPage,
+  LawsPage,
+  LawViewerPage,
+  ScannerPage,
+  SettingsPage,
+  StudyPage,
+} from "./pages";
 
 const rootRoute = createRootRoute({
   component: AppShell,
@@ -18,6 +26,12 @@ const lawsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "laws",
   component: LawsPage,
+});
+
+const lawViewerRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "laws/$lawId",
+  component: LawViewerPage,
 });
 
 const jumpRoute = createRoute({
@@ -47,6 +61,7 @@ const settingsRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   lawsRoute,
+  lawViewerRoute,
   jumpRoute,
   scannerRoute,
   studyRoute,
