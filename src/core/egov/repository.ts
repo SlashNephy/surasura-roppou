@@ -1,4 +1,6 @@
-import type { Law, LawNode, LawNodeType, LawRevision } from "@/core/domain";
+import type { Law, LawNode, LawRevision } from "@/core/domain";
+
+import { type EgovLawTextNode, normalizeEgovLawText } from "./lawText";
 
 export const defaultEgovApiBaseUrl = "https://laws.e-gov.go.jp/api/2";
 
@@ -105,57 +107,6 @@ interface EgovRevisionInfo {
   effectiveDate?: string;
 }
 
-interface EgovLawTextNode {
-  tag: string;
-  attr: Record<string, string>;
-  children: (EgovLawTextNode | string)[];
-}
-
-const nodeTypeByTag: Partial<Record<string, LawNodeType>> = {
-  Part: "Part",
-  Chapter: "Chapter",
-  Section: "Section",
-  Subsection: "Subsection",
-  Division: "Division",
-  Article: "Article",
-  Paragraph: "Paragraph",
-  Item: "Item",
-  Subitem: "Subitem",
-  SupplProvision: "SupplementaryProvision",
-  AppdxTable: "AppdxTable",
-  AppdxStyle: "AppdxStyle",
-} satisfies Partial<Record<string, LawNodeType>>;
-
-const pathSegmentByType = {
-  Part: "part",
-  Chapter: "chapter",
-  Section: "section",
-  Subsection: "subsection",
-  Division: "division",
-  Article: "article",
-  Paragraph: "paragraph",
-  Item: "item",
-  Subitem: "subitem",
-  SupplementaryProvision: "supplementary-provision",
-  AppdxTable: "appdx-table",
-  AppdxStyle: "appdx-style",
-} satisfies Record<LawNodeType, string>;
-
-const titleTagByType = {
-  Part: "PartTitle",
-  Chapter: "ChapterTitle",
-  Section: "SectionTitle",
-  Subsection: "SubsectionTitle",
-  Division: "DivisionTitle",
-  Article: "ArticleTitle",
-  Paragraph: "ParagraphNum",
-  Item: "ItemTitle",
-  Subitem: "SubitemTitle",
-  SupplementaryProvision: "SupplProvisionLabel",
-  AppdxTable: "AppdxTableTitle",
-  AppdxStyle: "AppdxStyleTitle",
-} satisfies Record<LawNodeType, string>;
-
 export const createEgovLawRepository = (options: EgovLawRepositoryOptions = {}): LawRepository => {
   const baseUrl = normalizeBaseUrl(options.baseUrl ?? defaultEgovApiBaseUrl);
   const fetcher = options.fetcher ?? ((...args) => globalThis.fetch(...args));
@@ -219,7 +170,7 @@ export const createEgovLawRepository = (options: EgovLawRepositoryOptions = {}):
       return {
         law,
         revision,
-        nodes: flattenLawText(response.lawFullText, law.lawId, revision.revisionId),
+        nodes: normalizeEgovLawText(response.lawFullText, law.lawId, revision.revisionId),
         raw: payload,
       };
     },
@@ -326,103 +277,6 @@ const toRevision = (
   fetchedAt: now().toISOString(),
   sourceUrl: `${baseUrl}/law_data/${encodeURIComponent(sourceId)}`,
 });
-
-const flattenLawText = (root: EgovLawTextNode, lawId: string, revisionId: string): LawNode[] => {
-  const nodes: LawNode[] = [];
-  const typeCounters = new Map<string, Partial<Record<LawNodeType, number>>>();
-
-  const walk = (
-    apiNode: EgovLawTextNode,
-    parentId: string | undefined,
-    parentPath: string,
-  ): string[] => {
-    const nodeType = nodeTypeByTag[apiNode.tag];
-
-    if (nodeType === undefined) {
-      return apiNode.children.flatMap((child) =>
-        typeof child === "string" ? [] : walk(child, parentId, parentPath),
-      );
-    }
-
-    const siblingIndex = nextNodeTypeIndex(typeCounters, parentPath, nodeType);
-    const path = appendPath(parentPath, buildPathSegment(nodeType, apiNode, siblingIndex));
-    const nodeId = buildNodeId(lawId, revisionId, path);
-    const number = getNodeNumber(apiNode);
-    const title = getNodeTitle(apiNode, nodeType);
-    const lawNode: LawNode = {
-      id: nodeId,
-      lawId,
-      revisionId,
-      type: nodeType,
-      path,
-      ...(number === undefined ? {} : { number }),
-      ...(title === undefined ? {} : { title }),
-      rawText: collectText(apiNode),
-      children: [],
-      ...(parentId === undefined ? {} : { parentId }),
-    };
-
-    nodes.push(lawNode);
-
-    apiNode.children.forEach((child) => {
-      if (typeof child === "string") {
-        return;
-      }
-
-      lawNode.children.push(...walk(child, nodeId, path));
-    });
-
-    return [nodeId];
-  };
-
-  walk(root, undefined, "");
-
-  return nodes;
-};
-
-const nextNodeTypeIndex = (
-  typeCounters: Map<string, Partial<Record<LawNodeType, number>>>,
-  parentPath: string,
-  nodeType: LawNodeType,
-): number => {
-  const counters = typeCounters.get(parentPath) ?? {};
-  const nextIndex = (counters[nodeType] ?? 0) + 1;
-
-  counters[nodeType] = nextIndex;
-  typeCounters.set(parentPath, counters);
-
-  return nextIndex;
-};
-
-const buildNodeId = (lawId: string, revisionId: string, path: string): string =>
-  `${lawId}:${revisionId}:${path}`;
-
-const appendPath = (parentPath: string, segment: string): string =>
-  parentPath === "" ? segment : `${parentPath}/${segment}`;
-
-const buildPathSegment = (
-  nodeType: LawNodeType,
-  apiNode: EgovLawTextNode,
-  siblingIndex: number,
-): string => {
-  const number = getNodeNumber(apiNode) ?? String(siblingIndex);
-
-  return `${pathSegmentByType[nodeType]}:${number}`;
-};
-
-const getNodeNumber = (apiNode: EgovLawTextNode): string | undefined => apiNode.attr.Num;
-
-const getNodeTitle = (apiNode: EgovLawTextNode, nodeType: LawNodeType): string | undefined => {
-  const titleTag = titleTagByType[nodeType];
-  const titleNode = apiNode.children.find(
-    (child): child is EgovLawTextNode => typeof child !== "string" && child.tag === titleTag,
-  );
-
-  return titleNode === undefined ? undefined : collectText(titleNode);
-};
-
-const collectText = (node: EgovLawTextNode): string =>
-  node.children.map((child) => (typeof child === "string" ? child : collectText(child))).join("");
 
 const parseLawsResponse = (payload: unknown) => {
   const record = expectRecord(payload, "laws response");

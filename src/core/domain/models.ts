@@ -44,6 +44,7 @@ export interface LawNode {
   number?: string;
   title?: string;
   rawText: string;
+  plainText: string;
   normalizedText?: string;
   children: string[];
   parentId?: string;
