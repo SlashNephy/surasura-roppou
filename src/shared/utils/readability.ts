@@ -92,11 +92,11 @@ const transformArticleNumbers = (text: string): string =>
     .replace(articleNumberRegex, (_match, kanjiNumber: string, suffix: string) => {
       return `第${replaceKanjiNumber(kanjiNumber)}${suffix}`;
     })
-    .replace(branchNumberRegex, (_match, prefix: string, branchNumbers: string) => {
-      return `${prefix}の${branchNumbers.split("の").map(replaceKanjiNumber).join("の")}`;
-    })
     .replace(appendixTableNumberRegex, (_match, prefix: string, tableNumber: string) => {
       return `${prefix}${replaceKanjiNumber(tableNumber)}`;
+    })
+    .replace(branchNumberRegex, (_match, prefix: string, branchNumbers: string) => {
+      return `${prefix}の${branchNumbers.split("の").map(replaceKanjiNumber).join("の")}`;
     });
 
 const transformDates = (text: string): string =>

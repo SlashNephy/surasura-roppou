@@ -38,6 +38,8 @@ describe("readability", () => {
     ["令和元年五月一日", "令和元年5月1日"],
     ["平成元年法律第十一号", "平成元年法律第11号"],
     ["別記様式第一", "別記様式1"],
+    ["別表第一の二", "別表1の2"],
+    ["別記様式第一の二", "別記様式1の2"],
   ])("transforms common legal notation: %s", (input, expected) => {
     expect(transformReadableText(input)).toBe(expected);
   });
