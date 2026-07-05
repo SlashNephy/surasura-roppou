@@ -26,4 +26,11 @@ describe("LawViewerPageContent", () => {
     );
     expect(screen.getByText("民法")).toBeInTheDocument();
   });
+
+  it("renders the ready sample law as unsaved", async () => {
+    renderLawViewerRoute("/laws/129AC0000000089");
+
+    expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+    expect(screen.getByText("未保存")).toBeInTheDocument();
+  });
 });

@@ -95,5 +95,5 @@ export const sampleLawViewerDocument = {
       parentId: "article:2",
     }),
   ],
-  isSaved: true,
+  isSaved: false,
 } satisfies LawViewerDocument;
