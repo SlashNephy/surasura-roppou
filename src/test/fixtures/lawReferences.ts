@@ -106,9 +106,27 @@ export const lawReferenceParseFixtures = [
     },
   },
   {
+    name: "relative next paragraph",
+    kind: "relative",
+    input: "次項",
+    expected: {
+      paragraph: "next",
+      confidenceFloor: 0.4,
+    },
+  },
+  {
     name: "same article item",
     kind: "relative",
     input: "同条第一号",
+    expected: {
+      item: "1",
+      confidenceFloor: 0.4,
+    },
+  },
+  {
+    name: "same paragraph item",
+    kind: "relative",
+    input: "同項第一号",
     expected: {
       item: "1",
       confidenceFloor: 0.4,

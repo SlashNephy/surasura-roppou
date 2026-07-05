@@ -14,6 +14,10 @@ describe("law reference parser fixtures", () => {
       expect(fixture.expected.confidenceFloor).toBeGreaterThanOrEqual(0);
       expect(fixture.expected.confidenceFloor).toBeLessThanOrEqual(1);
 
+      if (fixture.kind === "absolute") {
+        expect(fixture.expected.lawNameCandidate ?? fixture.expected.lawAlias).toBeDefined();
+      }
+
       if (fixture.kind === "absolute" && fixture.expected.item !== undefined) {
         expect(fixture.expected.article).toBeDefined();
       }

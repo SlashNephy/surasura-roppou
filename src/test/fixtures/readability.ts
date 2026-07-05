@@ -64,6 +64,18 @@ export const readabilityTransformFixtures = [
     expected: "一般",
   },
   {
+    name: "word containing ichi meaning part remains unchanged",
+    mode: "unchanged",
+    input: "一部",
+    expected: "一部",
+  },
+  {
+    name: "word containing ichi meaning identical remains unchanged",
+    mode: "unchanged",
+    input: "同一",
+    expected: "同一",
+  },
+  {
     name: "third party remains unchanged",
     mode: "unchanged",
     input: "第三者",

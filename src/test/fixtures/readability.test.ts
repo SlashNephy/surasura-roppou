@@ -13,6 +13,12 @@ describe("readability transform fixtures", () => {
       expect(fixture.input).not.toBe("");
       expect(fixture.mode).toMatch(/^(article-number|date|law-number|parentheses|unchanged)$/);
       expect(fixture.expected).not.toBe("");
+
+      if (fixture.mode === "unchanged") {
+        expect(fixture.input).toBe(fixture.expected);
+      } else {
+        expect(fixture.input).not.toBe(fixture.expected);
+      }
     });
   });
 });
