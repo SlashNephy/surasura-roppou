@@ -1,5 +1,6 @@
 import type { Law, LawNode, LawRevision } from "@/core/domain";
 import { Badge } from "@/shared/ui/badge";
+import { transformReadableText } from "@/shared/utils/readability";
 
 import { LawNodeList } from "./LawNodeList";
 import type { LawTextDisplayMode } from "./LawNodeList";
@@ -33,7 +34,9 @@ export const LawDocumentView = ({
             {law.title}
           </h1>
           {law.lawNumber !== undefined ? (
-            <p className="text-sm leading-6 text-muted-foreground break-words">{law.lawNumber}</p>
+            <p className="text-sm leading-6 text-muted-foreground break-words">
+              {getDisplayLawNumber(law.lawNumber, displayMode)}
+            </p>
           ) : null}
         </div>
       </div>
@@ -59,3 +62,6 @@ export const LawDocumentView = ({
     />
   </article>
 );
+
+const getDisplayLawNumber = (lawNumber: string, displayMode: LawTextDisplayMode): string =>
+  displayMode === "readable" ? transformReadableText(lawNumber) : lawNumber;

@@ -63,7 +63,7 @@ describe("LawDocumentView", () => {
     const document = screen.getByRole("article", { name: "民法" });
 
     expect(within(document).getByRole("heading", { level: 1, name: "民法" })).toBeInTheDocument();
-    expect(within(document).getByText("明治二十九年法律第八十九号")).toBeInTheDocument();
+    expect(within(document).getByText("明治29年法律第89号")).toBeInTheDocument();
     expect(within(document).getByText("法律")).toBeInTheDocument();
     expect(within(document).getByText("施行日: 2026-06-24")).toBeInTheDocument();
     expect(within(document).getByText("取得: 2026-07-05")).toBeInTheDocument();
@@ -110,5 +110,22 @@ describe("LawDocumentView", () => {
       }),
     ).toBeInTheDocument();
     expect(within(document).queryByText("第1条 原文の本文(括弧)。")).not.toBeInTheDocument();
+  });
+
+  it("renders original law number when displayMode is original", () => {
+    render(
+      <LawDocumentView
+        displayMode="original"
+        isSaved={false}
+        law={law}
+        nodes={[]}
+        revision={revision}
+      />,
+    );
+
+    const document = screen.getByRole("article", { name: "民法" });
+
+    expect(within(document).getByText("明治二十九年法律第八十九号")).toBeInTheDocument();
+    expect(within(document).queryByText("明治29年法律第89号")).not.toBeInTheDocument();
   });
 });
