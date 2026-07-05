@@ -96,4 +96,43 @@ describe("LawNodeList", () => {
     expect(screen.getByRole("heading", { name: "附　則" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "別表第一" })).toBeInTheDocument();
   });
+
+  it("keeps parent body text when the same text appears before child text", () => {
+    render(
+      <LawNodeList
+        nodes={[
+          node({
+            id: "article:1",
+            type: "Article",
+            path: "article:1",
+            title: "第一条",
+            plainText: "第一条 第一号の本文。 親だけの本文。 一 第一号の本文。",
+            children: ["paragraph:1"],
+          }),
+          node({
+            id: "paragraph:1",
+            type: "Paragraph",
+            path: "article:1/paragraph:1",
+            plainText: "第一号の本文。 親だけの本文。 一 第一号の本文。",
+            children: ["item:1"],
+            parentId: "article:1",
+          }),
+          node({
+            id: "item:1",
+            type: "Item",
+            path: "article:1/paragraph:1/item:1",
+            title: "一",
+            plainText: "一 第一号の本文。",
+            parentId: "paragraph:1",
+          }),
+        ]}
+      />,
+    );
+
+    const article = screen.getByRole("article", { name: "第一条" });
+
+    expect(article).toHaveTextContent("第一号の本文。 親だけの本文。");
+    expect(within(article).getByText("一")).toHaveClass("text-muted-foreground");
+    expect(within(article).getByText("第一号の本文。")).toBeInTheDocument();
+  });
 });
