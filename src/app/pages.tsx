@@ -59,3 +59,5 @@ export const SettingsPage = () => (
     description="表示、基準日、オフライン保存、学習設定を調整するための入口です。"
   />
 );
+
+export { LawViewerPage } from "./law-viewer-page";

@@ -45,7 +45,7 @@ Parent: [#2](https://github.com/SlashNephy/surasura-roppou/issues/2)
 | Issue                                                          | Title                                 | Status | Notes                                                                     |
 | -------------------------------------------------------------- | ------------------------------------- | ------ | ------------------------------------------------------------------------- |
 | [#13](https://github.com/SlashNephy/surasura-roppou/issues/13) | 本文データをLawNodeツリーへ正規化する | Open   | `src/core/egov/lawText.ts` で e-Gov 由来本文を `LawNode[]` に正規化する。 |
-| [#14](https://github.com/SlashNephy/surasura-roppou/issues/14) | レスポンシブな本文ビューア画面を作る  | Open   | デスクトップ 3 ペインとモバイル導線を育てる。                             |
+| [#14](https://github.com/SlashNephy/surasura-roppou/issues/14) | レスポンシブな本文ビューア画面を作る  | Open   | `/laws/:lawId` で fixture-backed な本文ビューア MVP を表示する。          |
 | [#15](https://github.com/SlashNephy/surasura-roppou/issues/15) | 目次と条文ナビゲーションを実装する    | Open   | 章、節、条、項、号の移動体験。                                            |
 | [#16](https://github.com/SlashNephy/surasura-roppou/issues/16) | 表示モードと文字列正規化を実装する    | Open   | 原文保持と読みやすい表示の切替。                                          |
 
