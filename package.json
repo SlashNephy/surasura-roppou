@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
+    "review:antigravity": "bash script/antigravity-review.sh",
     "test": "vitest run",
     "test:watch": "vitest"
   },
