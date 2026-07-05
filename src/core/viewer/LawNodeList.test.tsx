@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import type { LawNode } from "@/core/domain";
+import type { LawNode, LawNodeType } from "@/core/domain";
 
 import { LawNodeList } from "./LawNodeList";
 
@@ -80,12 +80,15 @@ const nodes: LawNode[] = [
 
 describe("LawNodeList", () => {
   it("renders LawNode hierarchy as readable legal text blocks", () => {
-    render(<LawNodeList nodes={nodes} />);
+    render(<LawNodeList activeArticleNumber="1" nodes={nodes} />);
 
     expect(screen.getByRole("heading", { level: 2, name: "第一編　総則" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 3, name: "第一章　通則" })).toBeInTheDocument();
 
     const article = screen.getByRole("article", { name: "第一条" });
+    expect(article).toHaveAttribute("id", "article-1");
+    expect(article).toHaveAttribute("data-active", "true");
+    expect(article).toHaveAttribute("aria-current", "location");
     expect(within(article).getByRole("heading", { level: 4, name: "第一条" })).toBeInTheDocument();
     expect(
       within(article).getByText("私権は、公共の福祉に適合しなければならない。"),
@@ -100,6 +103,61 @@ describe("LawNodeList", () => {
     expect(screen.getByRole("heading", { name: "別表第一" })).toBeInTheDocument();
     expect(screen.getByText("項目")).toBeInTheDocument();
   });
+
+  it.each([
+    ["SupplementaryProvision", "supplementary-provision:1", "附　則"],
+    ["AppdxTable", "appdx-table:1", "別表第一"],
+    ["AppdxStyle", "appdx-style:1", "別記様式第一"],
+  ] satisfies [LawNodeType, string, string][])(
+    "does not make article duplicates under %s URL addressable",
+    (containerType, containerPath, containerTitle) => {
+      const containerId = `${containerType}:1`;
+
+      render(
+        <LawNodeList
+          activeArticleNumber="1"
+          nodes={[
+            node({
+              id: "article:1",
+              type: "Article",
+              path: "article:1",
+              number: "1",
+              title: "第一条",
+              plainText: "第一条 本則の本文。",
+            }),
+            node({
+              id: containerId,
+              type: containerType,
+              path: containerPath,
+              title: containerTitle,
+              plainText: `${containerTitle} 第一条 付属資料の本文。`,
+              children: ["container-article:1"],
+            }),
+            node({
+              id: "container-article:1",
+              type: "Article",
+              path: `${containerPath}/article:1`,
+              number: "1",
+              title: "第一条",
+              plainText: "第一条 付属資料の本文。",
+              parentId: containerId,
+            }),
+          ]}
+        />,
+      );
+
+      const [mainArticle, nonAddressableArticle] = screen.getAllByRole("article", {
+        name: "第一条",
+      });
+
+      expect(mainArticle).toHaveAttribute("id", "article-1");
+      expect(mainArticle).toHaveAttribute("data-active", "true");
+      expect(mainArticle).toHaveAttribute("aria-current", "location");
+      expect(nonAddressableArticle).not.toHaveAttribute("id");
+      expect(nonAddressableArticle).not.toHaveAttribute("data-active");
+      expect(nonAddressableArticle).not.toHaveAttribute("aria-current");
+    },
+  );
 
   it("keeps parent body text when the same text appears before child text", () => {
     render(

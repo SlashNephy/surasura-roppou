@@ -8,9 +8,16 @@ interface LawDocumentViewProps {
   revision: LawRevision;
   nodes: LawNode[];
   isSaved: boolean;
+  activeArticleNumber?: string;
 }
 
-export const LawDocumentView = ({ law, revision, nodes, isSaved }: LawDocumentViewProps) => (
+export const LawDocumentView = ({
+  activeArticleNumber,
+  law,
+  revision,
+  nodes,
+  isSaved,
+}: LawDocumentViewProps) => (
   <article aria-label={law.title} className="grid min-w-0 gap-6">
     <header className="grid min-w-0 gap-4 border-b pb-5">
       <div className="grid min-w-0 gap-3">
@@ -42,6 +49,6 @@ export const LawDocumentView = ({ law, revision, nodes, isSaved }: LawDocumentVi
       </dl>
     </header>
 
-    <LawNodeList nodes={nodes} />
+    <LawNodeList activeArticleNumber={activeArticleNumber} nodes={nodes} />
   </article>
 );

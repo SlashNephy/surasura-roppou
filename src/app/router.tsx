@@ -34,6 +34,12 @@ const lawViewerRoute = createRoute({
   component: LawViewerPage,
 });
 
+const lawViewerArticleRoute = createRoute({
+  getParentRoute: () => lawViewerRoute,
+  path: "articles/$article",
+  component: LawViewerPage,
+});
+
 const jumpRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "jump",
@@ -61,7 +67,7 @@ const settingsRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   lawsRoute,
-  lawViewerRoute,
+  lawViewerRoute.addChildren([lawViewerArticleRoute]),
   jumpRoute,
   scannerRoute,
   studyRoute,

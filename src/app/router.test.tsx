@@ -1,15 +1,18 @@
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { render, screen, waitFor } from "@testing-library/react";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
+
+import { setupScrollMocks } from "@/test/scrollMocks";
 
 import { createAppRouter } from "./router";
 
-const scrollTo = window.scrollTo;
+setupScrollMocks();
 
 const routes = [
   ["/", "今日の条文へ進む"],
   ["/laws", "法令を探す"],
   ["/laws/129AC0000000089", "民法"],
+  ["/laws/129AC0000000089/articles/1", "民法"],
   ["/jump", "条文参照を開く"],
   ["/scanner", "条文参照を撮る"],
   ["/study", "復習を始める"],
@@ -17,14 +20,6 @@ const routes = [
 ] as const;
 
 describe("app router", () => {
-  beforeAll(() => {
-    window.scrollTo = () => undefined;
-  });
-
-  afterAll(() => {
-    window.scrollTo = scrollTo;
-  });
-
   it.each(routes)("renders %s", async (path, heading) => {
     const history = createMemoryHistory({ initialEntries: [path] });
 
