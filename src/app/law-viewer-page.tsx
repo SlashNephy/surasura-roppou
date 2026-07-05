@@ -2,6 +2,7 @@ import { type SyntheticEvent, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { ListTree } from "lucide-react";
 
+import type { LawRepository } from "@/core/egov";
 import {
   LawDocumentView,
   LawTableOfContents,
@@ -13,11 +14,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Skeleton } from "@/shared/ui/skeleton";
 
-import {
-  offlineDemoLawId,
-  sampleLawViewerDocument,
-  sampleLawViewerLawId,
-} from "./law-viewer-sample";
+import { loadLawViewerDocument } from "./law-viewer-loader";
 import type { LawViewerDocument } from "./law-viewer-sample";
 
 export type LawViewerState =
@@ -39,27 +36,50 @@ const useLawViewerParams = () => {
   };
 };
 
-const getLawViewerDocument = (lawId: string): LawViewerState => {
-  if (lawId === offlineDemoLawId) {
-    return { status: "offline-unavailable", lawTitle: sampleLawViewerDocument.law.title };
-  }
+interface LawViewerPageProps {
+  repository?: LawRepository;
+}
 
-  if (lawId !== sampleLawViewerLawId) {
-    return { status: "error", message: "法令が見つかりません。" };
-  }
-
-  return { status: "ready", ...sampleLawViewerDocument };
-};
-
-export const LawViewerPage = () => {
+export const LawViewerPage = ({ repository }: LawViewerPageProps = {}) => {
   const { article, lawId } = useLawViewerParams();
 
   return (
-    <LawViewerPageContent
+    <LawViewerPageLoader
+      key={lawId}
       activeArticleNumber={article}
       lawId={lawId}
-      state={getLawViewerDocument(lawId)}
+      repository={repository}
     />
+  );
+};
+
+const LawViewerPageLoader = ({
+  activeArticleNumber,
+  lawId,
+  repository,
+}: {
+  activeArticleNumber?: string;
+  lawId: string;
+  repository?: LawRepository;
+}) => {
+  const [state, setState] = useState<LawViewerState>({ status: "loading" });
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    void loadLawViewerDocument(lawId, repository).then((nextState) => {
+      if (isCurrent) {
+        setState(nextState);
+      }
+    });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [lawId, repository]);
+
+  return (
+    <LawViewerPageContent activeArticleNumber={activeArticleNumber} lawId={lawId} state={state} />
   );
 };
 

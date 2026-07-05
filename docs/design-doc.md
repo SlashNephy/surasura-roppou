@@ -901,7 +901,10 @@ Examples:
 /search?q=国賠法1条
 ```
 
-Open question: e-Gov の lawId / 法令番号 / 独自 ID のどれを canonical URL に使うか。
+Canonical URL の法令識別子には e-Gov の `lawId` を使う。
+法令番号、正式名称、略称は検索や参照解決の入力として扱い、URL へ遷移するときに `lawId` へ解決する。
+改正時点を固定する URL が必要な場合は、e-Gov の `law_revision_id` を `:revisionId` として扱う。
+この判断は [ADR 2026-07-05: e-Gov Law ID を canonical URL に使う](adr/2026-07-05-egov-law-id-canonical-url.md) に記録する。
 
 ## 17. Tech Stack
 
@@ -1043,7 +1046,6 @@ BFF は MVP では optional だが、AI・全法令検索・API proxy・sync を
 
 - Framework は Vite + React で始めるか、Next.js/TanStack Start にするか。
 - e-Gov API は MVP で直接 fetch するか、最初から BFF を置くか。
-- canonical law ID を何にするか。
 - 行政書士向けプリセットの初期法令セットをどこまで含めるか。
 - OCR は Tesseract.js で十分か、サーバー OCR を早期導入するか。
 - 学習カード生成に AI を使うか、まずは deterministic rules で作るか。
