@@ -59,7 +59,7 @@ const LawNodeBlock = ({ node, nodeById }: { node: LawNode; nodeById: Map<string,
     case "Paragraph":
     case "Item":
     case "Subitem": {
-      const marker = node.title ?? node.number;
+      const marker = node.type === "Paragraph" ? node.title : (node.title ?? node.number);
       const bodyText = stripLeadingMarker(
         stripTrailingChildPlainTexts(node.plainText, children),
         marker,
@@ -89,10 +89,15 @@ const LawNodeBlock = ({ node, nodeById }: { node: LawNode; nodeById: Map<string,
 
   const headingClassName = headingClassNameByType[node.type];
   const title = node.title ?? node.plainText;
+  const bodyText =
+    node.title === undefined
+      ? ""
+      : stripTrailingChildPlainTexts(stripLeadingMarker(node.plainText, node.title), children);
 
   return (
     <section className="grid gap-3">
       <h2 className={cn("text-foreground break-words", headingClassName)}>{title}</h2>
+      {bodyText !== "" ? <p className="leading-8 text-foreground break-words">{bodyText}</p> : null}
       {children.map((child) => (
         <LawNodeBlock key={child.id} node={child} nodeById={nodeById} />
       ))}

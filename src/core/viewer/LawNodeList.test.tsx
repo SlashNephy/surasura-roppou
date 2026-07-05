@@ -90,11 +90,15 @@ describe("LawNodeList", () => {
     expect(
       within(article).getByText("私権は、公共の福祉に適合しなければならない。"),
     ).toBeInTheDocument();
+    expect(article).toHaveTextContent("私権は、公共の福祉に適合しなければならない。一");
+    expect(article).not.toHaveTextContent("第一条1私権");
     expect(within(article).getByText("一")).toHaveClass("text-muted-foreground");
     expect(within(article).getByText("第一号の本文。")).toBeInTheDocument();
 
     expect(screen.getByRole("heading", { name: "附　則" })).toBeInTheDocument();
+    expect(screen.getByText("この法律は、公布の日から施行する。")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "別表第一" })).toBeInTheDocument();
+    expect(screen.getByText("項目")).toBeInTheDocument();
   });
 
   it("keeps parent body text when the same text appears before child text", () => {
