@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createEgovLawRepository, EgovApiError } from "./repository";
+import { createEgovLawRepository } from "./repository";
 
 const now = () => new Date("2026-07-05T00:00:00.000Z");
 
@@ -122,6 +122,32 @@ const lawDataFixture = {
                                     attr: {},
                                     children: ["私権は、公共の福祉に適合しなければならない。"],
                                   },
+                                ],
+                              },
+                            ],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                  {
+                    tag: "Article",
+                    attr: {},
+                    children: [
+                      { tag: "ArticleTitle", attr: {}, children: ["第二条"] },
+                      {
+                        tag: "Paragraph",
+                        attr: {},
+                        children: [
+                          {
+                            tag: "ParagraphSentence",
+                            attr: {},
+                            children: [
+                              {
+                                tag: "Sentence",
+                                attr: {},
+                                children: [
+                                  "権利の行使及び義務の履行は、信義に従い誠実に行わなければならない。",
                                 ],
                               },
                             ],
@@ -297,6 +323,19 @@ describe("EgovLawRepository", () => {
         number: "1",
         rawText: "私権は、公共の福祉に適合しなければならない。",
       }),
+      expect.objectContaining({
+        type: "Article",
+        path: "part:1/chapter:1/article:2",
+        rawText: "第二条権利の行使及び義務の履行は、信義に従い誠実に行わなければならない。",
+        children: [
+          "129AC0000000089:129AC0000000089_20260624_508AC0000000045:part:1/chapter:1/article:2/paragraph:1",
+        ],
+      }),
+      expect.objectContaining({
+        type: "Paragraph",
+        path: "part:1/chapter:1/article:2/paragraph:1",
+        rawText: "権利の行使及び義務の履行は、信義に従い誠実に行わなければならない。",
+      }),
     ]);
     expect(document.raw).toEqual(lawDataFixture);
   });
@@ -352,9 +391,31 @@ describe("EgovLawRepository", () => {
     );
     const repository = createEgovLawRepository({ fetcher, now });
 
-    await expect(repository.getLaw("missing")).rejects.toThrow(
-      new EgovApiError(404, "400001", "指定された法令IDが存在しません。"),
-    );
+    await expect(repository.getLaw("missing")).rejects.toMatchObject({
+      name: "EgovApiError",
+      status: 404,
+      code: "400001",
+      message: "指定された法令IDが存在しません。",
+      payload: {
+        code: "400001",
+        message: "指定された法令IDが存在しません。",
+      },
+      url: "https://laws.e-gov.go.jp/api/2/law_data/missing?law_full_text_format=json&response_format=json",
+    });
+  });
+
+  it("raises an API error with request context when the response is not JSON", async () => {
+    const { fetcher } = createTextFetchStub("<html>Bad Gateway</html>", 502);
+    const repository = createEgovLawRepository({ fetcher, now });
+
+    await expect(repository.getLaw("129AC0000000089")).rejects.toMatchObject({
+      name: "EgovApiError",
+      status: 502,
+      code: "502",
+      message:
+        "e-Gov API returned invalid JSON from https://laws.e-gov.go.jp/api/2/law_data/129AC0000000089?law_full_text_format=json&response_format=json",
+      url: "https://laws.e-gov.go.jp/api/2/law_data/129AC0000000089?law_full_text_format=json&response_format=json",
+    });
   });
 });
 
@@ -372,6 +433,20 @@ const createJsonFetchStub = (
     calls.push(init === undefined ? { input } : { input, init });
 
     return Promise.resolve(new Response(JSON.stringify(payload), { status }));
+  };
+
+  return { calls, fetcher };
+};
+
+const createTextFetchStub = (
+  payload: string,
+  status = 200,
+): { calls: FetchCall[]; fetcher: typeof fetch } => {
+  const calls: FetchCall[] = [];
+  const fetcher: typeof fetch = (input, init) => {
+    calls.push(init === undefined ? { input } : { input, init });
+
+    return Promise.resolve(new Response(payload, { status }));
   };
 
   return { calls, fetcher };

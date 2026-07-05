@@ -63,14 +63,31 @@ export interface LawRepository {
 }
 
 export class EgovApiError extends Error {
+  public readonly url?: string;
+  public readonly payload?: unknown;
+
   public constructor(
     public readonly status: number,
     public readonly code: string,
     message: string,
+    details: EgovApiErrorDetails = {},
   ) {
     super(message);
     this.name = "EgovApiError";
+
+    if (details.url !== undefined) {
+      this.url = details.url;
+    }
+
+    if (details.payload !== undefined) {
+      this.payload = details.payload;
+    }
   }
+}
+
+interface EgovApiErrorDetails {
+  url?: string;
+  payload?: unknown;
 }
 
 interface EgovLawInfo {
@@ -147,10 +164,10 @@ export const createEgovLawRepository = (options: EgovLawRepositoryOptions = {}):
   const requestJson = async (path: string, query: Record<string, QueryValue>): Promise<unknown> => {
     const url = buildUrl(baseUrl, path, { ...query, response_format: "json" });
     const response = await fetcher(url, { headers: { accept: "application/json" } });
-    const payload: unknown = await response.json();
+    const payload = await parseJsonResponse(response, url);
 
     if (!response.ok) {
-      throw buildApiError(response.status, payload);
+      throw buildApiError(response.status, payload, url);
     }
 
     return payload;
@@ -243,7 +260,20 @@ const buildUrl = (baseUrl: string, path: string, query: Record<string, QueryValu
 
 const normalizeBaseUrl = (baseUrl: string): string => baseUrl.replace(/\/+$/, "");
 
-const buildApiError = (status: number, payload: unknown): EgovApiError => {
+const parseJsonResponse = async (response: Response, url: string): Promise<unknown> => {
+  try {
+    return await response.json();
+  } catch {
+    throw new EgovApiError(
+      response.status,
+      String(response.status),
+      `e-Gov API returned invalid JSON from ${url}`,
+      { url },
+    );
+  }
+};
+
+const buildApiError = (status: number, payload: unknown, url: string): EgovApiError => {
   const payloadRecord = isRecord(payload) ? payload : {};
   const errorInfo = getOptionalRecord(payloadRecord, "error_info") ?? payloadRecord;
   const code = getOptionalString(errorInfo, "code") ?? String(status);
@@ -251,7 +281,7 @@ const buildApiError = (status: number, payload: unknown): EgovApiError => {
     getOptionalString(errorInfo, "message") ??
     `e-Gov API request failed with status ${String(status)}`;
 
-  return new EgovApiError(status, code, message);
+  return new EgovApiError(status, code, message, { payload, url });
 };
 
 const toLaw = (lawInfo: EgovLawInfo, revisionInfo: EgovRevisionInfo): Law => ({
@@ -299,21 +329,22 @@ const toRevision = (
 
 const flattenLawText = (root: EgovLawTextNode, lawId: string, revisionId: string): LawNode[] => {
   const nodes: LawNode[] = [];
+  const typeCounters = new Map<string, Partial<Record<LawNodeType, number>>>();
 
   const walk = (
     apiNode: EgovLawTextNode,
     parentId: string | undefined,
     parentPath: string,
-    siblingIndex: number,
   ): string[] => {
     const nodeType = nodeTypeByTag[apiNode.tag];
 
     if (nodeType === undefined) {
-      return apiNode.children.flatMap((child, index) =>
-        typeof child === "string" ? [] : walk(child, parentId, parentPath, index + 1),
+      return apiNode.children.flatMap((child) =>
+        typeof child === "string" ? [] : walk(child, parentId, parentPath),
       );
     }
 
+    const siblingIndex = nextNodeTypeIndex(typeCounters, parentPath, nodeType);
     const path = appendPath(parentPath, buildPathSegment(nodeType, apiNode, siblingIndex));
     const nodeId = buildNodeId(lawId, revisionId, path);
     const number = getNodeNumber(apiNode);
@@ -333,20 +364,34 @@ const flattenLawText = (root: EgovLawTextNode, lawId: string, revisionId: string
 
     nodes.push(lawNode);
 
-    apiNode.children.forEach((child, index) => {
+    apiNode.children.forEach((child) => {
       if (typeof child === "string") {
         return;
       }
 
-      lawNode.children.push(...walk(child, nodeId, path, index + 1));
+      lawNode.children.push(...walk(child, nodeId, path));
     });
 
     return [nodeId];
   };
 
-  walk(root, undefined, "", 1);
+  walk(root, undefined, "");
 
   return nodes;
+};
+
+const nextNodeTypeIndex = (
+  typeCounters: Map<string, Partial<Record<LawNodeType, number>>>,
+  parentPath: string,
+  nodeType: LawNodeType,
+): number => {
+  const counters = typeCounters.get(parentPath) ?? {};
+  const nextIndex = (counters[nodeType] ?? 0) + 1;
+
+  counters[nodeType] = nextIndex;
+  typeCounters.set(parentPath, counters);
+
+  return nextIndex;
 };
 
 const buildNodeId = (lawId: string, revisionId: string, path: string): string =>
