@@ -135,4 +135,41 @@ describe("LawNodeList", () => {
     expect(within(article).getByText("一")).toHaveClass("text-muted-foreground");
     expect(within(article).getByText("第一号の本文。")).toBeInTheDocument();
   });
+
+  it("keeps parent body text when child text is empty", () => {
+    render(
+      <LawNodeList
+        nodes={[
+          node({
+            id: "article:1",
+            type: "Article",
+            path: "article:1",
+            title: "第一条",
+            plainText: "第一条 空文字の子を持つ親本文。",
+            children: ["paragraph:1"],
+          }),
+          node({
+            id: "paragraph:1",
+            type: "Paragraph",
+            path: "article:1/paragraph:1",
+            plainText: "空文字の子を持つ親本文。",
+            children: ["item:1"],
+            parentId: "article:1",
+          }),
+          node({
+            id: "item:1",
+            type: "Item",
+            path: "article:1/paragraph:1/item:1",
+            title: "一",
+            plainText: "",
+            parentId: "paragraph:1",
+          }),
+        ]}
+      />,
+    );
+
+    const article = screen.getByRole("article", { name: "第一条" });
+
+    expect(within(article).getByText("空文字の子を持つ親本文。")).toBeInTheDocument();
+  });
 });

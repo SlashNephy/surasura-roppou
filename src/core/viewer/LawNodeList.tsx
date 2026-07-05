@@ -102,6 +102,10 @@ const LawNodeBlock = ({ node, nodeById }: { node: LawNode; nodeById: Map<string,
 
 const stripTrailingChildPlainTexts = (plainText: string, children: LawNode[]): string =>
   children.reduceRight((bodyText, child) => {
+    if (child.plainText === "") {
+      return bodyText;
+    }
+
     if (!bodyText.endsWith(child.plainText)) {
       return bodyText;
     }
