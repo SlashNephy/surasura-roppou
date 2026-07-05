@@ -73,9 +73,42 @@ describe("LawDocumentView", () => {
 
     expect(article).toHaveAttribute("id", "article-1");
     expect(article).toHaveAttribute("data-active", "true");
-    expect(within(article).getByRole("heading", { name: "第一条" })).toBeInTheDocument();
+    expect(within(article).getByRole("heading", { name: "第1条" })).toBeInTheDocument();
     expect(
       within(article).getByText("私権は、公共の福祉に適合しなければならない。"),
     ).toBeInTheDocument();
+  });
+
+  it("passes displayMode to the law node list", () => {
+    render(
+      <LawDocumentView
+        displayMode="original"
+        isSaved={false}
+        law={law}
+        nodes={[
+          node({
+            id: "article:1",
+            type: "Article",
+            path: "article:1",
+            title: "第一条",
+            rawText: "第一条　原文の本文（括弧）。",
+            plainText: "第一条 原文の本文（括弧）。",
+          }),
+        ]}
+        revision={revision}
+      />,
+    );
+
+    const document = screen.getByRole("article", { name: "民法" });
+
+    expect(
+      within(document).getByText((_, element) => {
+        return (
+          element?.tagName.toLowerCase() === "p" &&
+          element.textContent === "第一条　原文の本文（括弧）。"
+        );
+      }),
+    ).toBeInTheDocument();
+    expect(within(document).queryByText("第1条 原文の本文(括弧)。")).not.toBeInTheDocument();
   });
 });

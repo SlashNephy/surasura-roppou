@@ -2,6 +2,7 @@ import type { Law, LawNode, LawRevision } from "@/core/domain";
 import { Badge } from "@/shared/ui/badge";
 
 import { LawNodeList } from "./LawNodeList";
+import type { LawTextDisplayMode } from "./LawNodeList";
 
 interface LawDocumentViewProps {
   law: Law;
@@ -9,10 +10,12 @@ interface LawDocumentViewProps {
   nodes: LawNode[];
   isSaved: boolean;
   activeArticleNumber?: string;
+  displayMode?: LawTextDisplayMode;
 }
 
 export const LawDocumentView = ({
   activeArticleNumber,
+  displayMode = "readable",
   law,
   revision,
   nodes,
@@ -49,6 +52,10 @@ export const LawDocumentView = ({
       </dl>
     </header>
 
-    <LawNodeList activeArticleNumber={activeArticleNumber} nodes={nodes} />
+    <LawNodeList
+      activeArticleNumber={activeArticleNumber}
+      displayMode={displayMode}
+      nodes={nodes}
+    />
   </article>
 );
