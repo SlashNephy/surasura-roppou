@@ -39,7 +39,7 @@ Design Doc の Routing / URL Design に合わせ、条文 URL は次の形式に
 /laws/129AC0000000089/articles/1
 ```
 
-`article` は当面 `LawNode.type === "Article"` の `number` を使う。
+`article` は当面、主文側の URL-addressable な `LawNode.type === "Article"` の `number` を使う。附則、別表、様式の配下にある `Article` は同じ条番号が重複し得るため、この MVP の `/articles/:article` URL では直接指定しない。
 
 `/laws/:lawId` は法令トップとして残す。
 
@@ -49,9 +49,10 @@ Design Doc の Routing / URL Design に合わせ、条文 URL は次の形式に
 
 ### `core/viewer`
 
-`LawNodeList` は条文 anchor を本文側に付ける責務を持つ。
+`LawNodeList` は URL-addressable な条文 anchor を本文側に付ける責務を持つ。
 
-- `Article` node の outer `article` に `id` を付ける。
+- 主文側の URL-addressable な `Article` node の outer `article` に `id` を付ける。
+- `SupplementaryProvision`、`AppdxTable`、`AppdxStyle` 配下の `Article` は同じ条番号が重複し得るため、この MVP では `id` を付けない。
 - id は `article-${articleNumber}` とし、URL パラメータや selector で扱いやすい ASCII に寄せる。
 - 現在対象の article number を受け取り、該当条文カードを視覚的に強調する。
 
@@ -79,7 +80,8 @@ export interface LawTocItem {
 - `Part`、`Chapter`、`Section`、`Subsection`、`Division`、`Article` を目次対象にする。
 - `Paragraph`、`Item`、`Subitem` は本文階層に残し、目次には出さない。
 - `SupplementaryProvision`、`AppdxTable`、`AppdxStyle` は見出しとして目次に出す。
-- `Article` は `articleNumber` を持ち、クリック可能にする。
+- 主文側の URL-addressable な `Article` は `articleNumber` を持ち、クリック可能にする。
+- `SupplementaryProvision`、`AppdxTable`、`AppdxStyle` 配下の `Article` は目次には表示するが、`articleNumber` を持たず非クリックの text/group item として扱う。
 - article を持たない見出しは、子 article があればグループとして表示する。
 
 ### `app`

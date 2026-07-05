@@ -76,6 +76,59 @@ describe("lawToc", () => {
     ]);
   });
 
+  it("only exposes article numbers for URL-addressable main body articles", () => {
+    const toc = buildLawTableOfContents([
+      node({
+        id: "article:1",
+        type: "Article",
+        path: "article:1",
+        number: "1",
+        title: "第一条",
+      }),
+      node({
+        id: "supplementary:1",
+        type: "SupplementaryProvision",
+        path: "supplementary-provision:1",
+        title: "附　則",
+        children: ["supplementary:article:1"],
+      }),
+      node({
+        id: "supplementary:article:1",
+        type: "Article",
+        path: "supplementary-provision:1/article:1",
+        number: "1",
+        title: "第一条",
+        parentId: "supplementary:1",
+      }),
+    ]);
+
+    expect(toc).toEqual([
+      {
+        id: "article:1",
+        title: "第一条",
+        type: "Article",
+        depth: 1,
+        articleNumber: "1",
+        children: [],
+      },
+      {
+        id: "supplementary:1",
+        title: "附　則",
+        type: "SupplementaryProvision",
+        depth: 1,
+        children: [
+          {
+            id: "supplementary:article:1",
+            title: "第一条",
+            type: "Article",
+            depth: 2,
+            children: [],
+          },
+        ],
+      },
+    ]);
+  });
+
   it.each([
     ["1", "article-1"],
     ["709", "article-709"],

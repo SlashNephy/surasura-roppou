@@ -32,9 +32,13 @@ const items: LawTocItem[] = [
   },
 ];
 
+const noopSelectArticle = () => {
+  // テスト上は選択処理を観測しない render case で使う。
+};
+
 describe("LawTableOfContents", () => {
   it("renders nested items under the legal table of contents navigation", () => {
-    render(<LawTableOfContents items={items} />);
+    render(<LawTableOfContents items={items} onSelectArticle={noopSelectArticle} />);
 
     const navigation = screen.getByRole("navigation", { name: "法令目次" });
 
@@ -44,7 +48,13 @@ describe("LawTableOfContents", () => {
   });
 
   it("marks the active article button as the current location", () => {
-    render(<LawTableOfContents activeArticleNumber="1" items={items} />);
+    render(
+      <LawTableOfContents
+        activeArticleNumber="1"
+        items={items}
+        onSelectArticle={noopSelectArticle}
+      />,
+    );
 
     expect(screen.getByRole("button", { name: "第一条" })).toHaveAttribute(
       "aria-current",
@@ -62,7 +72,7 @@ describe("LawTableOfContents", () => {
   });
 
   it("renders an empty state when no items are available", () => {
-    render(<LawTableOfContents items={[]} />);
+    render(<LawTableOfContents items={[]} onSelectArticle={noopSelectArticle} />);
 
     expect(screen.getByText("目次を表示できません")).toBeInTheDocument();
   });

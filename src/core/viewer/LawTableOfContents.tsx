@@ -6,7 +6,7 @@ import type { LawTocItem } from "./lawToc";
 interface LawTableOfContentsProps {
   items: LawTocItem[];
   activeArticleNumber?: string;
-  onSelectArticle?: (articleNumber: string) => void;
+  onSelectArticle: (articleNumber: string) => void;
 }
 
 export const LawTableOfContents = ({
@@ -34,7 +34,7 @@ const TocItemList = ({
 }: {
   items: LawTocItem[];
   activeArticleNumber?: string;
-  onSelectArticle?: (articleNumber: string) => void;
+  onSelectArticle: (articleNumber: string) => void;
 }) => (
   <ul className="grid min-w-0 gap-1">
     {items.map((item) => (
@@ -56,7 +56,7 @@ const TocItem = ({
 }: {
   item: LawTocItem;
   activeArticleNumber?: string;
-  onSelectArticle?: (articleNumber: string) => void;
+  onSelectArticle: (articleNumber: string) => void;
 }) => {
   const articleNumber = item.type === "Article" ? item.articleNumber : undefined;
   const isArticle = articleNumber !== undefined;
@@ -71,7 +71,9 @@ const TocItem = ({
             "h-auto min-w-0 justify-start px-2 py-1.5 text-left whitespace-normal",
             isActiveArticle && "bg-accent text-accent-foreground",
           )}
-          onClick={() => onSelectArticle?.(articleNumber)}
+          onClick={() => {
+            onSelectArticle(articleNumber);
+          }}
           type="button"
           variant="ghost"
         >
