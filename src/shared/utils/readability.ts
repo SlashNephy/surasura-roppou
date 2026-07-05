@@ -39,6 +39,7 @@ export const toArabicNumber = (kanjiNumber: string): number | undefined => {
 
   let total = 0;
   let currentDigit: number | undefined;
+  let previousUnit = 10_000;
 
   for (const kanji of kanjiNumber) {
     const digit = digitByKanji.get(kanji);
@@ -58,11 +59,18 @@ export const toArabicNumber = (kanjiNumber: string): number | undefined => {
       return undefined;
     }
 
+    if (unit >= previousUnit) {
+      return undefined;
+    }
+
     total += (currentDigit ?? 1) * unit;
     currentDigit = undefined;
+    previousUnit = unit;
   }
 
-  return total + (currentDigit ?? 0);
+  const result = total + (currentDigit ?? 0);
+
+  return result < 10_000 ? result : undefined;
 };
 
 const replaceKanjiNumber = (kanjiNumber: string): string => {

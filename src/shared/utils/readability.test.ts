@@ -48,4 +48,18 @@ describe("readability", () => {
   it.each(["", "〇", "零", "壱", "一2"])("returns undefined for unsupported number %s", (input) => {
     expect(toArabicNumber(input)).toBeUndefined();
   });
+
+  it.each(["十十", "九千九千", "十百", "百百"])(
+    "returns undefined for malformed kanji number %s",
+    (input) => {
+      expect(toArabicNumber(input)).toBeUndefined();
+    },
+  );
+
+  it.each([
+    ["第十十条", "第十十条"],
+    ["第十百号", "第十百号"],
+  ])("keeps malformed article number unchanged: %s", (input, expected) => {
+    expect(transformReadableText(input)).toBe(expected);
+  });
 });
