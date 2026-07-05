@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { createEgovLawRepository } from "@/core/egov";
+import type { LawDocument, LawListResult, LawMetadata, LawRepository } from "@/core/egov";
 import { createJsonFetchStub, fixedTestNow as now, lawDataFixture } from "@/test/fixtures/egov";
 
 import { loadLawViewerDocument } from "./law-viewer-loader";
+import { offlineDemoLawId, sampleLawViewerDocument } from "./law-viewer-sample";
 
 describe("loadLawViewerDocument", () => {
   it("loads an e-Gov law through the repository for the viewer", async () => {
@@ -75,6 +77,13 @@ describe("loadLawViewerDocument", () => {
     expect(calls).toEqual([]);
   });
 
+  it("returns the offline unavailable state for the demo law ID", async () => {
+    await expect(loadLawViewerDocument(offlineDemoLawId)).resolves.toEqual({
+      status: "offline-unavailable",
+      lawTitle: sampleLawViewerDocument.law.title,
+    });
+  });
+
   it("maps temporary API failures to a retrieval error state", async () => {
     const { fetcher } = createJsonFetchStub(
       {
@@ -84,6 +93,20 @@ describe("loadLawViewerDocument", () => {
       500,
     );
     const repository = createEgovLawRepository({ fetcher, now });
+
+    await expect(loadLawViewerDocument("129AC0000000089", repository)).resolves.toEqual({
+      status: "error",
+      message: "法令を取得できませんでした。ネットワーク接続を確認してください。",
+    });
+  });
+
+  it("maps non-EgovApiError failures to a retrieval error state", async () => {
+    const repository = {
+      listLaws: (): Promise<LawListResult> => Promise.reject(new Error("Not used in this test")),
+      getLaw: (): Promise<LawDocument> => Promise.reject(new Error("network down")),
+      getLawMetadata: (): Promise<LawMetadata> =>
+        Promise.reject(new Error("Not used in this test")),
+    } satisfies LawRepository;
 
     await expect(loadLawViewerDocument("129AC0000000089", repository)).resolves.toEqual({
       status: "error",

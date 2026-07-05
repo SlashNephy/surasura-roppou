@@ -1046,7 +1046,6 @@ BFF は MVP では optional だが、AI・全法令検索・API proxy・sync を
 
 - Framework は Vite + React で始めるか、Next.js/TanStack Start にするか。
 - e-Gov API は MVP で直接 fetch するか、最初から BFF を置くか。
-- canonical law ID を何にするか。
 - 行政書士向けプリセットの初期法令セットをどこまで含めるか。
 - OCR は Tesseract.js で十分か、サーバー OCR を早期導入するか。
 - 学習カード生成に AI を使うか、まずは deterministic rules で作るか。
