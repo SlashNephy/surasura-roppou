@@ -108,6 +108,16 @@ const LawViewerReadyState = ({
   const [hasJumpError, setHasJumpError] = useState(false);
   const tocItems = useMemo(() => buildLawTableOfContents(state.nodes), [state.nodes]);
   const articleNumbers = useMemo(() => new Set(collectTocArticleNumbers(tocItems)), [tocItems]);
+  const articleNumberByNormalizedInput = useMemo(
+    () =>
+      new Map(
+        collectTocArticleNumbers(tocItems).map((articleNumber) => [
+          normalizeArticleNumberInput(articleNumber),
+          articleNumber,
+        ]),
+      ),
+    [tocItems],
+  );
   const isRouteArticleKnown =
     routeArticleNumber === undefined || articleNumbers.has(routeArticleNumber);
   const activeArticleNumber = isRouteArticleKnown ? routeArticleNumber : undefined;
@@ -115,18 +125,28 @@ const LawViewerReadyState = ({
   const articleJumpErrorId = "article-jump-error";
   const hasArticleError = hasJumpError || !isRouteArticleKnown;
 
+  const scrollToArticle = (articleNumber: string) => {
+    document
+      .getElementById(articleAnchorId(articleNumber))
+      ?.scrollIntoView({ block: "start", behavior: "smooth" });
+  };
+
   useEffect(() => {
     if (activeArticleNumber === undefined) {
       return;
     }
 
-    document
-      .getElementById(articleAnchorId(activeArticleNumber))
-      ?.scrollIntoView({ block: "start", behavior: "smooth" });
+    scrollToArticle(activeArticleNumber);
   }, [activeArticleNumber]);
 
   const navigateToArticle = (articleNumber: string) => {
     setHasJumpError(false);
+    setIsMobileTocOpen(false);
+
+    if (articleNumber === activeArticleNumber) {
+      scrollToArticle(articleNumber);
+    }
+
     void navigate({
       to: "/laws/$lawId/articles/$article",
       params: { lawId, article: articleNumber },
@@ -136,12 +156,13 @@ const LawViewerReadyState = ({
   const handleJumpSubmit = (event: SyntheticEvent<HTMLFormElement, SubmitEvent>) => {
     event.preventDefault();
 
-    const nextArticleNumber = jumpArticleNumber.trim();
-    if (nextArticleNumber === "") {
+    const normalizedArticleNumber = normalizeArticleNumberInput(jumpArticleNumber);
+    if (normalizedArticleNumber === "") {
       return;
     }
 
-    if (!articleNumbers.has(nextArticleNumber)) {
+    const nextArticleNumber = articleNumberByNormalizedInput.get(normalizedArticleNumber);
+    if (nextArticleNumber === undefined) {
       setHasJumpError(true);
       return;
     }
@@ -169,8 +190,8 @@ const LawViewerReadyState = ({
           <label className="grid min-w-0 gap-1 text-sm font-medium text-foreground">
             条番号
             <Input
-              aria-describedby={hasArticleError ? articleJumpErrorId : undefined}
-              aria-invalid={hasArticleError ? true : undefined}
+              aria-describedby={hasJumpError ? articleJumpErrorId : undefined}
+              aria-invalid={hasJumpError ? true : undefined}
               autoComplete="off"
               name="article"
               onChange={(event) => {
@@ -203,15 +224,17 @@ const LawViewerReadyState = ({
         {hasArticleError ? <div className="md:col-span-2">{notFoundAlert}</div> : null}
       </div>
 
-      {isMobileTocOpen ? (
-        <div id={tocPanelId} className="rounded-md border bg-card p-3 shadow-xs lg:hidden">
-          <LawTableOfContents
-            activeArticleNumber={activeArticleNumber}
-            items={tocItems}
-            onSelectArticle={navigateToArticle}
-          />
-        </div>
-      ) : null}
+      <div
+        id={tocPanelId}
+        className="rounded-md border bg-card p-3 shadow-xs lg:hidden"
+        hidden={!isMobileTocOpen}
+      >
+        <LawTableOfContents
+          activeArticleNumber={activeArticleNumber}
+          items={tocItems}
+          onSelectArticle={navigateToArticle}
+        />
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-start">
         <aside className="hidden rounded-md border bg-card p-3 shadow-xs lg:block">
@@ -238,6 +261,9 @@ const collectTocArticleNumbers = (items: LawTocItem[]): string[] =>
     ...(item.articleNumber === undefined ? [] : [item.articleNumber]),
     ...collectTocArticleNumbers(item.children),
   ]);
+
+const normalizeArticleNumberInput = (articleNumber: string): string =>
+  articleNumber.normalize("NFKC").replace(/\s+/g, "");
 
 const LawViewerLoadingState = () => (
   <section

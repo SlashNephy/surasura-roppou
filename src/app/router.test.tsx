@@ -1,14 +1,12 @@
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { render, screen, waitFor } from "@testing-library/react";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
+
+import { setupScrollMocks } from "@/test/scrollMocks";
 
 import { createAppRouter } from "./router";
 
-const scrollToDescriptor = Object.getOwnPropertyDescriptor(window, "scrollTo");
-const scrollIntoViewDescriptor = Object.getOwnPropertyDescriptor(
-  Element.prototype,
-  "scrollIntoView",
-);
+setupScrollMocks();
 
 const routes = [
   ["/", "今日の条文へ進む"],
@@ -22,33 +20,6 @@ const routes = [
 ] as const;
 
 describe("app router", () => {
-  beforeAll(() => {
-    Object.defineProperty(window, "scrollTo", {
-      configurable: true,
-      value: vi.fn(),
-      writable: true,
-    });
-    Object.defineProperty(Element.prototype, "scrollIntoView", {
-      configurable: true,
-      value: vi.fn(),
-      writable: true,
-    });
-  });
-
-  afterAll(() => {
-    if (scrollToDescriptor === undefined) {
-      Reflect.deleteProperty(window, "scrollTo");
-    } else {
-      Object.defineProperty(window, "scrollTo", scrollToDescriptor);
-    }
-
-    if (scrollIntoViewDescriptor === undefined) {
-      Reflect.deleteProperty(Element.prototype, "scrollIntoView");
-    } else {
-      Object.defineProperty(Element.prototype, "scrollIntoView", scrollIntoViewDescriptor);
-    }
-  });
-
   it.each(routes)("renders %s", async (path, heading) => {
     const history = createMemoryHistory({ initialEntries: [path] });
 

@@ -7,22 +7,17 @@ import {
   createRouter,
   useParams,
 } from "@tanstack/react-router";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
+
+import { setupScrollMocks } from "@/test/scrollMocks";
 
 import { LawViewerPageContent } from "./law-viewer-page";
 import type { LawViewerState } from "./law-viewer-page";
 import { createAppRouter } from "./router";
 
-type ScrollIntoView = (arg?: boolean | ScrollIntoViewOptions) => void;
-
-const scrollToDescriptor = Object.getOwnPropertyDescriptor(window, "scrollTo");
-const scrollIntoViewDescriptor = Object.getOwnPropertyDescriptor(
-  Element.prototype,
-  "scrollIntoView",
-);
-let scrollIntoView: ReturnType<typeof vi.fn<ScrollIntoView>>;
+const scrollMocks = setupScrollMocks();
 
 const renderLawViewerRoute = (path: string) => {
   const history = createMemoryHistory({ initialEntries: [path] });
@@ -107,34 +102,6 @@ const nonNumericArticleState = {
 } satisfies LawViewerState;
 
 describe("LawViewerPageContent", () => {
-  beforeEach(() => {
-    Object.defineProperty(window, "scrollTo", {
-      configurable: true,
-      value: vi.fn(),
-      writable: true,
-    });
-    scrollIntoView = vi.fn<ScrollIntoView>();
-    Object.defineProperty(Element.prototype, "scrollIntoView", {
-      configurable: true,
-      value: scrollIntoView,
-      writable: true,
-    });
-  });
-
-  afterEach(() => {
-    if (scrollToDescriptor === undefined) {
-      Reflect.deleteProperty(window, "scrollTo");
-    } else {
-      Object.defineProperty(window, "scrollTo", scrollToDescriptor);
-    }
-
-    if (scrollIntoViewDescriptor === undefined) {
-      Reflect.deleteProperty(Element.prototype, "scrollIntoView");
-    } else {
-      Object.defineProperty(Element.prototype, "scrollIntoView", scrollIntoViewDescriptor);
-    }
-  });
-
   it("renders a loading state from the page state contract", () => {
     render(<LawViewerPageContent state={{ status: "loading" }} />);
 
@@ -176,7 +143,10 @@ describe("LawViewerPageContent", () => {
       "location",
     );
     await waitFor(() => {
-      expect(scrollIntoView).toHaveBeenCalledWith({ block: "start", behavior: "smooth" });
+      expect(scrollMocks.scrollIntoView).toHaveBeenCalledWith({
+        block: "start",
+        behavior: "smooth",
+      });
     });
   });
 
@@ -215,6 +185,20 @@ describe("LawViewerPageContent", () => {
     });
   });
 
+  it("normalizes full-width article number input before navigating", async () => {
+    const { history, user } = renderLawViewerContentRoute(
+      "/laws/custom-law",
+      nonNumericArticleState,
+    );
+
+    await user.type(await screen.findByLabelText("条番号"), "７０９ の ２");
+    await user.click(screen.getByRole("button", { name: "移動" }));
+
+    await waitFor(() => {
+      expect(history.location.pathname).toBe("/laws/custom-law/articles/709%E3%81%AE2");
+    });
+  });
+
   it("keeps the current law page and shows an alert for an unknown jump target", async () => {
     const { history, user } = renderLawViewerRoute("/laws/129AC0000000089");
 
@@ -237,6 +221,16 @@ describe("LawViewerPageContent", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("指定された条文が見つかりません。");
   });
 
+  it("does not mark the jump input invalid for an unknown route article before form submit", async () => {
+    renderLawViewerRoute("/laws/129AC0000000089/articles/999");
+
+    const articleInput = await screen.findByLabelText("条番号");
+
+    expect(screen.getByRole("alert")).toHaveTextContent("指定された条文が見つかりません。");
+    expect(articleInput).not.toHaveAttribute("aria-describedby");
+    expect(articleInput).not.toHaveAttribute("aria-invalid");
+  });
+
   it("keeps a single article error alert when route and jump targets are both unknown", async () => {
     const { user } = renderLawViewerRoute("/laws/129AC0000000089/articles/999");
 
@@ -251,14 +245,51 @@ describe("LawViewerPageContent", () => {
     const { user } = renderLawViewerRoute("/laws/129AC0000000089");
 
     const tocToggle = await screen.findByRole("button", { name: "目次" });
+    const mobileTocPanel = document.querySelector("#law-viewer-mobile-toc");
+
     expect(tocToggle).toHaveAttribute("aria-expanded", "false");
     expect(tocToggle).toHaveClass("lg:hidden");
     expect(tocToggle).not.toHaveClass("md:hidden");
+    expect(mobileTocPanel).toBeInTheDocument();
+    expect(mobileTocPanel).toHaveAttribute("hidden");
 
     await user.click(tocToggle);
 
     expect(tocToggle).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getAllByRole("navigation", { name: "法令目次" }).length).toBeGreaterThan(0);
+    expect(mobileTocPanel).not.toHaveAttribute("hidden");
+    expect(
+      within(mobileTocPanel as HTMLElement).getByRole("navigation", { name: "法令目次" }),
+    ).toBeInTheDocument();
+  });
+
+  it("closes the mobile table of contents after selecting an article", async () => {
+    const { history, user } = renderLawViewerRoute("/laws/129AC0000000089");
+
+    const tocToggle = await screen.findByRole("button", { name: "目次" });
+    await user.click(tocToggle);
+    const mobileTocPanel = document.querySelector("#law-viewer-mobile-toc");
+
+    await user.click(within(mobileTocPanel as HTMLElement).getByRole("button", { name: "第二条" }));
+
+    await waitFor(() => {
+      expect(history.location.pathname).toBe("/laws/129AC0000000089/articles/2");
+    });
+    expect(tocToggle).toHaveAttribute("aria-expanded", "false");
+    expect(mobileTocPanel).toHaveAttribute("hidden");
+  });
+
+  it("scrolls again when selecting the currently active article", async () => {
+    const { user } = renderLawViewerRoute("/laws/129AC0000000089/articles/1");
+
+    await screen.findByRole("article", { name: "第一条" });
+    scrollMocks.scrollIntoView.mockClear();
+
+    await user.click(screen.getByRole("button", { name: "第一条" }));
+
+    expect(scrollMocks.scrollIntoView).toHaveBeenCalledWith({
+      block: "start",
+      behavior: "smooth",
+    });
   });
 
   it("keeps the article input text-friendly for branch article numbers", async () => {

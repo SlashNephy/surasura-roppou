@@ -32,6 +32,11 @@ export const articleAnchorId = (articleNumber: string): string => `article-${art
 export const allowsArticleUrlTargets = (nodeType: LawNodeType): boolean =>
   !nonUrlAddressableArticleContainerTypes.has(nodeType);
 
+export const computeChildArticleContext = (
+  isUrlAddressableArticleContext: boolean,
+  nodeType: LawNodeType,
+): boolean => isUrlAddressableArticleContext && allowsArticleUrlTargets(nodeType);
+
 export const buildLawTableOfContents = (nodes: LawNode[]): LawTocItem[] => {
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const topLevelNodes = nodes.filter((node) => node.parentId === undefined);
@@ -45,15 +50,16 @@ const buildTocItems = (
   depth: number,
   isUrlAddressableArticleContext: boolean,
 ): LawTocItem[] => {
-  const childArticleContext = isUrlAddressableArticleContext && allowsArticleUrlTargets(node.type);
+  const childArticleContext = computeChildArticleContext(isUrlAddressableArticleContext, node.type);
   const children = node.children
     .map((childId) => nodeById.get(childId))
     .filter((child): child is LawNode => child !== undefined);
+  const isTocNode = tocNodeTypes.has(node.type);
   const childItems = children.flatMap((child) =>
-    buildTocItems(child, nodeById, depth + 1, childArticleContext),
+    buildTocItems(child, nodeById, isTocNode ? depth + 1 : depth, childArticleContext),
   );
 
-  if (!tocNodeTypes.has(node.type)) {
+  if (!isTocNode) {
     return childItems;
   }
 

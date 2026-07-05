@@ -88,6 +88,7 @@ describe("LawNodeList", () => {
     const article = screen.getByRole("article", { name: "第一条" });
     expect(article).toHaveAttribute("id", "article-1");
     expect(article).toHaveAttribute("data-active", "true");
+    expect(article).toHaveAttribute("aria-current", "location");
     expect(within(article).getByRole("heading", { level: 4, name: "第一条" })).toBeInTheDocument();
     expect(
       within(article).getByText("私権は、公共の福祉に適合しなければならない。"),
@@ -151,8 +152,10 @@ describe("LawNodeList", () => {
 
       expect(mainArticle).toHaveAttribute("id", "article-1");
       expect(mainArticle).toHaveAttribute("data-active", "true");
+      expect(mainArticle).toHaveAttribute("aria-current", "location");
       expect(nonAddressableArticle).not.toHaveAttribute("id");
       expect(nonAddressableArticle).not.toHaveAttribute("data-active");
+      expect(nonAddressableArticle).not.toHaveAttribute("aria-current");
     },
   );
 

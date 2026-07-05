@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import type { LawNode } from "@/core/domain";
 
-import { allowsArticleUrlTargets, articleAnchorId, buildLawTableOfContents } from "./lawToc";
+import {
+  allowsArticleUrlTargets,
+  articleAnchorId,
+  buildLawTableOfContents,
+  computeChildArticleContext,
+} from "./lawToc";
 
 const node = (overrides: Partial<LawNode> & Pick<LawNode, "id" | "path" | "type">): LawNode => ({
   lawId: "129AC0000000089",
@@ -130,6 +135,94 @@ describe("lawToc", () => {
   });
 
   it.each([
+    {
+      name: "returns an empty table of contents for empty input",
+      nodes: [],
+      expected: [],
+    },
+    {
+      name: "keeps flattened depth when a non-TOC node contains an article",
+      nodes: [
+        node({
+          id: "paragraph:1",
+          type: "Paragraph",
+          path: "paragraph:1",
+          children: ["article:1"],
+        }),
+        node({
+          id: "article:1",
+          type: "Article",
+          path: "paragraph:1/article:1",
+          number: "1",
+          title: "第一条",
+          parentId: "paragraph:1",
+        }),
+      ],
+      expected: [
+        {
+          id: "article:1",
+          title: "第一条",
+          type: "Article",
+          depth: 1,
+          articleNumber: "1",
+          children: [],
+        },
+      ],
+    },
+    {
+      name: "keeps child depth relative to emitted TOC nodes only",
+      nodes: [
+        node({
+          id: "chapter:1",
+          type: "Chapter",
+          path: "chapter:1",
+          title: "第一章",
+          children: ["paragraph:1"],
+        }),
+        node({
+          id: "paragraph:1",
+          type: "Paragraph",
+          path: "chapter:1/paragraph:1",
+          parentId: "chapter:1",
+          children: ["article:1"],
+        }),
+        node({
+          id: "article:1",
+          type: "Article",
+          path: "chapter:1/paragraph:1/article:1",
+          number: "1",
+          title: "第一条",
+          parentId: "paragraph:1",
+        }),
+      ],
+      expected: [
+        {
+          id: "chapter:1",
+          title: "第一章",
+          type: "Chapter",
+          depth: 1,
+          children: [
+            {
+              id: "article:1",
+              title: "第一条",
+              type: "Article",
+              depth: 2,
+              articleNumber: "1",
+              children: [],
+            },
+          ],
+        },
+      ],
+    },
+  ] satisfies {
+    name: string;
+    nodes: LawNode[];
+    expected: ReturnType<typeof buildLawTableOfContents>;
+  }[])("$name", ({ expected, nodes }) => {
+    expect(buildLawTableOfContents(nodes)).toEqual(expected);
+  });
+
+  it.each([
     ["1", "article-1"],
     ["709", "article-709"],
   ])("builds an article anchor id for article %s", (articleNumber, expected) => {
@@ -147,6 +240,17 @@ describe("lawToc", () => {
     "returns whether %s allows article URL targets",
     (nodeType, expected) => {
       expect(allowsArticleUrlTargets(nodeType)).toBe(expected);
+    },
+  );
+
+  it.each([
+    [true, "Part", true],
+    [true, "SupplementaryProvision", false],
+    [false, "Part", false],
+  ] satisfies [boolean, LawNode["type"], boolean][])(
+    "computes child article context from parent context %s and node type %s",
+    (parentContext, nodeType, expected) => {
+      expect(computeChildArticleContext(parentContext, nodeType)).toBe(expected);
     },
   );
 });

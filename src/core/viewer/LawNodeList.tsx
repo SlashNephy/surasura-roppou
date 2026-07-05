@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import type { LawNode, LawNodeType } from "@/core/domain";
 import { cn } from "@/shared/utils/cn";
 
-import { allowsArticleUrlTargets, articleAnchorId } from "./lawToc";
+import { articleAnchorId, computeChildArticleContext } from "./lawToc";
 
 interface LawNodeListProps {
   nodes: LawNode[];
@@ -60,7 +60,7 @@ const LawNodeBlock = ({
   node: LawNode;
   nodeById: Map<string, LawNode>;
 }) => {
-  const childArticleContext = isUrlAddressableArticleContext && allowsArticleUrlTargets(node.type);
+  const childArticleContext = computeChildArticleContext(isUrlAddressableArticleContext, node.type);
   const children = node.children
     .map((childId) => nodeById.get(childId))
     .filter((child): child is LawNode => child !== undefined);
@@ -80,6 +80,7 @@ const LawNodeBlock = ({
         <article
           id={articleId}
           data-active={isActiveArticle ? "true" : undefined}
+          aria-current={isActiveArticle ? "location" : undefined}
           aria-label={node.title ?? `条文 ${node.number ?? node.path}`}
           className={cn(
             "scroll-mt-20 rounded-md border bg-background p-4 shadow-xs md:p-5",
@@ -91,16 +92,13 @@ const LawNodeBlock = ({
           </Heading>
           <div className="mt-4 grid gap-3">
             {children.length > 0 ? (
-              children.map((child) => (
-                <LawNodeBlock
-                  key={child.id}
-                  activeArticleNumber={activeArticleNumber}
-                  depth={depth + 1}
-                  isUrlAddressableArticleContext={childArticleContext}
-                  node={child}
-                  nodeById={nodeById}
-                />
-              ))
+              renderChildBlocks({
+                activeArticleNumber,
+                children,
+                depth,
+                isUrlAddressableArticleContext: childArticleContext,
+                nodeById,
+              })
             ) : (
               <p className="leading-8 text-foreground break-words">{node.plainText}</p>
             )}
@@ -132,16 +130,13 @@ const LawNodeBlock = ({
             ) : null}
             <span className="min-w-0 break-words">{bodyText}</span>
           </p>
-          {children.map((child) => (
-            <LawNodeBlock
-              key={child.id}
-              activeArticleNumber={activeArticleNumber}
-              depth={depth + 1}
-              isUrlAddressableArticleContext={childArticleContext}
-              node={child}
-              nodeById={nodeById}
-            />
-          ))}
+          {renderChildBlocks({
+            activeArticleNumber,
+            children,
+            depth,
+            isUrlAddressableArticleContext: childArticleContext,
+            nodeById,
+          })}
         </div>
       );
     }
@@ -161,19 +156,40 @@ const LawNodeBlock = ({
         </Heading>
       ) : null}
       {bodyText !== "" ? <p className="leading-8 text-foreground break-words">{bodyText}</p> : null}
-      {children.map((child) => (
-        <LawNodeBlock
-          key={child.id}
-          activeArticleNumber={activeArticleNumber}
-          depth={depth + 1}
-          isUrlAddressableArticleContext={childArticleContext}
-          node={child}
-          nodeById={nodeById}
-        />
-      ))}
+      {renderChildBlocks({
+        activeArticleNumber,
+        children,
+        depth,
+        isUrlAddressableArticleContext: childArticleContext,
+        nodeById,
+      })}
     </section>
   );
 };
+
+const renderChildBlocks = ({
+  activeArticleNumber,
+  children,
+  depth,
+  isUrlAddressableArticleContext,
+  nodeById,
+}: {
+  activeArticleNumber: string | undefined;
+  children: LawNode[];
+  depth: number;
+  isUrlAddressableArticleContext: boolean;
+  nodeById: Map<string, LawNode>;
+}) =>
+  children.map((child) => (
+    <LawNodeBlock
+      key={child.id}
+      activeArticleNumber={activeArticleNumber}
+      depth={depth + 1}
+      isUrlAddressableArticleContext={isUrlAddressableArticleContext}
+      node={child}
+      nodeById={nodeById}
+    />
+  ));
 
 const stripTrailingChildPlainTexts = (plainText: string, children: LawNode[]): string =>
   children.reduceRight((bodyText, child) => {
