@@ -2,8 +2,8 @@ import { useMemo } from "react";
 
 import type { LawNode, LawNodeType } from "@/core/domain";
 import { cn } from "@/shared/utils/cn";
-import { transformReadableText } from "@/shared/utils/readability";
 
+import { applyLawTextDisplayMode, type LawTextDisplayMode } from "./displayMode";
 import { articleAnchorId, computeChildArticleContext } from "./lawToc";
 
 interface LawNodeListProps {
@@ -11,8 +11,6 @@ interface LawNodeListProps {
   activeArticleNumber?: string;
   displayMode?: LawTextDisplayMode;
 }
-
-export type LawTextDisplayMode = "original" | "readable";
 
 type HeadingLawNodeType = Exclude<LawNodeType, "Article" | "Paragraph" | "Item" | "Subitem">;
 
@@ -241,7 +239,7 @@ const stripLeadingMarker = (plainText: string, marker: string | undefined): stri
 const getDisplayText = (node: LawNode, displayMode: LawTextDisplayMode): string => {
   const text = displayMode === "original" ? node.rawText || node.plainText : node.plainText;
 
-  return displayMode === "readable" ? transformReadableText(text) : text;
+  return applyLawTextDisplayMode(text, displayMode);
 };
 
 const getDisplayInlineText = (
@@ -252,5 +250,5 @@ const getDisplayInlineText = (
     return undefined;
   }
 
-  return displayMode === "readable" ? transformReadableText(text) : text;
+  return applyLawTextDisplayMode(text, displayMode);
 };

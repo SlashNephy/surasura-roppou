@@ -128,4 +128,20 @@ describe("LawDocumentView", () => {
     expect(within(document).getByText("明治二十九年法律第八十九号")).toBeInTheDocument();
     expect(within(document).queryByText("明治29年法律第89号")).not.toBeInTheDocument();
   });
+
+  it("formats law number without applying unrelated readable transforms", () => {
+    render(
+      <LawDocumentView
+        isSaved={false}
+        law={{ ...law, lawNumber: "平成元年法律第十一号（抄）" }}
+        nodes={[]}
+        revision={revision}
+      />,
+    );
+
+    const document = screen.getByRole("article", { name: "民法" });
+
+    expect(within(document).getByText("平成元年法律第11号（抄）")).toBeInTheDocument();
+    expect(within(document).queryByText("平成元年法律第11号(抄)")).not.toBeInTheDocument();
+  });
 });

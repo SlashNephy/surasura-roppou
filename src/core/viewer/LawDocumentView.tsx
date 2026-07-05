@@ -1,9 +1,9 @@
 import type { Law, LawNode, LawRevision } from "@/core/domain";
 import { Badge } from "@/shared/ui/badge";
-import { transformReadableText } from "@/shared/utils/readability";
 
+import { applyLawTextDisplayMode } from "./displayMode";
+import type { LawTextDisplayMode } from "./displayMode";
 import { LawNodeList } from "./LawNodeList";
-import type { LawTextDisplayMode } from "./LawNodeList";
 
 interface LawDocumentViewProps {
   law: Law;
@@ -64,4 +64,4 @@ export const LawDocumentView = ({
 );
 
 const getDisplayLawNumber = (lawNumber: string, displayMode: LawTextDisplayMode): string =>
-  displayMode === "readable" ? transformReadableText(lawNumber) : lawNumber;
+  applyLawTextDisplayMode(lawNumber, displayMode, "law-number");
