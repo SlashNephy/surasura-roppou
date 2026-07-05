@@ -69,6 +69,38 @@ describe("article reference keys", () => {
     expect(buildLawArticleUrl(reference)).toBe("/laws/129AC0000000089/articles/709");
   });
 
+  it("omits empty optional values from keys and URLs", () => {
+    const reference = {
+      lawId: "129AC0000000089",
+      revisionId: "",
+      article: "709",
+      paragraph: "",
+      item: "",
+    } satisfies ArticleReference;
+
+    expect(buildArticleReferenceKey(reference)).toBe("law:129AC0000000089/article:709");
+    expect(buildLawArticleUrl(reference)).toBe("/laws/129AC0000000089/articles/709");
+  });
+
+  it.each([
+    [
+      "latest law top",
+      { lawId: "129AC0000000089" },
+      "law:129AC0000000089",
+      "/laws/129AC0000000089",
+    ],
+    [
+      "specific revision top",
+      { lawId: "129AC0000000089", revisionId: "20240401" },
+      "law:129AC0000000089/revision:20240401",
+      "/laws/129AC0000000089/20240401",
+    ],
+  ] as const)("builds stable keys and URLs for %s", (_name, reference, key, url) => {
+    expect(buildArticleReferenceKey(reference)).toBe(key);
+    expect(buildLawArticleUrl(reference)).toBe(url);
+    expect(parseArticleReferenceKey(key)).toEqual(reference);
+  });
+
   it("round-trips Japanese text and reserved URL characters", () => {
     const reference = {
       lawId: "民法/明治",

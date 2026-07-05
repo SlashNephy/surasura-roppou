@@ -10,7 +10,6 @@ export type {
   LawNodeType,
   LawReferenceCandidate,
   LawReferenceDetectionSource,
-  LawReferenceTarget,
   LawRevision,
   QuizRating,
   QuizResult,
@@ -18,7 +17,7 @@ export type {
   StudyCardType,
   StudySession,
 } from "./models";
-export type { ArticleReference } from "./references";
+export type { ArticleReference, LawReferenceTarget } from "./references";
 export {
   buildArticleReferenceKey,
   buildLawArticleUrl,

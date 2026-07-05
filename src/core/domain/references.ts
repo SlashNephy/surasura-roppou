@@ -1,9 +1,14 @@
-export interface ArticleReference {
+export interface LawReferenceTarget {
   lawId: string;
   revisionId?: string | null;
-  article: string;
+  article?: string | null;
   paragraph?: string | null;
   item?: string | null;
+  path?: string | null;
+}
+
+export interface ArticleReference extends LawReferenceTarget {
+  article: string;
 }
 
 const segmentKinds = ["law", "revision", "article", "paragraph", "item"] as const;
@@ -12,11 +17,15 @@ type ReferenceSegmentKind = (typeof segmentKinds)[number];
 
 type ReferenceSegments = Partial<Record<ReferenceSegmentKind, string>>;
 
-export const buildArticleReferenceKey = (reference: ArticleReference): string => {
+export const buildArticleReferenceKey = (reference: LawReferenceTarget): string => {
   const segments = [`law:${encodeReferenceSegment(reference.lawId)}`];
 
   if (hasReferenceValue(reference.revisionId)) {
     segments.push(`revision:${encodeReferenceSegment(reference.revisionId)}`);
+  }
+
+  if (!hasReferenceValue(reference.article)) {
+    return segments.join("/");
   }
 
   segments.push(`article:${encodeReferenceSegment(reference.article)}`);
@@ -32,10 +41,15 @@ export const buildArticleReferenceKey = (reference: ArticleReference): string =>
   return segments.join("/");
 };
 
-export const buildLawArticleUrl = (reference: ArticleReference): string => {
+export const buildLawArticleUrl = (reference: LawReferenceTarget): string => {
   const lawPath = hasReferenceValue(reference.revisionId)
     ? `/laws/${encodeURIComponent(reference.lawId)}/${encodeURIComponent(reference.revisionId)}`
     : `/laws/${encodeURIComponent(reference.lawId)}`;
+
+  if (!hasReferenceValue(reference.article)) {
+    return lawPath;
+  }
+
   const params = new URLSearchParams();
 
   if (hasReferenceValue(reference.paragraph)) {
@@ -52,10 +66,17 @@ export const buildLawArticleUrl = (reference: ArticleReference): string => {
   return query === "" ? articlePath : `${articlePath}?${query}`;
 };
 
-export const parseArticleReferenceKey = (key: string): ArticleReference | undefined => {
+export const parseArticleReferenceKey = (key: string): LawReferenceTarget | undefined => {
   const segments = parseSegments(key);
 
-  if (segments?.law === undefined || segments.article === undefined) {
+  if (segments?.law === undefined) {
+    return undefined;
+  }
+
+  if (
+    segments.article === undefined &&
+    (segments.paragraph !== undefined || segments.item !== undefined)
+  ) {
     return undefined;
   }
 
@@ -125,5 +146,5 @@ const decodeReferenceSegment = (value: string): string | undefined => {
 };
 
 const hasReferenceValue = (value: string | null | undefined): value is string => {
-  return value !== undefined && value !== null;
+  return value !== undefined && value !== null && value !== "";
 };

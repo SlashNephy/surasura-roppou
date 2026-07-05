@@ -1,4 +1,4 @@
-import type { ArticleReference } from "./references";
+import type { ArticleReference, LawReferenceTarget } from "./references";
 
 export type ISODateString = string;
 
@@ -47,15 +47,6 @@ export interface LawNode {
   normalizedText?: string;
   children: string[];
   parentId?: string;
-}
-
-export interface LawReferenceTarget {
-  lawId: string;
-  revisionId?: string | null;
-  article?: string | null;
-  paragraph?: string | null;
-  item?: string | null;
-  path?: string | null;
 }
 
 export interface Bookmark {
