@@ -68,6 +68,24 @@ pnpm run review:antigravity
 
 `review:antigravity` は Antigravity CLI (`agy`) が利用できない環境では skip します。skip した場合は、PR 本文や最終報告にその旨を記録します。
 
+## Deployment
+
+Cloudflare Pages に Vite の `dist` を配信します。
+`public/_redirects` で SPA fallback を明示しているため、`/laws/:lawId` などのクライアントルーティング URL へ直接アクセスしても `index.html` が返ります。
+
+Cloudflare Pages の build 設定:
+
+- Build command: `pnpm run build`
+- Build output directory: `dist`
+- Environment variables: `NODE_VERSION=24.16.0`, `PNPM_VERSION=11.7.0`
+
+本番 build のローカル確認:
+
+```bash
+pnpm run build
+pnpm preview
+```
+
 ## Repository Layout
 
 - `src/app/`: アプリシェル、ルーター、ページ単位の実装。
