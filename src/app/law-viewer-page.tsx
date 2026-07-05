@@ -112,6 +112,8 @@ const LawViewerReadyState = ({
     routeArticleNumber === undefined || articleNumbers.has(routeArticleNumber);
   const activeArticleNumber = isRouteArticleKnown ? routeArticleNumber : undefined;
   const tocPanelId = "law-viewer-mobile-toc";
+  const articleJumpErrorId = "article-jump-error";
+  const hasArticleError = hasJumpError || !isRouteArticleKnown;
 
   useEffect(() => {
     if (activeArticleNumber === undefined) {
@@ -149,6 +151,7 @@ const LawViewerReadyState = ({
 
   const notFoundAlert = (
     <p
+      id={articleJumpErrorId}
       role="alert"
       className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-6 text-destructive"
     >
@@ -166,7 +169,10 @@ const LawViewerReadyState = ({
           <label className="grid min-w-0 gap-1 text-sm font-medium text-foreground">
             条番号
             <Input
-              inputMode="numeric"
+              aria-describedby={hasArticleError ? articleJumpErrorId : undefined}
+              aria-invalid={hasArticleError ? true : undefined}
+              autoComplete="off"
+              name="article"
               onChange={(event) => {
                 setJumpArticleNumber(event.target.value);
                 setHasJumpError(false);
@@ -183,7 +189,7 @@ const LawViewerReadyState = ({
         <Button
           aria-controls={tocPanelId}
           aria-expanded={isMobileTocOpen}
-          className="w-fit gap-2 md:hidden"
+          className="w-fit gap-2 lg:hidden"
           onClick={() => {
             setIsMobileTocOpen((current) => !current);
           }}
@@ -194,12 +200,11 @@ const LawViewerReadyState = ({
           目次
         </Button>
 
-        {hasJumpError ? <div className="md:col-span-2">{notFoundAlert}</div> : null}
-        {!isRouteArticleKnown ? <div className="md:col-span-2">{notFoundAlert}</div> : null}
+        {hasArticleError ? <div className="md:col-span-2">{notFoundAlert}</div> : null}
       </div>
 
       {isMobileTocOpen ? (
-        <div id={tocPanelId} className="rounded-md border bg-card p-3 shadow-xs md:hidden">
+        <div id={tocPanelId} className="rounded-md border bg-card p-3 shadow-xs lg:hidden">
           <LawTableOfContents
             activeArticleNumber={activeArticleNumber}
             items={tocItems}
