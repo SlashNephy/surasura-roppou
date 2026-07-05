@@ -76,7 +76,8 @@ export const normalizeEgovLawText = (
     const number = getNodeNumber(apiNode, nodeType) ?? String(siblingIndex);
     const path = appendPath(parentPath, `${pathSegmentByType[nodeType]}:${number}`);
     const nodeId = `${lawId}:${revisionId}:${path}`;
-    const title = getNodeTitle(apiNode, nodeType);
+    const rawTitle = getNodeTitle(apiNode, nodeType);
+    const title = rawTitle === undefined || rawTitle.trim() === "" ? undefined : rawTitle;
     const plainText = collectPlainText(apiNode);
     const lawNode: LawNode = {
       id: nodeId,
@@ -193,8 +194,8 @@ const extractNumberFromTitle = (title: string, nodeType: LawNodeType): string | 
 const normalizeNumberSegments = (value: string): string | undefined => {
   const segments = value
     .trim()
-    .replace(/^第/, "")
     .split("の")
+    .map((segment) => segment.trim().replace(/^第/, ""))
     .filter((segment) => segment !== "");
 
   return segments.length === 0 ? undefined : segments.map(normalizeNumberText).join("-");
@@ -206,21 +207,37 @@ const collectRawText = (node: EgovLawTextNode): string =>
     .join("");
 
 const collectPlainText = (node: EgovLawTextNode): string => {
-  const parts = collectTextParts(node);
+  if (node.tag === "RubyChar") {
+    return "";
+  }
 
-  return parts.join(" ");
+  const parts = node.children
+    .map((child) => (typeof child === "string" ? child.trim() : collectPlainText(child)))
+    .filter((part) => part !== "");
+
+  return parts.join(plainTextBlockTags.has(node.tag) ? " " : "");
 };
 
-const collectTextParts = (node: EgovLawTextNode): string[] =>
-  node.children.flatMap((child) => {
-    if (typeof child === "string") {
-      const value = child.trim();
-
-      return value === "" ? [] : [value];
-    }
-
-    return collectTextParts(child);
-  });
+const plainTextBlockTags = new Set([
+  "Law",
+  "LawBody",
+  "Part",
+  "Chapter",
+  "Section",
+  "Subsection",
+  "Division",
+  "Article",
+  "Paragraph",
+  "Item",
+  "Subitem",
+  "SupplProvision",
+  "AppdxTable",
+  "AppdxStyle",
+  "TableStruct",
+  "Table",
+  "TableRow",
+  "TableColumn",
+]);
 
 const stringifyAttribute = (value: string | number | boolean | undefined): string | undefined => {
   return value === undefined ? undefined : String(value);
