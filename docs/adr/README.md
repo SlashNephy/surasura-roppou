@@ -61,4 +61,4 @@ Proposed | Accepted | Superseded
 
 ## Current Records
 
-まだ ADR はない。
+- [2026-07-05: e-Gov Law ID を canonical URL に使う](2026-07-05-egov-law-id-canonical-url.md)

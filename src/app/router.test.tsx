@@ -2,6 +2,8 @@ import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import { createEgovLawRepository } from "@/core/egov";
+import { createJsonFetchStub, fixedTestNow as now, lawDataFixture } from "@/test/fixtures/egov";
 import { setupScrollMocks } from "@/test/scrollMocks";
 
 import { createAppRouter } from "./router";
@@ -22,8 +24,10 @@ const routes = [
 describe("app router", () => {
   it.each(routes)("renders %s", async (path, heading) => {
     const history = createMemoryHistory({ initialEntries: [path] });
+    const { fetcher } = createJsonFetchStub(lawDataFixture);
+    const lawRepository = createEgovLawRepository({ fetcher, now });
 
-    render(<RouterProvider router={createAppRouter({ history })} />);
+    render(<RouterProvider router={createAppRouter({ history, lawRepository })} />);
 
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: heading })).toBeInTheDocument();

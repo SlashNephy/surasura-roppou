@@ -16,15 +16,15 @@ Last updated: 2026-07-05
 
 ## 2. フェーズ一覧
 
-| Phase | Goal                                           | Parent Issue                                                 | Status      |
-| ----- | ---------------------------------------------- | ------------------------------------------------------------ | ----------- |
-| M0    | 開発基盤、設計、型、取得層、初期 docs を整える | [#1](https://github.com/SlashNephy/surasura-roppou/issues/1) | In progress |
-| M1    | e-Gov データを使った法令ビューア MVP を作る    | [#2](https://github.com/SlashNephy/surasura-roppou/issues/2) | Open        |
-| M2    | PWA、オフライン保存、ブックマークを作る        | [#3](https://github.com/SlashNephy/surasura-roppou/issues/3) | Open        |
-| M3    | 参照検索、略称、検索バーを作る                 | [#4](https://github.com/SlashNephy/surasura-roppou/issues/4) | Open        |
-| M4    | 学習カード、クイズ、復習を作る                 | [#5](https://github.com/SlashNephy/surasura-roppou/issues/5) | Open        |
-| M5    | OCR で撮って条文を開く体験を作る               | [#6](https://github.com/SlashNephy/surasura-roppou/issues/6) | Open        |
-| M6    | ときどき六法連携、品質、運用を整える           | [#7](https://github.com/SlashNephy/surasura-roppou/issues/7) | Open        |
+| Phase | Goal                                           | Parent Issue                                                 | Status |
+| ----- | ---------------------------------------------- | ------------------------------------------------------------ | ------ |
+| M0    | 開発基盤、設計、型、取得層、初期 docs を整える | [#1](https://github.com/SlashNephy/surasura-roppou/issues/1) | Closed |
+| M1    | e-Gov データを使った法令ビューア MVP を作る    | [#2](https://github.com/SlashNephy/surasura-roppou/issues/2) | Closed |
+| M2    | PWA、オフライン保存、ブックマークを作る        | [#3](https://github.com/SlashNephy/surasura-roppou/issues/3) | Open   |
+| M3    | 参照検索、略称、検索バーを作る                 | [#4](https://github.com/SlashNephy/surasura-roppou/issues/4) | Open   |
+| M4    | 学習カード、クイズ、復習を作る                 | [#5](https://github.com/SlashNephy/surasura-roppou/issues/5) | Open   |
+| M5    | OCR で撮って条文を開く体験を作る               | [#6](https://github.com/SlashNephy/surasura-roppou/issues/6) | Open   |
+| M6    | ときどき六法連携、品質、運用を整える           | [#7](https://github.com/SlashNephy/surasura-roppou/issues/7) | Open   |
 
 ## 3. M0: 開発基盤
 
@@ -32,8 +32,8 @@ Last updated: 2026-07-05
 | -------------------------------------------------------------- | ---------------------------------- | ------ | ----------------------------------------------------------------------------------------------- |
 | [#8](https://github.com/SlashNephy/surasura-roppou/issues/8)   | フロントエンド基盤とCIを構築する   | Closed | Vite、React、TypeScript、TanStack Router、Tailwind CSS、shadcn/ui style primitives、CI の入口。 |
 | [#9](https://github.com/SlashNephy/surasura-roppou/issues/9)   | ドメインモデルと条文パスを定義する | Closed | `src/core/domain` の基礎型と条文参照キー。                                                      |
-| [#10](https://github.com/SlashNephy/surasura-roppou/issues/10) | テスト基盤とfixtureを整備する      | Open   | Vitest/CI 導入済み。`src/test/fixtures/` に e-Gov、条文参照、読みやすさ変換 fixture を置く。    |
-| [#11](https://github.com/SlashNephy/surasura-roppou/issues/11) | 初期ドキュメントとREADMEを整備する | Open   | README、design doc、task index、ADR 入口を整える。                                              |
+| [#10](https://github.com/SlashNephy/surasura-roppou/issues/10) | テスト基盤とfixtureを整備する      | Closed | Vitest/CI 導入済み。`src/test/fixtures/` に e-Gov、条文参照、読みやすさ変換 fixture を置く。    |
+| [#11](https://github.com/SlashNephy/surasura-roppou/issues/11) | 初期ドキュメントとREADMEを整備する | Closed | README、design doc、task index、ADR 入口を整える。                                              |
 | [#12](https://github.com/SlashNephy/surasura-roppou/issues/12) | データ取得層を実装する             | Closed | `src/core/egov` の e-Gov API 取得層。                                                           |
 
 M0 が完了すると、後続 Issue は共通の UI 基盤、ドメイン型、e-Gov 取得層、ドキュメント入口を前提に進められる。
@@ -44,10 +44,13 @@ Parent: [#2](https://github.com/SlashNephy/surasura-roppou/issues/2)
 
 | Issue                                                          | Title                                 | Status | Notes                                                                        |
 | -------------------------------------------------------------- | ------------------------------------- | ------ | ---------------------------------------------------------------------------- |
-| [#13](https://github.com/SlashNephy/surasura-roppou/issues/13) | 本文データをLawNodeツリーへ正規化する | Open   | `src/core/egov/lawText.ts` で e-Gov 由来本文を `LawNode[]` に正規化する。    |
-| [#14](https://github.com/SlashNephy/surasura-roppou/issues/14) | レスポンシブな本文ビューア画面を作る  | Open   | `/laws/:lawId` で fixture-backed な本文ビューア MVP を表示する。             |
-| [#15](https://github.com/SlashNephy/surasura-roppou/issues/15) | 目次と条文ナビゲーションを実装する    | Open   | `/laws/:lawId/articles/:article`、目次、条番号ジャンプ、本文 anchor の MVP。 |
-| [#16](https://github.com/SlashNephy/surasura-roppou/issues/16) | 表示モードと文字列正規化を実装する    | Open   | 原文表示、読みやすい表示、条番号・日付・法令番号・かっこの表示変換。         |
+| [#13](https://github.com/SlashNephy/surasura-roppou/issues/13) | 本文データをLawNodeツリーへ正規化する | Closed | `src/core/egov/lawText.ts` で e-Gov 由来本文を `LawNode[]` に正規化する。    |
+| [#14](https://github.com/SlashNephy/surasura-roppou/issues/14) | レスポンシブな本文ビューア画面を作る  | Closed | `/laws/:lawId` で `LawRepository` 経由の e-Gov 本文を表示する。              |
+| [#15](https://github.com/SlashNephy/surasura-roppou/issues/15) | 目次と条文ナビゲーションを実装する    | Closed | `/laws/:lawId/articles/:article`、目次、条番号ジャンプ、本文 anchor の MVP。 |
+| [#16](https://github.com/SlashNephy/surasura-roppou/issues/16) | 表示モードと文字列正規化を実装する    | Closed | 原文表示、読みやすい表示、条番号・日付・法令番号・かっこの表示変換。         |
+
+M1 完了時点の法令ビューアは、e-Gov `lawId` を canonical URL として扱い、`LawRepository` 経由で本文を取得する。
+テストでは fixture-backed repository を注入し、外部 API に依存せずに loading / error / ready 状態を検証する。
 
 ## 5. M2: PWA・保存・オフライン
 
@@ -114,7 +117,6 @@ Parent: [#7](https://github.com/SlashNephy/surasura-roppou/issues/7)
 
 ## 11. 次の進め方
 
-1. M0 の残件である [#10](https://github.com/SlashNephy/surasura-roppou/issues/10) と [#11](https://github.com/SlashNephy/surasura-roppou/issues/11) を閉じる。
-2. M1 の [#13](https://github.com/SlashNephy/surasura-roppou/issues/13) で e-Gov 取得結果を viewer 用ツリーへ正規化する。
-3. [#14](https://github.com/SlashNephy/surasura-roppou/issues/14) と [#15](https://github.com/SlashNephy/surasura-roppou/issues/15) で本文ビューアの初期体験を作る。
-4. 保存、検索、学習、OCR は viewer MVP の契約を崩さない範囲で段階的に足す。
+1. M2 の [#17](https://github.com/SlashNephy/surasura-roppou/issues/17) で IndexedDB スキーマと保存リポジトリを定義する。
+2. M3 の [#22](https://github.com/SlashNephy/surasura-roppou/issues/22) で初期略称辞書を作り、参照パーサーの入力解決を準備する。
+3. 保存、検索、学習、OCR は viewer MVP の URL / `LawRepository` / `LawNode` 契約を崩さない範囲で段階的に足す。

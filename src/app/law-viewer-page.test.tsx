@@ -11,18 +11,71 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
+import { createEgovLawRepository } from "@/core/egov";
+import type { LawDocument, LawListResult, LawMetadata, LawRepository } from "@/core/egov";
+import { createJsonFetchStub, fixedTestNow as now, lawDataFixture } from "@/test/fixtures/egov";
 import { setupScrollMocks } from "@/test/scrollMocks";
 
-import { LawViewerPageContent } from "./law-viewer-page";
+import { LawViewerPage, LawViewerPageContent } from "./law-viewer-page";
 import type { LawViewerState } from "./law-viewer-page";
-import { createAppRouter } from "./router";
 
 const scrollMocks = setupScrollMocks();
 
-const renderLawViewerRoute = (path: string) => {
-  const history = createMemoryHistory({ initialEntries: [path] });
+const createFixtureRepository = () => {
+  const { calls, fetcher } = createJsonFetchStub(lawDataFixture);
 
-  render(<RouterProvider router={createAppRouter({ history })} />);
+  return {
+    calls,
+    repository: createEgovLawRepository({ fetcher, now }),
+  };
+};
+
+const createMissingRepository = (): LawRepository => {
+  const { fetcher } = createJsonFetchStub(
+    {
+      code: "400001",
+      message: "指定された法令IDが存在しません。",
+    },
+    404,
+  );
+
+  return createEgovLawRepository({ fetcher, now });
+};
+
+const pendingRepository = {
+  listLaws: (): Promise<LawListResult> => Promise.reject(new Error("Not used in this test")),
+  getLaw: (): Promise<LawDocument> =>
+    new Promise((resolve) => {
+      void resolve;
+    }),
+  getLawMetadata: (): Promise<LawMetadata> => Promise.reject(new Error("Not used in this test")),
+} satisfies LawRepository;
+
+const renderLawViewerRoute = (path: string, repository = createFixtureRepository().repository) => {
+  const LawViewerRoute = () => <LawViewerPage repository={repository} />;
+  const history = createMemoryHistory({ initialEntries: [path] });
+  const rootRoute = createRootRoute({
+    component: Outlet,
+  });
+  const baseRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "laws/$lawId",
+    component: LawViewerRoute,
+  });
+  const articleRoute = createRoute({
+    getParentRoute: () => baseRoute,
+    path: "articles/$article",
+    component: LawViewerRoute,
+  });
+
+  render(
+    <RouterProvider
+      router={createRouter({
+        history,
+        routeTree: rootRoute.addChildren([baseRoute.addChildren([articleRoute])]),
+      })}
+    />,
+  );
 
   return {
     history,
@@ -109,7 +162,7 @@ describe("LawViewerPageContent", () => {
   });
 
   it("renders an error state with a return link to law search", async () => {
-    renderLawViewerRoute("/laws/not-found");
+    renderLawViewerRoute("/laws/not-found", createMissingRepository());
 
     expect(await screen.findByRole("alert")).toHaveTextContent("法令が見つかりません。");
     expect(screen.getByRole("link", { name: "法令検索へ戻る" })).toHaveAttribute("href", "/laws");
@@ -124,11 +177,26 @@ describe("LawViewerPageContent", () => {
     expect(screen.getByText("民法")).toBeInTheDocument();
   });
 
-  it("renders the ready sample law as unsaved", async () => {
-    renderLawViewerRoute("/laws/129AC0000000089");
+  it("renders a loading state while the repository request is pending", async () => {
+    renderLawViewerRoute("/laws/129AC0000000089", pendingRepository);
+
+    expect(await screen.findByLabelText("法令本文を読み込み中")).toBeInTheDocument();
+  });
+
+  it("loads the ready law through the repository as unsaved", async () => {
+    const { calls, repository } = createFixtureRepository();
+
+    renderLawViewerRoute("/laws/129AC0000000089", repository);
 
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
     expect(screen.getByText("未保存")).toBeInTheDocument();
+    expect(calls).toEqual([
+      {
+        input:
+          "https://laws.e-gov.go.jp/api/2/law_data/129AC0000000089?law_full_text_format=json&response_format=json",
+        init: { headers: { accept: "application/json" } },
+      },
+    ]);
   });
 
   it("renders readable display mode by default", async () => {
@@ -144,7 +212,7 @@ describe("LawViewerPageContent", () => {
 
     expect(within(article).getByRole("heading", { name: "第1条" })).toBeInTheDocument();
     expect(
-      within(article).getByText("私権は、公共の福祉(公共の利益を含む。)に適合しなければならない。"),
+      within(article).getByText("私権は、公共の福祉に適合しなければならない。"),
     ).toBeInTheDocument();
   });
 
@@ -163,9 +231,7 @@ describe("LawViewerPageContent", () => {
 
     expect(within(article).getByRole("heading", { name: "第一条" })).toBeInTheDocument();
     expect(
-      within(article).getByText(
-        "私権は、公共の福祉（公共の利益を含む。）に適合しなければならない。",
-      ),
+      within(article).getByText("私権は、公共の福祉に適合しなければならない。"),
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "読みやすい表示" }));
