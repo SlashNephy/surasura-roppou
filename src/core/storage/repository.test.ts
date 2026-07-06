@@ -15,15 +15,18 @@ import type {
 } from "@/core/domain";
 
 import {
-  createStorageRepository,
+  createStorageRepository as originalCreateStorageRepository,
   deleteSurasuraDatabase,
   surasuraDatabaseVersion,
 } from "./repository";
+import type { StorageRepository, StorageRepositoryOptions } from "./repository";
 
 const fixedNow = () => new Date("2026-07-06T00:00:00.000Z");
+const openedRepositories: StorageRepository[] = [];
 const openedDatabaseNames: string[] = [];
 
 afterEach(async () => {
+  await Promise.all(openedRepositories.splice(0).map((repository) => repository.close()));
   await Promise.all(openedDatabaseNames.splice(0).map((name) => deleteSurasuraDatabase(name)));
 });
 
@@ -70,6 +73,57 @@ describe("StorageRepository", () => {
         nodeCount: 2,
         savedAt: "2026-07-06T00:00:00.000Z",
         updatedAt: "2026-07-07T00:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("lists saved laws from newest to oldest", async () => {
+    let currentTime = new Date("2026-07-06T00:00:00.000Z");
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: () => currentTime,
+    });
+    const olderLaw = {
+      ...law,
+      lawId: "129AC0000000088",
+      title: "旧法",
+      aliases: ["旧法"],
+    } satisfies Law;
+    const olderRevision = {
+      ...revision,
+      lawId: olderLaw.lawId,
+      revisionId: "129AC0000000088_20260401_0000000000000",
+    } satisfies LawRevision;
+    const olderNode = {
+      ...articleNode,
+      id: "129AC0000000088:129AC0000000088_20260401_0000000000000:article:1",
+      lawId: olderLaw.lawId,
+      revisionId: olderRevision.revisionId,
+    } satisfies LawNode;
+
+    await repository.saveLawDocument({
+      law: olderLaw,
+      revision: olderRevision,
+      nodes: [olderNode],
+    });
+
+    currentTime = new Date("2026-07-07T00:00:00.000Z");
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode] });
+
+    await expect(repository.listSavedLaws()).resolves.toEqual([
+      {
+        law,
+        revision,
+        nodeCount: 1,
+        savedAt: "2026-07-07T00:00:00.000Z",
+        updatedAt: "2026-07-07T00:00:00.000Z",
+      },
+      {
+        law: olderLaw,
+        revision: olderRevision,
+        nodeCount: 1,
+        savedAt: "2026-07-06T00:00:00.000Z",
+        updatedAt: "2026-07-06T00:00:00.000Z",
       },
     ]);
   });
@@ -146,7 +200,30 @@ describe("StorageRepository", () => {
   it("exposes schema version 1 for the first offline storage migration", () => {
     expect(surasuraDatabaseVersion).toBe(1);
   });
+
+  it("closes the cached connection and can reopen on later operations", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.putCollection(collection);
+    await repository.close();
+
+    await repository.putCollection({ ...collection, id: "collection-2", title: "再オープン" });
+
+    await expect(repository.listCollections()).resolves.toEqual([
+      collection,
+      { ...collection, id: "collection-2", title: "再オープン" },
+    ]);
+  });
 });
+
+const createStorageRepository = (options: StorageRepositoryOptions): StorageRepository => {
+  const repository = originalCreateStorageRepository(options);
+  openedRepositories.push(repository);
+  return repository;
+};
 
 const createDatabaseName = (): string => {
   const name = `surasura-roppou-test-${crypto.randomUUID()}`;

@@ -73,6 +73,7 @@ export interface StorageRepository {
   listStudySessions(): Promise<StudySession[]>;
   putOcrSession(session: OcrSession): Promise<void>;
   listOcrSessions(): Promise<OcrSession[]>;
+  close(): Promise<void>;
 }
 
 export const createStorageRepository = (
@@ -80,17 +81,16 @@ export const createStorageRepository = (
 ): StorageRepository => {
   const databaseName = options.databaseName ?? surasuraDatabaseName;
   const now = options.now ?? (() => new Date());
-  const openDatabase = () => openSurasuraDatabase(databaseName);
+  let databasePromise: Promise<IDBPDatabase<SurasuraDatabase>> | undefined;
+  const getDatabase = () => {
+    databasePromise ??= openSurasuraDatabase(databaseName);
+    return databasePromise;
+  };
   const withDatabase = async <T>(
     operation: (database: IDBPDatabase<SurasuraDatabase>) => Promise<T>,
   ): Promise<T> => {
-    const database = await openDatabase();
-
-    try {
-      return await operation(database);
-    } finally {
-      database.close();
-    }
+    const database = await getDatabase();
+    return operation(database);
   };
 
   return {
@@ -105,21 +105,24 @@ export const createStorageRepository = (
           .index("by-law-revision")
           .getAllKeys([document.law.lawId, document.revision.revisionId]);
 
-        await Promise.all(existingNodeKeys.map((key) => nodes.delete(key)));
-        await tx.objectStore("laws").put(document.law);
-        await tx.objectStore("lawRevisions").put(document.revision);
-        await Promise.all(
-          document.nodes.map((node, sortOrder) =>
-            nodes.put({
-              id: node.id,
-              lawId: node.lawId,
-              revisionId: node.revisionId,
-              sortOrder,
-              node,
-            }),
-          ),
-        );
-        await tx.objectStore("savedLaws").put({
+        for (const key of existingNodeKeys) {
+          void nodes.delete(key);
+        }
+
+        void tx.objectStore("laws").put(document.law);
+        void tx.objectStore("lawRevisions").put(document.revision);
+
+        for (const [sortOrder, node] of document.nodes.entries()) {
+          void nodes.put({
+            id: node.id,
+            lawId: node.lawId,
+            revisionId: node.revisionId,
+            sortOrder,
+            node,
+          });
+        }
+
+        void savedLaws.put({
           lawId: document.law.lawId,
           revisionId: document.revision.revisionId,
           nodeCount: document.nodes.length,
@@ -165,32 +168,33 @@ export const createStorageRepository = (
     async listSavedLaws() {
       return withDatabase(async (db) => {
         const tx = db.transaction(["savedLaws", "laws", "lawRevisions"], "readonly");
-        const savedLaws = await tx.objectStore("savedLaws").getAll();
-        const summaries = await Promise.all(
-          savedLaws.map(async (savedLaw) => {
-            const [law, revision] = await Promise.all([
-              tx.objectStore("laws").get(savedLaw.lawId),
-              tx.objectStore("lawRevisions").get(savedLaw.revisionId),
-            ]);
+        const savedLaws = tx.objectStore("savedLaws");
+        const laws = tx.objectStore("laws");
+        const lawRevisions = tx.objectStore("lawRevisions");
+        const summaries: SavedLawSummary[] = [];
 
-            if (law === undefined || revision === undefined) {
-              return undefined;
-            }
+        for await (const cursor of savedLaws.index("by-saved-at").iterate(null, "prev")) {
+          const savedLaw = cursor.value;
+          const [law, revision] = await Promise.all([
+            laws.get(savedLaw.lawId),
+            lawRevisions.get(savedLaw.revisionId),
+          ]);
 
-            return {
-              law,
-              revision,
-              nodeCount: savedLaw.nodeCount,
-              savedAt: savedLaw.savedAt,
-              updatedAt: savedLaw.updatedAt,
-            } satisfies SavedLawSummary;
-          }),
-        );
+          if (law === undefined || revision === undefined) {
+            continue;
+          }
+
+          summaries.push({
+            law,
+            revision,
+            nodeCount: savedLaw.nodeCount,
+            savedAt: savedLaw.savedAt,
+            updatedAt: savedLaw.updatedAt,
+          });
+        }
         await tx.done;
 
-        return summaries
-          .filter((summary): summary is SavedLawSummary => summary !== undefined)
-          .sort((left, right) => right.savedAt.localeCompare(left.savedAt));
+        return summaries;
       });
     },
 
@@ -208,7 +212,10 @@ export const createStorageRepository = (
           .index("by-law-revision")
           .getAllKeys([savedLaw.lawId, savedLaw.revisionId]);
 
-        await Promise.all(nodeKeys.map((key) => nodes.delete(key)));
+        for (const key of nodeKeys) {
+          void nodes.delete(key);
+        }
+
         await tx.objectStore("savedLaws").delete(lawId);
         await tx.done;
       });
@@ -295,6 +302,16 @@ export const createStorageRepository = (
     async listOcrSessions() {
       return withDatabase((db) => db.getAll("ocrSessions"));
     },
+
+    async close() {
+      if (databasePromise === undefined) {
+        return;
+      }
+
+      const database = await databasePromise;
+      database.close();
+      databasePromise = undefined;
+    },
   };
 };
 
@@ -370,8 +387,8 @@ const withTargetIndexes = <T extends { id: string; target: LawReferenceTarget }>
 });
 
 const stripTargetIndexes = <T extends { id: string }>(record: T & TargetIndexes): T => {
-  const copy = { ...record };
-  delete (copy as Partial<TargetIndexes>).lawId;
-  delete (copy as Partial<TargetIndexes>).targetKey;
-  return copy;
+  const { lawId, targetKey, ...publicRecord } = record;
+  void lawId;
+  void targetKey;
+  return publicRecord as unknown as T;
 };
