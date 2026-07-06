@@ -85,6 +85,7 @@ const LawNodeBlock = ({
       const isUrlAddressableArticle = articleId !== undefined;
       const isActiveArticle = isUrlAddressableArticle && node.number === activeArticleNumber;
       const displayTitle = getDisplayInlineText(node.title ?? node.number, displayMode);
+      const displayCaption = getDisplayInlineText(node.caption, displayMode);
       const displayText = getDisplayText(node, displayMode);
 
       return (
@@ -93,12 +94,22 @@ const LawNodeBlock = ({
           data-active={isActiveArticle ? "true" : undefined}
           aria-current={isActiveArticle ? "location" : undefined}
           aria-label={node.title ?? `条文 ${node.number ?? node.path}`}
-          className={cn(
-            "scroll-mt-20 rounded-md border bg-background p-4 shadow-xs md:p-5",
-            isActiveArticle && "border-primary/60 ring-2 ring-primary/20",
-          )}
+          className="relative scroll-mt-20 py-4 md:py-5"
         >
-          <Heading className="text-lg font-semibold text-foreground">{displayTitle}</Heading>
+          {isActiveArticle ? (
+            <span
+              aria-hidden="true"
+              className="absolute top-4 bottom-4 -left-4 w-2 rounded-l-xs border-y-2 border-l-2 border-primary md:-left-6"
+            />
+          ) : null}
+          <Heading className="font-serif text-lg font-semibold text-foreground">
+            {displayTitle}
+            {displayCaption === undefined ? null : (
+              <span className="ml-2 text-base font-normal text-secondary-foreground">
+                {displayCaption}
+              </span>
+            )}
+          </Heading>
           <div className="mt-4 grid gap-3">
             {children.length > 0 ? (
               renderChildBlocks({
@@ -110,7 +121,7 @@ const LawNodeBlock = ({
                 nodeById,
               })
             ) : (
-              <p className="leading-8 text-foreground break-words">{displayText}</p>
+              <p className="font-serif leading-8 text-foreground break-words">{displayText}</p>
             )}
           </div>
         </article>
@@ -135,7 +146,7 @@ const LawNodeBlock = ({
             node.type === "Subitem" && "pl-8",
           )}
         >
-          <p className="flex min-w-0 gap-3 leading-8 text-foreground">
+          <p className="flex min-w-0 gap-3 font-serif leading-8 text-foreground">
             {displayMarker !== undefined ? (
               <span className="shrink-0 text-muted-foreground">{displayMarker}</span>
             ) : null}
@@ -165,11 +176,13 @@ const LawNodeBlock = ({
   return (
     <section className="grid gap-3">
       {displayTitle !== undefined ? (
-        <Heading className={cn("text-foreground break-words", headingClassName)}>
+        <Heading className={cn("font-serif text-foreground break-words", headingClassName)}>
           {displayTitle}
         </Heading>
       ) : null}
-      {bodyText !== "" ? <p className="leading-8 text-foreground break-words">{bodyText}</p> : null}
+      {bodyText !== "" ? (
+        <p className="font-serif leading-8 text-foreground break-words">{bodyText}</p>
+      ) : null}
       {renderChildBlocks({
         activeArticleNumber,
         children,

@@ -102,6 +102,53 @@ describe("LawNodeList", () => {
     expect(within(article).getByText("第12条の2 原文の本文(括弧)。")).toBeInTheDocument();
   });
 
+  it("renders the article caption in a lighter ink inside the heading", () => {
+    render(
+      <LawNodeList
+        nodes={[
+          node({
+            id: "article:caption",
+            type: "Article",
+            path: "article:1",
+            number: "1",
+            title: "第一条",
+            caption: "（基本原則）",
+            plainText: "第一条 私権は、公共の福祉に適合しなければならない。",
+          }),
+        ]}
+      />,
+    );
+
+    // 読みやすい表示では全角かっこが半角化される（本文と同じ表示レイヤー規則）
+    const heading = screen.getByRole("heading", { name: "第1条(基本原則)" });
+
+    expect(within(heading).getByText("(基本原則)")).toHaveClass(
+      "ml-2",
+      "text-base",
+      "font-normal",
+      "text-secondary-foreground",
+    );
+  });
+
+  it("renders the heading without a caption span when the article has no caption", () => {
+    render(
+      <LawNodeList
+        nodes={[
+          node({
+            id: "article:no-caption",
+            type: "Article",
+            path: "article:1",
+            number: "1",
+            title: "第一条",
+            plainText: "第一条 私権は、公共の福祉に適合しなければならない。",
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "第1条" })).toBeInTheDocument();
+  });
+
   it("renders original raw text when displayMode is original", () => {
     render(
       <LawNodeList

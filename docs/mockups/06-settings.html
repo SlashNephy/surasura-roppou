@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>設定・オフライン管理 | すらすら六法 モックアップ</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 24px 16px 48px;
+  background: #f4f1ea; color: #27272a;
+  font-family: 'Hiragino Sans', 'Yu Gothic', sans-serif;
+  line-height: 1.6;
+}
+.page { max-width: 980px; margin: 0 auto; }
+.topnav { font-size: 12px; margin-bottom: 16px; }
+.topnav a { color: #166534; text-decoration: none; }
+h2 { font-family: 'Hiragino Mincho ProN', 'Yu Mincho', serif; font-size: 22px; margin: 0 0 4px; color: #2b2620; }
+h3 { font-size: 14px; margin: 0 0 8px; }
+.subtitle { color: #78716c; font-size: 13px; margin: 0 0 20px; }
+.section { margin-top: 24px; }
+.label { font-size: 10px; letter-spacing: .1em; color: #a8a29e; text-transform: uppercase; margin: 0 0 6px; }
+.mockup { background: #fff; border: 1px solid #d6cdbc; border-radius: 12px; overflow: hidden; margin: 12px 0; box-shadow: 0 2px 8px rgba(43,38,32,.06); }
+.mockup-header { background: #efe9dd; padding: 8px 14px; font-size: 11px; font-weight: 600; color: #57534e; border-bottom: 1px solid #d6cdbc; }
+.mockup-body { min-width: 0; }
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+@media (max-width: 760px) { .split { grid-template-columns: 1fr; } }
+.options { display: grid; gap: 10px; margin: 12px 0; }
+.option { display: flex; gap: 12px; background: #fff; border: 1px solid #e7e0d3; border-radius: 10px; padding: 12px 14px; }
+.option .letter { flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%; background: #166534; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+.option .content { min-width: 0; }
+.option .content p { margin: 4px 0 0; font-size: 13px; color: #57534e; }
+</style>
+</head>
+<body>
+<div class="page">
+<p class="topnav"><a href="index.html">← モックアップ一覧</a></p>
+<h2>設定・オフライン管理</h2>
+<p class="subtitle">左＝設定トップ、右＝オフライン保存の管理画面。design-doc 7.4「ストレージ使用量と最終同期日時の表示」を独立画面に格上げしています。</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">設定トップ</div>
+    <div class="mockup-body" style="padding:0;background:#fcfbf8;">
+      <div style="padding:14px 16px;font-family:'Hiragino Sans',sans-serif;font-size:11px;color:#27272a;">
+        <div style="color:#a8a29e;font-size:9px;letter-spacing:.08em;margin-bottom:6px;">表示</div>
+        <div style="background:#fff;border:1px solid #e7e0d3;border-radius:10px;margin-bottom:12px;">
+          <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f0ece3;"><span>文字サイズ</span><span style="color:#78716c;">文A ─●── 大</span></div>
+          <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f0ece3;"><span>行間</span><span style="color:#78716c;">ゆったり ▾</span></div>
+          <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f0ece3;"><span>テーマ</span><span style="color:#78716c;">自動（ライト/ダーク） ▾</span></div>
+          <div style="display:flex;justify-content:space-between;padding:10px 12px;"><span>既定の表示</span><span style="color:#166534;font-weight:600;">読みやすい表示 ▾</span></div>
+        </div>
+        <div style="color:#a8a29e;font-size:9px;letter-spacing:.08em;margin-bottom:6px;">学習</div>
+        <div style="background:#fff;border:1px solid #e7e0d3;border-radius:10px;margin-bottom:12px;">
+          <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f0ece3;"><span>学習年度の基準日</span><span style="color:#78716c;">2026-04-01 ▾</span></div>
+          <div style="display:flex;justify-content:space-between;padding:10px 12px;"><span>科目プリセット</span><span style="color:#78716c;">行政書士 ▾</span></div>
+        </div>
+        <div style="color:#a8a29e;font-size:9px;letter-spacing:.08em;margin-bottom:6px;">データ</div>
+        <div style="background:#fff;border:1px solid #e7e0d3;border-radius:10px;">
+          <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f0ece3;"><span>オフライン保存の管理</span><span style="color:#78716c;">6法令 ・ 12.3MB ›</span></div>
+          <div style="display:flex;justify-content:space-between;padding:10px 12px;border-bottom:1px solid #f0ece3;"><span>エクスポート / インポート</span><span style="color:#78716c;">JSON ›</span></div>
+          <div style="display:flex;justify-content:space-between;padding:10px 12px;"><span>ときどき六法と連携</span><span style="color:#78716c;">未接続 ›</span></div>
+        </div>
+        <div style="margin-top:12px;font-size:9px;color:#a8a29e;text-align:center;">すらすら六法 v0.4.0 ・ 法令データ: e-Gov 法令検索<br>本アプリは学習補助であり、法的助言を提供するものではありません</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">オフライン保存の管理</div>
+    <div class="mockup-body" style="padding:0;background:#fcfbf8;">
+      <div style="padding:14px 16px;font-family:'Hiragino Sans',sans-serif;font-size:11px;color:#27272a;">
+        <div style="background:#fff;border:1px solid #e7e0d3;border-radius:10px;padding:12px;margin-bottom:12px;">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:#57534e;"><span>ストレージ使用量</span><span><b>12.3MB</b> / 端末空き 41.2GB</span></div>
+          <div style="height:6px;background:#f0ece3;border-radius:3px;margin-top:6px;overflow:hidden;"><div style="width:18%;height:6px;background:#166534;"></div></div>
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:#a8a29e;margin-top:6px;">
+            <span>最終同期 今日 09:00</span>
+            <span style="color:#166534;font-weight:600;">↻ すべて再同期</span>
+          </div>
+        </div>
+        <div style="background:#f6faf6;border:1px solid #bbe0c3;border-radius:10px;padding:8px 12px;font-size:9px;color:#14532d;margin-bottom:12px;">
+          ✓ 永続ストレージ許可済み — ブラウザによる自動削除から保護されています
+        </div>
+        <div style="color:#a8a29e;font-size:9px;letter-spacing:.08em;margin-bottom:6px;">保存済みの法令</div>
+        <div style="background:#fff;border:1px solid #e7e0d3;border-radius:10px;">
+          <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #f0ece3;">
+            <span style="font-family:'Hiragino Mincho ProN',serif;">日本国憲法</span>
+            <span style="font-size:9px;color:#a8a29e;margin-left:auto;">0.4MB ・ 今日</span>
+            <span style="color:#a8a29e;">🗑</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #f0ece3;">
+            <span style="font-family:'Hiragino Mincho ProN',serif;">民法</span>
+            <span style="font-size:9px;color:#a8a29e;margin-left:auto;">6.8MB ・ 今日</span>
+            <span style="color:#a8a29e;">🗑</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #f0ece3;">
+            <span style="font-family:'Hiragino Mincho ProN',serif;">国家賠償法</span>
+            <span style="font-size:9px;color:#a8a29e;margin-left:auto;">0.1MB ・ 今日</span>
+            <span style="color:#a8a29e;">🗑</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;">
+            <span style="font-family:'Hiragino Mincho ProN',serif;">行政手続法</span>
+            <span style="font-size:9px;color:#a8a29e;margin-left:auto;">0.7MB ・ 7/3 <b style="color:#b45309;">更新あり</b></span>
+            <span style="color:#166534;font-weight:600;font-size:9px;">↻ 更新</span>
+          </div>
+        </div>
+        <div style="margin-top:10px;font-size:9px;color:#a8a29e;">ブックマーク・メモ・復習カードは常に端末内に保存され、この一覧とは別に管理されます。</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>設計メモ</h3>
+  <div class="options">
+    <div class="option">
+      <div class="letter">1</div>
+      <div class="content"><h3>設定は OS 風のグループリスト</h3><p>設定画面だけは読み物ではなく道具なので、明朝の出番を法令名のみに絞り、iOS/Android の設定画面の文法（グループ+行+右端に現在値）へ寄せています。</p></div>
+    </div>
+    <div class="option">
+      <div class="letter">2</div>
+      <div class="content"><h3>永続ストレージの状態を明示</h3><p>design-doc 19 のリスク「PWA storage eviction」への UI 側の回答。navigator.storage.persist() の許可状態を緑のバナーで見せ、未許可なら「保護を有効にする」ボタンに変わります。</p></div>
+    </div>
+    <div class="option">
+      <div class="letter">3</div>
+      <div class="content"><h3>法令ごとの更新通知</h3><p>保存済み法令に e-Gov 側の改正があれば行単位で「更新あり」を出し、まとめて再同期もできます。基準日学習（学習年度固定）のユーザーは意図的に更新しない選択も可能です。</p></div>
+    </div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>

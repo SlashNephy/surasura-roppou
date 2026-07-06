@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>検索・ジャンプ | すらすら六法 モックアップ</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 24px 16px 48px;
+  background: #f4f1ea; color: #27272a;
+  font-family: 'Hiragino Sans', 'Yu Gothic', sans-serif;
+  line-height: 1.6;
+}
+.page { max-width: 980px; margin: 0 auto; }
+.topnav { font-size: 12px; margin-bottom: 16px; }
+.topnav a { color: #166534; text-decoration: none; }
+h2 { font-family: 'Hiragino Mincho ProN', 'Yu Mincho', serif; font-size: 22px; margin: 0 0 4px; color: #2b2620; }
+h3 { font-size: 14px; margin: 0 0 8px; }
+.subtitle { color: #78716c; font-size: 13px; margin: 0 0 20px; }
+.section { margin-top: 24px; }
+.label { font-size: 10px; letter-spacing: .1em; color: #a8a29e; text-transform: uppercase; margin: 0 0 6px; }
+.mockup { background: #fff; border: 1px solid #d6cdbc; border-radius: 12px; overflow: hidden; margin: 12px 0; box-shadow: 0 2px 8px rgba(43,38,32,.06); }
+.mockup-header { background: #efe9dd; padding: 8px 14px; font-size: 11px; font-weight: 600; color: #57534e; border-bottom: 1px solid #d6cdbc; }
+.mockup-body { min-width: 0; }
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+@media (max-width: 760px) { .split { grid-template-columns: 1fr; } }
+.options { display: grid; gap: 10px; margin: 12px 0; }
+.option { display: flex; gap: 12px; background: #fff; border: 1px solid #e7e0d3; border-radius: 10px; padding: 12px 14px; }
+.option .letter { flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%; background: #166534; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+.option .content { min-width: 0; }
+.option .content p { margin: 4px 0 0; font-size: 13px; color: #57534e; }
+</style>
+</head>
+<body>
+<div class="page">
+<p class="topnav"><a href="index.html">← モックアップ一覧</a></p>
+<h2>検索 / ジャンプ</h2>
+<p class="subtitle">検索は2層構造を提案します。左＝ヘッダー検索から開くコマンドパレット（参照ジャンプ用・全画面共通・「/」キーで起動）、右＝検索結果ページ（本文横断検索用）。</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">コマンドパレット：「国賠1」と入力した状態</div>
+    <div class="mockup-body" style="padding:0;background:#8a8378;">
+      <div style="padding:28px 24px;">
+        <div style="background:#fffdf9;border-radius:12px;box-shadow:0 8px 30px rgba(30,25,18,.35);overflow:hidden;max-width:420px;margin:0 auto;">
+          <div style="display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid #e7e0d3;font-family:'Hiragino Sans',sans-serif;">
+            <span style="color:#a8a29e;">🔍</span>
+            <span style="font-size:13px;color:#27272a;">国賠1<span style="border-left:1.5px solid #166534;margin-left:1px;"></span></span>
+            <span style="margin-left:auto;font-size:9px;color:#a8a29e;border:1px solid #e7e0d3;border-radius:4px;padding:1px 5px;">esc</span>
+          </div>
+          <div style="padding:6px;font-family:'Hiragino Sans',sans-serif;">
+            <div style="font-size:9px;color:#a8a29e;letter-spacing:.08em;padding:6px 10px 4px;">条文参照として解釈</div>
+            <div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;">
+              <div>
+                <div style="font-family:'Hiragino Mincho ProN',serif;font-size:13px;font-weight:700;color:#14532d;">国家賠償法 第1条</div>
+                <div style="font-size:9px;color:#78716c;margin-top:2px;">略称「国賠」に一致 ・ 昭和22年法律第125号</div>
+              </div>
+              <span style="margin-left:auto;font-size:9px;color:#166534;background:#dcfce7;border-radius:4px;padding:1px 6px;">⏎ で開く</span>
+            </div>
+            <div style="border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;">
+              <div>
+                <div style="font-family:'Hiragino Mincho ProN',serif;font-size:13px;color:#44403c;">国民年金法 第1条</div>
+                <div style="font-size:9px;color:#a8a29e;margin-top:2px;">部分一致（可能性低）</div>
+              </div>
+            </div>
+            <div style="font-size:9px;color:#a8a29e;letter-spacing:.08em;padding:10px 10px 4px;border-top:1px solid #f0ece3;margin-top:4px;">その他の操作</div>
+            <div style="border-radius:8px;padding:8px 12px;font-size:11px;color:#44403c;">📖 「国賠1」を法令名として検索</div>
+            <div style="border-radius:8px;padding:8px 12px;font-size:11px;color:#44403c;">🔎 開いている法令の本文から検索</div>
+          </div>
+          <div style="border-top:1px solid #e7e0d3;padding:6px 14px;font-size:9px;color:#a8a29e;font-family:'Hiragino Sans',sans-serif;display:flex;gap:12px;">
+            <span>↑↓ 移動</span><span>⏎ 開く</span><span>⇧⏎ ブックマークへ</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">検索結果ページ：「賠償」で本文横断検索</div>
+    <div class="mockup-body" style="padding:0;background:#fcfbf8;">
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid #e7e0d3;background:#fffdf9;font-family:'Hiragino Sans',sans-serif;font-size:10px;color:#57534e;">
+        <span style="font-family:'Hiragino Mincho ProN',serif;font-weight:700;color:#166534;font-size:11px;">六 すらすら六法</span>
+        <span style="background:#fff;border:1px solid #d6cdbc;border-radius:6px;padding:3px 10px;color:#27272a;">🔍 賠償</span>
+        <span style="margin-left:auto;">📖 📷 🎓 ⚙</span>
+      </div>
+      <div style="padding:12px 16px;font-family:'Hiragino Sans',sans-serif;">
+        <div style="display:flex;gap:6px;font-size:9px;margin-bottom:10px;">
+          <span style="background:#166534;color:#fff;border-radius:12px;padding:2px 10px;">保存済みから ✓</span>
+          <span style="border:1px solid #d6cdbc;border-radius:12px;padding:2px 10px;background:#fff;color:#57534e;">すべての法令（オンライン）</span>
+          <span style="margin-left:auto;color:#a8a29e;">12件 ・ 0.2秒</span>
+        </div>
+        <div style="display:grid;gap:8px;">
+          <div style="background:#fff;border:1px solid #e7e0d3;border-radius:8px;padding:10px 12px;">
+            <div style="font-family:'Hiragino Mincho ProN',serif;font-size:12px;font-weight:700;color:#27272a;">国家賠償法 第1条 <span style="font-weight:400;color:#78716c;font-size:10px;">（公務員の不法行為と賠償責任）</span></div>
+            <div style="font-family:'Hiragino Mincho ProN',serif;font-size:11px;line-height:1.9;color:#57534e;margin-top:4px;">…損害を加えたときは、国又は公共団体が、これを<mark style="background:#dcfce7;color:#14532d;padding:0 2px;">賠償</mark>する責に任ずる。</div>
+            <div style="font-size:9px;color:#a8a29e;margin-top:4px;">✓ オフライン保存済み ・ 🔖 ブックマーク中</div>
+          </div>
+          <div style="background:#fff;border:1px solid #e7e0d3;border-radius:8px;padding:10px 12px;">
+            <div style="font-family:'Hiragino Mincho ProN',serif;font-size:12px;font-weight:700;color:#27272a;">民法 第709条 <span style="font-weight:400;color:#78716c;font-size:10px;">（不法行為による損害賠償）</span></div>
+            <div style="font-family:'Hiragino Mincho ProN',serif;font-size:11px;line-height:1.9;color:#57534e;margin-top:4px;">…これによつて生じた損害を<mark style="background:#dcfce7;color:#14532d;padding:0 2px;">賠償</mark>する責任を負う。</div>
+          </div>
+          <div style="background:#fff;border:1px solid #e7e0d3;border-radius:8px;padding:10px 12px;">
+            <div style="font-family:'Hiragino Mincho ProN',serif;font-size:12px;font-weight:700;color:#27272a;">自動車損害賠償保障法 第3条</div>
+            <div style="font-family:'Hiragino Mincho ProN',serif;font-size:11px;line-height:1.9;color:#57534e;margin-top:4px;">…自己のために自動車を運行の用に供する者は、…<mark style="background:#dcfce7;color:#14532d;padding:0 2px;">賠償</mark>する責に任ずる。</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>設計メモ</h3>
+  <div class="options">
+    <div class="option">
+      <div class="letter">1</div>
+      <div class="content"><h3>ジャンプはパレット、探索はページ</h3><p>「国賠1 → 即開く」は 0.5 秒の速さが命なのでオーバーレイ（どの画面からでも「/」一発）。「賠償を含む条文を眺めたい」は比較検討なのでページ。用途で層を分けます。/jump 画面はパレットに統合して廃止できます。</p></div>
+    </div>
+    <div class="option">
+      <div class="letter">2</div>
+      <div class="content"><h3>Resolver の確信度を面積で表現</h3><p>最有力候補は緑地で大きく・⏎ 即決可能に。低確信候補は無地で小さく。design-doc 11.4 の「閾値以上なら直接ジャンプ」は、パレット上では「⏎ のデフォルトフォーカス」として表現します。</p></div>
+    </div>
+    <div class="option">
+      <div class="letter">3</div>
+      <div class="content"><h3>オフライン境界の明示</h3><p>結果ページの「保存済みから ✓ / すべての法令（オンライン）」トグルで、いまどの範囲を検索しているかを常に見せます。オフライン時は後者が無効化され、理由がツールチップで出ます。</p></div>
+    </div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>

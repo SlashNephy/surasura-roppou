@@ -6,7 +6,7 @@ import { createMemoryStorageRepository } from "@/test/fixtures/storage";
 
 import { createAppRouter } from "./router";
 
-const primaryNavRoutes = ["法令", "ジャンプ", "撮る", "復習", "設定"] as const;
+const primaryNavRoutes = ["法令", "撮る", "復習", "設定"] as const;
 const scrollTo = window.scrollTo;
 
 describe("AppShell", () => {
@@ -18,7 +18,7 @@ describe("AppShell", () => {
     window.scrollTo = scrollTo;
   });
 
-  it("renders desktop and mobile navigation links for main routes", async () => {
+  it("renders header and mobile navigation links for main routes", async () => {
     const history = createMemoryHistory({ initialEntries: ["/laws"] });
     const storageRepository = createMemoryStorageRepository().repository;
 
@@ -31,18 +31,19 @@ describe("AppShell", () => {
     });
   });
 
-  it("renders desktop navigation, main, and study panes", async () => {
+  it("renders header banner and main content without side panels", async () => {
     const history = createMemoryHistory({ initialEntries: ["/laws"] });
     const storageRepository = createMemoryStorageRepository().repository;
 
     render(<RouterProvider router={createAppRouter({ history, storageRepository })} />);
 
     await waitFor(() => {
-      expect(
-        screen.getByRole("complementary", { name: "ナビゲーションパネル" }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole("banner")).toBeInTheDocument();
       expect(screen.getByRole("main", { name: "メインコンテンツ" })).toBeInTheDocument();
-      expect(screen.getByRole("complementary", { name: "学習パネル" })).toBeInTheDocument();
+      expect(
+        screen.queryByRole("complementary", { name: "ナビゲーションパネル" }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByRole("complementary", { name: "学習パネル" })).not.toBeInTheDocument();
     });
   });
 
@@ -58,7 +59,7 @@ describe("AppShell", () => {
 
       for (const link of activeLinks) {
         expect(link).toHaveClass("bg-accent");
-        expect(link).toHaveClass("text-foreground");
+        expect(link).toHaveClass("text-accent-foreground");
         expect(link).not.toHaveClass("text-muted-foreground");
       }
 

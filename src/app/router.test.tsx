@@ -13,14 +13,13 @@ import { createAppRouter } from "./router";
 setupScrollMocks();
 
 const routes = [
-  ["/", "今日の条文へ進む"],
+  ["/", "撮って、開いて、すらすら読める。"],
   ["/laws", "法令を探す"],
   ["/laws/129AC0000000089", "民法"],
   ["/laws/129AC0000000089/articles/1", "民法"],
-  ["/jump", "条文参照を開く"],
-  ["/scanner", "条文参照を撮る"],
-  ["/study", "復習を始める"],
-  ["/settings", "設定を調整する"],
+  ["/scanner", "問題集や資料から条文を開く"],
+  ["/study", "復習"],
+  ["/settings", "設定"],
 ] as const;
 
 describe("app router", () => {
@@ -46,7 +45,6 @@ describe("app router", () => {
     render(<RouterProvider router={createAppRouter({ history, storageRepository })} />);
 
     await waitFor(() => {
-      expect(screen.getByText("Laws")).toHaveClass("text-primary");
       expect(screen.getByRole("heading", { name: "法令を探す" })).toHaveClass("text-foreground");
       expect(
         screen.getByText("法令名、略称、法令番号から目的の法令へ進むための入口です。"),

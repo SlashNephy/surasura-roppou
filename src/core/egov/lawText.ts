@@ -51,6 +51,11 @@ const titleTagByType = {
   AppdxStyle: "AppdxStyleTitle",
 } satisfies Record<LawNodeType, string>;
 
+// 条見出しのかっこ書き（例: （基本原則））を持つノード種別だけ対象にする
+const captionTagByType: Partial<Record<LawNodeType, string>> = {
+  Article: "ArticleCaption",
+};
+
 export const normalizeEgovLawText = (
   root: EgovLawTextNode,
   lawId: string,
@@ -78,6 +83,8 @@ export const normalizeEgovLawText = (
     const nodeId = `${lawId}:${revisionId}:${path}`;
     const rawTitle = getNodeTitle(apiNode, nodeType);
     const title = rawTitle === undefined || rawTitle.trim() === "" ? undefined : rawTitle;
+    const rawCaption = getNodeCaption(apiNode, nodeType);
+    const caption = rawCaption === undefined || rawCaption.trim() === "" ? undefined : rawCaption;
     const plainText = collectPlainText(apiNode);
     const lawNode: LawNode = {
       id: nodeId,
@@ -87,6 +94,7 @@ export const normalizeEgovLawText = (
       path,
       number,
       ...(title === undefined ? {} : { title }),
+      ...(caption === undefined ? {} : { caption }),
       rawText: collectRawText(apiNode),
       plainText,
       normalizedText: plainText,
@@ -148,6 +156,20 @@ const getNodeTitle = (apiNode: EgovLawTextNode, nodeType: LawNodeType): string |
   );
 
   return titleNode === undefined ? undefined : collectRawText(titleNode);
+};
+
+const getNodeCaption = (apiNode: EgovLawTextNode, nodeType: LawNodeType): string | undefined => {
+  const captionTag = captionTagByType[nodeType];
+
+  if (captionTag === undefined) {
+    return undefined;
+  }
+
+  const captionNode = apiNode.children.find(
+    (child): child is EgovLawTextNode => typeof child !== "string" && child.tag === captionTag,
+  );
+
+  return captionNode === undefined ? undefined : collectRawText(captionNode);
 };
 
 const extractNumberFromTitle = (title: string, nodeType: LawNodeType): string | undefined => {
