@@ -11,6 +11,7 @@ export type {
   LawReferenceCandidate,
   LawReferenceDetectionSource,
   LawRevision,
+  OcrSession,
   QuizRating,
   QuizResult,
   StudyCard,

@@ -62,3 +62,4 @@ Proposed | Accepted | Superseded
 ## Current Records
 
 - [2026-07-05: e-Gov Law ID を canonical URL に使う](2026-07-05-egov-law-id-canonical-url.md)
+- [2026-07-06: IndexedDB schema version 1 を定義する](2026-07-06-indexeddb-storage-version-1.md)

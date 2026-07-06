@@ -1,0 +1,377 @@
+import { deleteDB, openDB } from "idb";
+import type { IDBPDatabase } from "idb";
+
+import { buildArticleReferenceKey } from "@/core/domain";
+import type {
+  Annotation,
+  Bookmark,
+  Collection,
+  ISODateString,
+  Law,
+  LawNode,
+  LawReferenceTarget,
+  LawRevision,
+  OcrSession,
+  StudyCard,
+  StudySession,
+} from "@/core/domain";
+
+import {
+  surasuraDatabaseName,
+  surasuraDatabaseVersion,
+  type StoredLawNode,
+  type SurasuraDatabase,
+  type TargetIndexes,
+} from "./schema";
+
+export { surasuraDatabaseName, surasuraDatabaseVersion } from "./schema";
+export type { SavedLawRecord, SurasuraDatabase } from "./schema";
+
+type NowProvider = () => Date;
+
+export interface StorageRepositoryOptions {
+  databaseName?: string;
+  now?: NowProvider;
+}
+
+export interface LawDocumentInput {
+  law: Law;
+  revision: LawRevision;
+  nodes: LawNode[];
+}
+
+export interface SavedLawDocument extends LawDocumentInput {
+  savedAt: ISODateString;
+}
+
+export interface SavedLawSummary {
+  law: Law;
+  revision: LawRevision;
+  nodeCount: number;
+  savedAt: ISODateString;
+  updatedAt: ISODateString;
+}
+
+export interface LawScopedQuery {
+  lawId?: string;
+}
+
+export interface StorageRepository {
+  saveLawDocument(document: LawDocumentInput): Promise<void>;
+  getLawDocument(lawId: string): Promise<SavedLawDocument | undefined>;
+  listSavedLaws(): Promise<SavedLawSummary[]>;
+  deleteLawDocument(lawId: string): Promise<void>;
+  putBookmark(bookmark: Bookmark): Promise<void>;
+  listBookmarks(query?: LawScopedQuery): Promise<Bookmark[]>;
+  putCollection(collection: Collection): Promise<void>;
+  listCollections(): Promise<Collection[]>;
+  putAnnotation(annotation: Annotation): Promise<void>;
+  listAnnotations(query?: LawScopedQuery): Promise<Annotation[]>;
+  putStudyCard(card: StudyCard): Promise<void>;
+  listDueStudyCards(dueAtOrBefore: ISODateString): Promise<StudyCard[]>;
+  putStudySession(session: StudySession): Promise<void>;
+  listStudySessions(): Promise<StudySession[]>;
+  putOcrSession(session: OcrSession): Promise<void>;
+  listOcrSessions(): Promise<OcrSession[]>;
+}
+
+export const createStorageRepository = (
+  options: StorageRepositoryOptions = {},
+): StorageRepository => {
+  const databaseName = options.databaseName ?? surasuraDatabaseName;
+  const now = options.now ?? (() => new Date());
+  const openDatabase = () => openSurasuraDatabase(databaseName);
+  const withDatabase = async <T>(
+    operation: (database: IDBPDatabase<SurasuraDatabase>) => Promise<T>,
+  ): Promise<T> => {
+    const database = await openDatabase();
+
+    try {
+      return await operation(database);
+    } finally {
+      database.close();
+    }
+  };
+
+  return {
+    async saveLawDocument(document) {
+      await withDatabase(async (db) => {
+        const updatedAt = now().toISOString();
+        const tx = db.transaction(["laws", "lawRevisions", "lawNodes", "savedLaws"], "readwrite");
+        const nodes = tx.objectStore("lawNodes");
+        const savedLaws = tx.objectStore("savedLaws");
+        const existingSavedLaw = await savedLaws.get(document.law.lawId);
+        const existingNodeKeys = await nodes
+          .index("by-law-revision")
+          .getAllKeys([document.law.lawId, document.revision.revisionId]);
+
+        await Promise.all(existingNodeKeys.map((key) => nodes.delete(key)));
+        await tx.objectStore("laws").put(document.law);
+        await tx.objectStore("lawRevisions").put(document.revision);
+        await Promise.all(
+          document.nodes.map((node, sortOrder) =>
+            nodes.put({
+              id: node.id,
+              lawId: node.lawId,
+              revisionId: node.revisionId,
+              sortOrder,
+              node,
+            }),
+          ),
+        );
+        await tx.objectStore("savedLaws").put({
+          lawId: document.law.lawId,
+          revisionId: document.revision.revisionId,
+          nodeCount: document.nodes.length,
+          savedAt: existingSavedLaw?.savedAt ?? updatedAt,
+          updatedAt,
+        });
+        await tx.done;
+      });
+    },
+
+    async getLawDocument(lawId) {
+      return withDatabase(async (db) => {
+        const tx = db.transaction(["savedLaws", "laws", "lawRevisions", "lawNodes"], "readonly");
+        const savedLaw = await tx.objectStore("savedLaws").get(lawId);
+
+        if (savedLaw === undefined) {
+          return undefined;
+        }
+
+        const [law, revision, storedNodes] = await Promise.all([
+          tx.objectStore("laws").get(savedLaw.lawId),
+          tx.objectStore("lawRevisions").get(savedLaw.revisionId),
+          tx
+            .objectStore("lawNodes")
+            .index("by-law-revision")
+            .getAll([savedLaw.lawId, savedLaw.revisionId]),
+        ]);
+        await tx.done;
+
+        if (law === undefined || revision === undefined) {
+          return undefined;
+        }
+
+        return {
+          law,
+          revision,
+          nodes: toOrderedNodes(storedNodes),
+          savedAt: savedLaw.savedAt,
+        };
+      });
+    },
+
+    async listSavedLaws() {
+      return withDatabase(async (db) => {
+        const tx = db.transaction(["savedLaws", "laws", "lawRevisions"], "readonly");
+        const savedLaws = await tx.objectStore("savedLaws").getAll();
+        const summaries = await Promise.all(
+          savedLaws.map(async (savedLaw) => {
+            const [law, revision] = await Promise.all([
+              tx.objectStore("laws").get(savedLaw.lawId),
+              tx.objectStore("lawRevisions").get(savedLaw.revisionId),
+            ]);
+
+            if (law === undefined || revision === undefined) {
+              return undefined;
+            }
+
+            return {
+              law,
+              revision,
+              nodeCount: savedLaw.nodeCount,
+              savedAt: savedLaw.savedAt,
+              updatedAt: savedLaw.updatedAt,
+            } satisfies SavedLawSummary;
+          }),
+        );
+        await tx.done;
+
+        return summaries
+          .filter((summary): summary is SavedLawSummary => summary !== undefined)
+          .sort((left, right) => right.savedAt.localeCompare(left.savedAt));
+      });
+    },
+
+    async deleteLawDocument(lawId) {
+      await withDatabase(async (db) => {
+        const savedLaw = await db.get("savedLaws", lawId);
+
+        if (savedLaw === undefined) {
+          return;
+        }
+
+        const tx = db.transaction(["lawNodes", "savedLaws"], "readwrite");
+        const nodes = tx.objectStore("lawNodes");
+        const nodeKeys = await nodes
+          .index("by-law-revision")
+          .getAllKeys([savedLaw.lawId, savedLaw.revisionId]);
+
+        await Promise.all(nodeKeys.map((key) => nodes.delete(key)));
+        await tx.objectStore("savedLaws").delete(lawId);
+        await tx.done;
+      });
+    },
+
+    async putBookmark(bookmark) {
+      await withDatabase(async (db) => {
+        await db.put("bookmarks", withTargetIndexes(bookmark));
+      });
+    },
+
+    async listBookmarks(query = {}) {
+      return withDatabase(async (db) => {
+        const records =
+          query.lawId === undefined
+            ? await db.getAll("bookmarks")
+            : await db.getAllFromIndex("bookmarks", "by-law-id", query.lawId);
+
+        return records.map(stripTargetIndexes);
+      });
+    },
+
+    async putCollection(collection) {
+      await withDatabase(async (db) => {
+        await db.put("collections", collection);
+      });
+    },
+
+    async listCollections() {
+      return withDatabase((db) => db.getAll("collections"));
+    },
+
+    async putAnnotation(annotation) {
+      await withDatabase(async (db) => {
+        await db.put("annotations", withTargetIndexes(annotation));
+      });
+    },
+
+    async listAnnotations(query = {}) {
+      return withDatabase(async (db) => {
+        const records =
+          query.lawId === undefined
+            ? await db.getAll("annotations")
+            : await db.getAllFromIndex("annotations", "by-law-id", query.lawId);
+
+        return records.map(stripTargetIndexes);
+      });
+    },
+
+    async putStudyCard(card) {
+      await withDatabase(async (db) => {
+        await db.put("studyCards", withTargetIndexes(card));
+      });
+    },
+
+    async listDueStudyCards(dueAtOrBefore) {
+      return withDatabase(async (db) => {
+        const records = await db.getAllFromIndex(
+          "studyCards",
+          "by-due-at",
+          IDBKeyRange.upperBound(dueAtOrBefore),
+        );
+
+        return records.map(stripTargetIndexes);
+      });
+    },
+
+    async putStudySession(session) {
+      await withDatabase(async (db) => {
+        await db.put("studySessions", session);
+      });
+    },
+
+    async listStudySessions() {
+      return withDatabase((db) => db.getAll("studySessions"));
+    },
+
+    async putOcrSession(session) {
+      await withDatabase(async (db) => {
+        await db.put("ocrSessions", session);
+      });
+    },
+
+    async listOcrSessions() {
+      return withDatabase((db) => db.getAll("ocrSessions"));
+    },
+  };
+};
+
+export const openSurasuraDatabase = async (
+  databaseName = surasuraDatabaseName,
+): Promise<IDBPDatabase<SurasuraDatabase>> =>
+  openDB<SurasuraDatabase>(databaseName, surasuraDatabaseVersion, {
+    upgrade(database, oldVersion) {
+      if (oldVersion < 1) {
+        createVersion1Stores(database);
+      }
+    },
+  });
+
+export const deleteSurasuraDatabase = async (
+  databaseName = surasuraDatabaseName,
+): Promise<void> => {
+  await deleteDB(databaseName);
+};
+
+const createVersion1Stores = (database: IDBPDatabase<SurasuraDatabase>) => {
+  const laws = database.createObjectStore("laws", { keyPath: "lawId" });
+  laws.createIndex("by-title", "title");
+  laws.createIndex("by-updated-at", "updatedAt");
+
+  const lawRevisions = database.createObjectStore("lawRevisions", { keyPath: "revisionId" });
+  lawRevisions.createIndex("by-law-id", "lawId");
+  lawRevisions.createIndex("by-effective-date", "effectiveDate");
+
+  const lawNodes = database.createObjectStore("lawNodes", { keyPath: "id" });
+  lawNodes.createIndex("by-law-revision", ["lawId", "revisionId"]);
+
+  const savedLaws = database.createObjectStore("savedLaws", { keyPath: "lawId" });
+  savedLaws.createIndex("by-saved-at", "savedAt");
+  savedLaws.createIndex("by-updated-at", "updatedAt");
+
+  const bookmarks = database.createObjectStore("bookmarks", { keyPath: "id" });
+  bookmarks.createIndex("by-law-id", "lawId");
+  bookmarks.createIndex("by-target-key", "targetKey");
+  bookmarks.createIndex("by-updated-at", "updatedAt");
+
+  const collections = database.createObjectStore("collections", { keyPath: "id" });
+  collections.createIndex("by-updated-at", "updatedAt");
+
+  const annotations = database.createObjectStore("annotations", { keyPath: "id" });
+  annotations.createIndex("by-law-id", "lawId");
+  annotations.createIndex("by-target-key", "targetKey");
+  annotations.createIndex("by-updated-at", "updatedAt");
+
+  const studyCards = database.createObjectStore("studyCards", { keyPath: "id" });
+  studyCards.createIndex("by-due-at", "dueAt");
+  studyCards.createIndex("by-law-id", "lawId");
+  studyCards.createIndex("by-target-key", "targetKey");
+  studyCards.createIndex("by-updated-at", "updatedAt");
+
+  const studySessions = database.createObjectStore("studySessions", { keyPath: "id" });
+  studySessions.createIndex("by-started-at", "startedAt");
+
+  const ocrSessions = database.createObjectStore("ocrSessions", { keyPath: "id" });
+  ocrSessions.createIndex("by-created-at", "createdAt");
+  ocrSessions.createIndex("by-updated-at", "updatedAt");
+};
+
+const toOrderedNodes = (records: StoredLawNode[]): LawNode[] =>
+  records.sort((left, right) => left.sortOrder - right.sortOrder).map((record) => record.node);
+
+const withTargetIndexes = <T extends { id: string; target: LawReferenceTarget }>(
+  record: T,
+): T & TargetIndexes => ({
+  ...record,
+  lawId: record.target.lawId,
+  targetKey: buildArticleReferenceKey(record.target),
+});
+
+const stripTargetIndexes = <T extends { id: string }>(record: T & TargetIndexes): T => {
+  const copy = { ...record };
+  delete (copy as Partial<TargetIndexes>).lawId;
+  delete (copy as Partial<TargetIndexes>).targetKey;
+  return copy;
+};
