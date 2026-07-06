@@ -7,6 +7,8 @@ import { Button } from "@/shared/ui/button";
 import { Separator } from "@/shared/ui/separator";
 import { cn } from "@/shared/utils/cn";
 
+import { PwaUpdatePrompt } from "./PwaUpdatePrompt";
+
 interface NavItem {
   to: "/laws" | "/jump" | "/scanner" | "/study" | "/settings";
   label: string;
@@ -151,5 +153,6 @@ export const AppShell = () => (
       <StudyPanel />
     </div>
     <MobileNavigation />
+    <PwaUpdatePrompt />
   </div>
 );

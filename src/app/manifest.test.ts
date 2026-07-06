@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { surasuraPwaManifest } from "@/core/pwa/config";
+
 import manifestText from "../../public/manifest.webmanifest?raw";
 
 const manifest = JSON.parse(manifestText) as {
@@ -10,8 +12,6 @@ const manifest = JSON.parse(manifestText) as {
 
 describe("PWA manifest", () => {
   it("uses the agreed app name and route start URL", () => {
-    expect(manifest.name).toBe("すらすら六法");
-    expect(manifest.start_url).toBe("/");
-    expect(manifest.display).toBe("standalone");
+    expect(manifest).toEqual(surasuraPwaManifest);
   });
 });
