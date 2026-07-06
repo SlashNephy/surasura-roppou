@@ -23,18 +23,13 @@ export const createMemoryStorageRepository = (
   getCollections(): Collection[];
   repository: StorageRepository;
 } => {
-  const initialDocument =
+  const options: MemoryStorageRepositoryOptions =
     initialDocumentOrOptions === undefined || "law" in initialDocumentOrOptions
-      ? initialDocumentOrOptions
-      : initialDocumentOrOptions.savedLawDocument;
-  let bookmarks =
-    initialDocumentOrOptions === undefined || "law" in initialDocumentOrOptions
-      ? []
-      : [...(initialDocumentOrOptions.bookmarks ?? [])];
-  let collections =
-    initialDocumentOrOptions === undefined || "law" in initialDocumentOrOptions
-      ? []
-      : [...(initialDocumentOrOptions.collections ?? [])];
+      ? { savedLawDocument: initialDocumentOrOptions }
+      : initialDocumentOrOptions;
+  const initialDocument = options.savedLawDocument;
+  let bookmarks = [...(options.bookmarks ?? [])];
+  let collections = [...(options.collections ?? [])];
   let savedDocument = initialDocument;
   let savedAt = initialDocument?.savedAt;
   let updatedAt = initialDocument?.revision.fetchedAt ?? initialDocument?.savedAt;

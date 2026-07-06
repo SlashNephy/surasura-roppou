@@ -18,6 +18,7 @@ const routes = [
   ["/laws/129AC0000000089", "民法"],
   ["/laws/129AC0000000089/articles/1", "民法"],
   ["/saved", "保存リスト"],
+  ["/saved/collections/missing", "コレクションが見つかりません"],
   ["/jump", "条文参照を開く"],
   ["/scanner", "条文参照を撮る"],
   ["/study", "復習を始める"],

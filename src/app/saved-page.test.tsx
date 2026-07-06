@@ -10,6 +10,7 @@ import { setupScrollMocks } from "@/test/scrollMocks";
 
 import { sampleLawViewerDocument } from "./law-viewer-sample";
 import { createAppRouter } from "./router";
+import { parseTags } from "./saved-page-utils";
 
 setupScrollMocks();
 
@@ -210,6 +211,19 @@ describe("SavedPage", () => {
 
     expect(bookmark.id).toMatch(/^[a-z0-9]+-[a-z0-9]+$/);
     expect(bookmark.title).toBe("民法1条");
+  });
+});
+
+describe("parseTags", () => {
+  it.each([
+    ["民法,総則", ["民法", "総則"]],
+    ["民法，総則", ["民法", "総則"]],
+    ["民法、総則", ["民法", "総則"]],
+    [" 民法 ,  総則 ", ["民法", "総則"]],
+    ["民法,,，、総則", ["民法", "総則"]],
+    [",，、", []],
+  ] as const)("normalizes %s", (input, expected) => {
+    expect(parseTags(input)).toEqual(expected);
   });
 });
 

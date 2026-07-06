@@ -13,6 +13,8 @@ import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 
+import { parseTags } from "./saved-page-utils";
+
 const defaultStorageRepository = createStorageRepository();
 
 interface SavedPageProps {
@@ -234,9 +236,7 @@ const SavedLawList = ({ savedLaws }: { savedLaws: SavedLawSummary[] }) => (
   <section aria-labelledby="saved-laws-heading" className="grid gap-3">
     <SectionHeading icon={Archive} id="saved-laws-heading" title="保存済み法令" />
     {savedLaws.length === 0 ? (
-      <p className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground">
-        保存済み法令はまだありません。
-      </p>
+      <EmptyState>保存済み法令はまだありません。</EmptyState>
     ) : (
       <ul className="grid gap-2">
         {savedLaws.map((savedLaw) => (
@@ -274,9 +274,7 @@ const BookmarkList = ({
   <section aria-labelledby="bookmarks-heading" className="grid gap-3">
     <SectionHeading icon={StickyNote} id="bookmarks-heading" title="保存項目" />
     {bookmarks.length === 0 ? (
-      <p className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground">
-        {emptyMessage}
-      </p>
+      <EmptyState>{emptyMessage}</EmptyState>
     ) : (
       <ul className="grid gap-2">
         {bookmarks.map((bookmark) => (
@@ -307,9 +305,7 @@ const CollectionList = ({ collections }: { collections: Collection[] }) => (
   <section aria-labelledby="collections-heading" className="grid gap-3">
     <SectionHeading icon={FolderPlus} id="collections-heading" title="コレクション" />
     {collections.length === 0 ? (
-      <p className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground">
-        コレクションはまだありません。
-      </p>
+      <EmptyState>コレクションはまだありません。</EmptyState>
     ) : (
       <ul className="grid gap-2">
         {collections.map((collection) => (
@@ -567,13 +563,19 @@ const SectionHeading = ({
   </div>
 );
 
-const StatusMessage = ({ children }: { children: string }) => (
+const PanelMessage = ({ children, role }: { children: string; role?: "status" }) => (
   <p
-    role="status"
+    role={role}
     className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground"
   >
     {children}
   </p>
+);
+
+const EmptyState = ({ children }: { children: string }) => <PanelMessage>{children}</PanelMessage>;
+
+const StatusMessage = ({ children }: { children: string }) => (
+  <PanelMessage role="status">{children}</PanelMessage>
 );
 
 const BookmarkLink = ({ bookmark }: { bookmark: Bookmark }) => {
@@ -599,12 +601,6 @@ const BookmarkLink = ({ bookmark }: { bookmark: Bookmark }) => {
     </Link>
   );
 };
-
-const parseTags = (value: string): string[] =>
-  value
-    .split(/[,，、]+/)
-    .map((tag) => tag.trim())
-    .filter((tag) => tag !== "");
 
 const formatDate = (value: string): string =>
   typeof value === "string" && value.length >= 10 ? value.slice(0, 10) : "不明";
