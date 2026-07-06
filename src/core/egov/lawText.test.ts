@@ -251,4 +251,25 @@ describe("normalizeEgovLawText", () => {
     );
     expect(paragraphNode).not.toHaveProperty("title");
   });
+
+  it("extracts the article caption into caption", () => {
+    const nodes = normalizeLawBody([
+      lawTextNode("Article", [
+        lawTextNode("ArticleCaption", ["（基本原則）"]),
+        lawTextNode("ArticleTitle", ["第一条"]),
+        paragraph(),
+      ]),
+    ]);
+    const articleNode = findNode(nodes, "Article", "article:1");
+
+    expect(articleNode).toEqual(
+      expect.objectContaining({ title: "第一条", caption: "（基本原則）" }),
+    );
+  });
+
+  it("omits caption when the article has no caption", () => {
+    const nodes = normalizeLawBody([article("第一条")]);
+
+    expect(findNode(nodes, "Article", "article:1")).not.toHaveProperty("caption");
+  });
 });

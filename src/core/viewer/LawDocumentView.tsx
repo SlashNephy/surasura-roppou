@@ -30,7 +30,7 @@ export const LawDocumentView = ({
           <Badge variant={isSaved ? "default" : "outline"}>{isSaved ? "保存済み" : "未保存"}</Badge>
         </div>
         <div className="grid min-w-0 gap-2">
-          <h1 className="min-w-0 text-2xl font-semibold text-foreground break-words md:text-3xl">
+          <h1 className="min-w-0 font-serif text-2xl font-semibold text-foreground break-words md:text-3xl">
             {law.title}
           </h1>
           {law.lawNumber !== undefined ? (

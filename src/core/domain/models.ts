@@ -43,6 +43,7 @@ export interface LawNode {
   path: string;
   number?: string;
   title?: string;
+  caption?: string;
   rawText: string;
   plainText: string;
   normalizedText?: string;

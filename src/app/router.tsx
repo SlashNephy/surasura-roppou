@@ -5,15 +5,7 @@ import type { LawRepository } from "@/core/egov";
 import type { StorageRepository } from "@/core/storage";
 
 import { AppShell } from "./AppShell";
-import {
-  HomePage,
-  JumpPage,
-  LawsPage,
-  LawViewerPage,
-  ScannerPage,
-  SettingsPage,
-  StudyPage,
-} from "./pages";
+import { HomePage, LawsPage, LawViewerPage, ScannerPage, SettingsPage, StudyPage } from "./pages";
 
 interface CreateAppRouterOptions {
   history?: RouterHistory;
@@ -29,10 +21,12 @@ const createRouteTree = ({
     component: AppShell,
   });
 
+  const HomeRoute = () => <HomePage storageRepository={storageRepository} />;
+
   const indexRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/",
-    component: HomePage,
+    component: HomeRoute,
   });
 
   const LawsRoute = () => <LawsPage storageRepository={storageRepository} />;
@@ -59,12 +53,6 @@ const createRouteTree = ({
     component: LawViewerRoute,
   });
 
-  const jumpRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: "jump",
-    component: JumpPage,
-  });
-
   const scannerRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "scanner",
@@ -87,7 +75,6 @@ const createRouteTree = ({
     indexRoute,
     lawsRoute,
     lawViewerRoute.addChildren([lawViewerArticleRoute]),
-    jumpRoute,
     scannerRoute,
     studyRoute,
     settingsRoute,

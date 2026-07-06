@@ -1,0 +1,143 @@
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "@tanstack/react-router";
+import { Camera, ClipboardPaste, GraduationCap, Search } from "lucide-react";
+
+import { createSavedLawUseCase, createStorageRepository } from "@/core/storage";
+import type { SavedLawSummary, StorageRepository } from "@/core/storage";
+import { Button } from "@/shared/ui/button";
+
+const defaultStorageRepository = createStorageRepository();
+
+// 初回起動時のコールドスタート対策として提示する定番法令（e-Gov lawId）
+const featuredLaws = [
+  { lawId: "321CONSTITUTION", title: "日本国憲法" },
+  { lawId: "129AC0000000089", title: "民法" },
+  { lawId: "140AC0000000045", title: "刑法" },
+] as const;
+
+export const HomePage = ({
+  storageRepository = defaultStorageRepository,
+}: {
+  storageRepository?: StorageRepository;
+}) => {
+  const [savedLaws, setSavedLaws] = useState<SavedLawSummary[]>([]);
+  const [savedLawsError, setSavedLawsError] = useState<string | undefined>();
+  const savedLawUseCase = useMemo(
+    () => createSavedLawUseCase(storageRepository),
+    [storageRepository],
+  );
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    void savedLawUseCase
+      .list()
+      .then((nextSavedLaws) => {
+        if (isCurrent) {
+          setSavedLaws(nextSavedLaws);
+          setSavedLawsError(undefined);
+        }
+      })
+      .catch(() => {
+        if (isCurrent) {
+          setSavedLaws([]);
+          setSavedLawsError("保存済み法令を読み込めませんでした。");
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [savedLawUseCase]);
+
+  const hasSavedLaws = savedLaws.length > 0;
+
+  return (
+    <section className="mx-auto grid w-full max-w-4xl gap-10 px-5 py-12 md:py-16">
+      <div className="grid justify-items-center gap-4 text-center">
+        <h1 className="font-serif text-2xl font-semibold text-foreground md:text-3xl">
+          撮って、開いて、すらすら読める。
+        </h1>
+        <p className="text-sm text-muted-foreground">e-Gov 法令データに基づく法令ビューワー</p>
+        <Button asChild variant="outline" className="h-11 w-full max-w-md justify-start gap-2">
+          <Link to="/laws">
+            <Search className="size-4 text-muted-foreground" aria-hidden="true" />
+            <span className="truncate text-muted-foreground">
+              国賠法1条、民709、行政手続法14条…
+            </span>
+          </Link>
+        </Button>
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button asChild variant="outline" className="gap-2">
+            <Link to="/scanner">
+              <Camera className="size-4" aria-hidden="true" />
+              撮って開く
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="gap-2">
+            <Link to="/scanner">
+              <ClipboardPaste className="size-4" aria-hidden="true" />
+              貼り付けて開く
+            </Link>
+          </Button>
+        </div>
+      </div>
+
+      {savedLawsError !== undefined ? (
+        // ストレージ障害時は空状態（チップ）と区別できるようエラーを明示する
+        <p
+          role="status"
+          className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground"
+        >
+          {savedLawsError}
+        </p>
+      ) : hasSavedLaws ? (
+        <div className="grid gap-4">
+          <Button asChild className="h-auto justify-start gap-3 py-3">
+            <Link to="/study">
+              <GraduationCap className="size-5" aria-hidden="true" />
+              <span className="grid text-left">
+                <span className="font-semibold">復習を始める</span>
+                <span className="text-xs opacity-75">復習機能は準備中です</span>
+              </span>
+            </Link>
+          </Button>
+          <section aria-labelledby="home-saved-laws-heading" className="grid gap-3">
+            <h2 id="home-saved-laws-heading" className="text-lg font-semibold text-foreground">
+              オフライン保存済み
+            </h2>
+            <ul className="grid gap-2 sm:grid-cols-2">
+              {savedLaws.map((savedLaw) => (
+                <li key={savedLaw.law.lawId} className="rounded-md border bg-card p-4">
+                  <Link
+                    className="font-serif text-base font-semibold text-foreground underline-offset-4 hover:underline"
+                    params={{ lawId: savedLaw.law.lawId }}
+                    to="/laws/$lawId"
+                  >
+                    {savedLaw.law.title}
+                  </Link>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {savedLaw.nodeCount.toLocaleString("ja-JP")} ノード
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
+      ) : (
+        <div className="grid justify-items-center gap-3 text-center">
+          <p className="text-xs tracking-widest text-muted-foreground">よく読まれている法令</p>
+          <div className="flex flex-wrap justify-center gap-2">
+            {featuredLaws.map((law) => (
+              <Button asChild key={law.lawId} variant="outline" className="rounded-full font-serif">
+                <Link params={{ lawId: law.lawId }} to="/laws/$lawId">
+                  {law.title}
+                </Link>
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+};
