@@ -1,5 +1,5 @@
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -48,6 +48,7 @@ describe("SavedPage", () => {
       "href",
       "/laws/129AC0000000089/articles/1",
     );
+    expect(within(bookmark as HTMLElement).getByText("法令: 民法")).toBeInTheDocument();
     expect(within(bookmark as HTMLElement).getByText("民法")).toBeInTheDocument();
     expect(within(bookmark as HTMLElement).getByText("総則")).toBeInTheDocument();
     expect(within(bookmark as HTMLElement).getByText("基本原則として確認する")).toBeInTheDocument();
@@ -94,6 +95,10 @@ describe("SavedPage", () => {
 
     expect(await screen.findByRole("heading", { name: "民法総則" })).toBeInTheDocument();
     expect(screen.getByText("総則の重要条文")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "保存リストへ戻る" })).toHaveAttribute(
+      "href",
+      "/saved",
+    );
     expect(screen.getByRole("link", { name: "民法1条" })).toHaveAttribute(
       "href",
       "/laws/129AC0000000089/articles/1",
@@ -106,15 +111,37 @@ describe("SavedPage", () => {
     const storage = createMemoryStorageRepository({
       bookmarks: [bookmark],
       collections: [collection],
+      savedLawDocument: createSavedLawDocument({
+        law: sampleLawViewerDocument.law,
+        revision: sampleLawViewerDocument.revision,
+        nodes: sampleLawViewerDocument.nodes,
+      }),
     });
 
     renderSavedRoute(`/saved/collections/${collection.id}`, storage.repository);
 
     expect(await screen.findByRole("heading", { name: "民法総則" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "保存リストへ戻る" })).toHaveAttribute(
+      "href",
+      "/saved",
+    );
     expect(screen.getByRole("link", { name: "民法1条" })).toHaveAttribute(
       "href",
       "/laws/129AC0000000089/articles/1",
     );
+    expect(screen.getByText("法令: 民法")).toBeInTheDocument();
+  });
+
+  it("shows an empty collection state", async () => {
+    const collection = createCollection("missing-bookmark");
+    const storage = createMemoryStorageRepository({
+      collections: [collection],
+    });
+
+    renderSavedRoute(`/saved/collections/${collection.id}`, storage.repository);
+
+    expect(await screen.findByRole("heading", { name: "民法総則" })).toBeInTheDocument();
+    expect(screen.getByText("このコレクションは空です。")).toBeInTheDocument();
   });
 
   it("shows a not found state for an unknown collection", async () => {
@@ -138,7 +165,7 @@ describe("SavedPage", () => {
 
     renderSavedRoute("/saved", repository);
 
-    expect(await screen.findByRole("status")).toHaveTextContent(
+    expect(await screen.findByRole("alert")).toHaveTextContent(
       "保存リストを読み込めませんでした。",
     );
   });
@@ -150,7 +177,7 @@ describe("SavedPage", () => {
 
     renderSavedRoute("/saved/collections/collection-1", repository);
 
-    expect(await screen.findByRole("status")).toHaveTextContent(
+    expect(await screen.findByRole("alert")).toHaveTextContent(
       "コレクションを読み込めませんでした。",
     );
     expect(screen.getByRole("link", { name: "保存リストへ戻る" })).toHaveAttribute(
@@ -172,7 +199,50 @@ describe("SavedPage", () => {
     await user.type(screen.getByLabelText("法令ID"), "129AC0000000089");
     await user.click(screen.getByRole("button", { name: "保存項目を追加" }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent("保存項目を追加できませんでした。");
+    expect(await screen.findByRole("alert")).toHaveTextContent("保存項目を追加できませんでした。");
+  });
+
+  it("does not create a bookmark when required fields are blank", async () => {
+    const putBookmark = vi.fn<StorageRepository["putBookmark"]>();
+    const repository = createRejectingStorageRepository({ putBookmark });
+    const user = userEvent.setup();
+
+    renderSavedRoute("/saved", repository);
+
+    await screen.findByRole("heading", { name: "保存リスト" });
+    await user.type(screen.getByLabelText("保存タイトル"), " ");
+    await user.type(screen.getByLabelText("法令ID"), " ");
+    await user.click(screen.getByRole("button", { name: "保存項目を追加" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "保存タイトルと法令IDを入力してください。",
+    );
+    expect(putBookmark).not.toHaveBeenCalled();
+  });
+
+  it("prevents duplicate bookmark submissions while saving", async () => {
+    const deferred = createDeferred();
+    const putBookmark = vi.fn<StorageRepository["putBookmark"]>(() => deferred.promise);
+    const repository = createRejectingStorageRepository({ putBookmark });
+    const user = userEvent.setup();
+
+    renderSavedRoute("/saved", repository);
+
+    await screen.findByRole("heading", { name: "保存リスト" });
+    await user.type(screen.getByLabelText("保存タイトル"), "民法1条");
+    await user.type(screen.getByLabelText("法令ID"), "129AC0000000089");
+
+    const button = screen.getByRole("button", { name: "保存項目を追加" });
+    await user.click(button);
+
+    expect(button).toBeDisabled();
+    await user.click(button);
+    expect(putBookmark).toHaveBeenCalledTimes(1);
+
+    deferred.resolve();
+    await waitFor(() => {
+      expect(button).not.toBeDisabled();
+    });
   });
 
   it("shows a form error when collection creation fails", async () => {
@@ -187,9 +257,50 @@ describe("SavedPage", () => {
     await user.type(screen.getByLabelText("コレクション名"), "民法総則");
     await user.click(screen.getByRole("button", { name: "コレクションを作成" }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent(
+    expect(await screen.findByRole("alert")).toHaveTextContent(
       "コレクションを作成できませんでした。",
     );
+  });
+
+  it("does not create a collection when the title is blank", async () => {
+    const putCollection = vi.fn<StorageRepository["putCollection"]>();
+    const repository = createRejectingStorageRepository({ putCollection });
+    const user = userEvent.setup();
+
+    renderSavedRoute("/saved", repository);
+
+    await screen.findByRole("heading", { name: "保存リスト" });
+    await user.type(screen.getByLabelText("コレクション名"), " ");
+    await user.click(screen.getByRole("button", { name: "コレクションを作成" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "コレクション名を入力してください。",
+    );
+    expect(putCollection).not.toHaveBeenCalled();
+  });
+
+  it("prevents duplicate collection submissions while saving", async () => {
+    const deferred = createDeferred();
+    const putCollection = vi.fn<StorageRepository["putCollection"]>(() => deferred.promise);
+    const repository = createRejectingStorageRepository({ putCollection });
+    const user = userEvent.setup();
+
+    renderSavedRoute("/saved", repository);
+
+    await screen.findByRole("heading", { name: "保存リスト" });
+    await user.type(screen.getByLabelText("コレクション名"), "民法総則");
+
+    const button = screen.getByRole("button", { name: "コレクションを作成" });
+    await user.click(button);
+
+    expect(button).toBeDisabled();
+    await user.click(button);
+    expect(putCollection).toHaveBeenCalledTimes(1);
+
+    deferred.resolve();
+    await waitFor(() => {
+      expect(button).not.toBeDisabled();
+    });
   });
 
   it("creates a bookmark with the fallback ID generator when crypto is unavailable", async () => {
@@ -261,6 +372,19 @@ const createRejectingStorageRepository = (
   ...createMemoryStorageRepository().repository,
   ...overrides,
 });
+
+const createDeferred = () => {
+  let resolve!: () => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<void>((promiseResolve, promiseReject) => {
+    resolve = () => {
+      promiseResolve();
+    };
+    reject = promiseReject;
+  });
+
+  return { promise, reject, resolve };
+};
 
 const withUnavailableCrypto = async (callback: () => Promise<void>) => {
   const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, "crypto");

@@ -26,6 +26,7 @@ type CollectionPageState =
       bookmarks: Bookmark[];
       collection: Collection | undefined;
       collectionId: string;
+      savedLaws: SavedLawSummary[];
       status: "loaded";
     }
   | {
@@ -52,6 +53,10 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
   const savedLawUseCase = useMemo(
     () => createSavedLawUseCase(storageRepository),
     [storageRepository],
+  );
+  const savedLawTitlesById = useMemo(
+    () => new Map(savedLaws.map((savedLaw) => [savedLaw.law.lawId, savedLaw.law.title])),
+    [savedLaws],
   );
 
   const loadSavedPageData = useCallback(async (): Promise<SavedPageData> => {
@@ -114,12 +119,12 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
         </p>
       </div>
 
-      {error === undefined ? null : <StatusMessage>{error}</StatusMessage>}
+      {error === undefined ? null : <ErrorMessage>{error}</ErrorMessage>}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem] xl:items-start">
         <div className="grid gap-6">
           <SavedLawList savedLaws={savedLaws} />
-          <BookmarkList bookmarks={bookmarks} />
+          <BookmarkList bookmarks={bookmarks} lawTitlesById={savedLawTitlesById} />
           <CollectionList collections={collections} />
         </div>
 
@@ -148,17 +153,26 @@ export const SavedCollectionPage = ({
     collectionId,
     status: "loading",
   });
+  const savedLawUseCase = useMemo(
+    () => createSavedLawUseCase(storageRepository),
+    [storageRepository],
+  );
 
   useEffect(() => {
     let isCurrent = true;
 
-    void Promise.all([storageRepository.listBookmarks(), storageRepository.listCollections()])
-      .then(([nextBookmarks, nextCollections]) => {
+    void Promise.all([
+      storageRepository.listBookmarks(),
+      storageRepository.listCollections(),
+      savedLawUseCase.list(),
+    ])
+      .then(([nextBookmarks, nextCollections, nextSavedLaws]) => {
         if (isCurrent) {
           setState({
             bookmarks: nextBookmarks,
             collection: nextCollections.find((item) => item.id === collectionId),
             collectionId,
+            savedLaws: nextSavedLaws,
             status: "loaded",
           });
         }
@@ -176,7 +190,7 @@ export const SavedCollectionPage = ({
     return () => {
       isCurrent = false;
     };
-  }, [collectionId, storageRepository]);
+  }, [collectionId, savedLawUseCase, storageRepository]);
 
   if (state.collectionId !== collectionId || state.status === "loading") {
     return (
@@ -189,7 +203,7 @@ export const SavedCollectionPage = ({
   if (state.status === "error") {
     return (
       <section className="mx-auto flex min-h-[calc(100dvh-10rem)] w-full max-w-2xl flex-col justify-center gap-4 px-5 py-10">
-        <StatusMessage>{state.error}</StatusMessage>
+        <ErrorMessage>{state.error}</ErrorMessage>
         <Button asChild className="w-fit" variant="outline">
           <Link to="/saved">保存リストへ戻る</Link>
         </Button>
@@ -212,10 +226,16 @@ export const SavedCollectionPage = ({
   const collectionBookmarks = state.bookmarks.filter((bookmark) =>
     collection.bookmarkIds.includes(bookmark.id),
   );
+  const lawTitlesById = new Map(
+    state.savedLaws.map((savedLaw) => [savedLaw.law.lawId, savedLaw.law.title]),
+  );
 
   return (
     <section className="mx-auto grid w-full max-w-4xl gap-6 px-5 py-8 md:px-6">
       <div className="grid gap-3">
+        <Button asChild className="w-fit" variant="outline">
+          <Link to="/saved">保存リストへ戻る</Link>
+        </Button>
         <p className="text-sm font-medium text-primary">Collection</p>
         <h1 className="text-3xl font-semibold tracking-normal text-foreground md:text-4xl">
           {collection.title}
@@ -227,7 +247,11 @@ export const SavedCollectionPage = ({
         )}
       </div>
 
-      <BookmarkList bookmarks={collectionBookmarks} emptyMessage="このコレクションは空です。" />
+      <BookmarkList
+        bookmarks={collectionBookmarks}
+        emptyMessage="このコレクションは空です。"
+        lawTitlesById={lawTitlesById}
+      />
     </section>
   );
 };
@@ -267,9 +291,11 @@ const SavedLawList = ({ savedLaws }: { savedLaws: SavedLawSummary[] }) => (
 const BookmarkList = ({
   bookmarks,
   emptyMessage = "保存項目はまだありません。",
+  lawTitlesById,
 }: {
   bookmarks: Bookmark[];
   emptyMessage?: string;
+  lawTitlesById?: ReadonlyMap<string, string>;
 }) => (
   <section aria-labelledby="bookmarks-heading" className="grid gap-3">
     <SectionHeading icon={StickyNote} id="bookmarks-heading" title="保存項目" />
@@ -281,6 +307,9 @@ const BookmarkList = ({
           <li key={bookmark.id} className="rounded-md border bg-card p-4">
             <div className="grid gap-2">
               <BookmarkLink bookmark={bookmark} />
+              <p className="text-sm text-muted-foreground">
+                法令: {lawTitlesById?.get(bookmark.target.lawId) ?? bookmark.target.lawId}
+              </p>
               {bookmark.note === undefined ? null : (
                 <p className="text-sm leading-6 text-muted-foreground">{bookmark.note}</p>
               )}
@@ -345,18 +374,26 @@ const BookmarkForm = ({
   const [tags, setTags] = useState("");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | undefined>();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (event: SyntheticEvent<HTMLFormElement, SubmitEvent>) => {
     event.preventDefault();
+
+    if (isSubmitting) {
+      return;
+    }
+
     setError(undefined);
 
     if (title.trim() === "" || lawId.trim() === "") {
+      setError("保存タイトルと法令IDを入力してください。");
       return;
     }
 
     const now = new Date().toISOString();
 
     try {
+      setIsSubmitting(true);
       await storageRepository.putBookmark({
         id: generateStorageId(),
         target: {
@@ -377,6 +414,8 @@ const BookmarkForm = ({
       setNote("");
     } catch {
       setError("保存項目を追加できませんでした。");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -388,54 +427,68 @@ const BookmarkForm = ({
       }}
     >
       <h2 className="text-lg font-semibold text-foreground">保存項目を追加</h2>
-      {error === undefined ? null : <StatusMessage>{error}</StatusMessage>}
-      <label className="grid gap-1 text-sm font-medium text-foreground">
+      {error === undefined ? null : <ErrorMessage>{error}</ErrorMessage>}
+      <label className="grid gap-1 text-sm font-medium text-foreground" htmlFor="bookmark-title">
         保存タイトル
         <Input
+          aria-invalid={error === undefined ? undefined : true}
+          disabled={isSubmitting}
+          id="bookmark-title"
+          required
           value={title}
           onChange={(event) => {
             setTitle(event.target.value);
           }}
         />
       </label>
-      <label className="grid gap-1 text-sm font-medium text-foreground">
+      <label className="grid gap-1 text-sm font-medium text-foreground" htmlFor="bookmark-law-id">
         法令ID
         <Input
+          aria-invalid={error === undefined ? undefined : true}
+          disabled={isSubmitting}
+          id="bookmark-law-id"
+          required
           value={lawId}
           onChange={(event) => {
             setLawId(event.target.value);
           }}
         />
       </label>
-      <label className="grid gap-1 text-sm font-medium text-foreground">
+      <label className="grid gap-1 text-sm font-medium text-foreground" htmlFor="bookmark-article">
         条番号
         <Input
+          disabled={isSubmitting}
+          id="bookmark-article"
           value={article}
           onChange={(event) => {
             setArticle(event.target.value);
           }}
         />
       </label>
-      <label className="grid gap-1 text-sm font-medium text-foreground">
+      <label className="grid gap-1 text-sm font-medium text-foreground" htmlFor="bookmark-tags">
         タグ
         <Input
+          disabled={isSubmitting}
+          id="bookmark-tags"
           value={tags}
           onChange={(event) => {
             setTags(event.target.value);
           }}
         />
       </label>
-      <label className="grid gap-1 text-sm font-medium text-foreground">
+      <label className="grid gap-1 text-sm font-medium text-foreground" htmlFor="bookmark-note">
         メモ
         <textarea
           className="min-h-24 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          disabled={isSubmitting}
+          id="bookmark-note"
           value={note}
           onChange={(event) => {
             setNote(event.target.value);
           }}
         />
       </label>
-      <Button className="w-fit" type="submit">
+      <Button className="w-fit" disabled={isSubmitting} type="submit">
         保存項目を追加
       </Button>
     </form>
@@ -455,18 +508,26 @@ const CollectionForm = ({
   const [description, setDescription] = useState("");
   const [selectedBookmarkIds, setSelectedBookmarkIds] = useState<string[]>([]);
   const [error, setError] = useState<string | undefined>();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async (event: SyntheticEvent<HTMLFormElement, SubmitEvent>) => {
     event.preventDefault();
+
+    if (isSubmitting) {
+      return;
+    }
+
     setError(undefined);
 
     if (title.trim() === "") {
+      setError("コレクション名を入力してください。");
       return;
     }
 
     const now = new Date().toISOString();
 
     try {
+      setIsSubmitting(true);
       await storageRepository.putCollection({
         id: generateStorageId(),
         title: title.trim(),
@@ -481,6 +542,8 @@ const CollectionForm = ({
       setSelectedBookmarkIds([]);
     } catch {
       setError("コレクションを作成できませんでした。");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -500,19 +563,28 @@ const CollectionForm = ({
       }}
     >
       <h2 className="text-lg font-semibold text-foreground">コレクションを作成</h2>
-      {error === undefined ? null : <StatusMessage>{error}</StatusMessage>}
-      <label className="grid gap-1 text-sm font-medium text-foreground">
+      {error === undefined ? null : <ErrorMessage>{error}</ErrorMessage>}
+      <label className="grid gap-1 text-sm font-medium text-foreground" htmlFor="collection-title">
         コレクション名
         <Input
+          aria-invalid={error === undefined ? undefined : true}
+          disabled={isSubmitting}
+          id="collection-title"
+          required
           value={title}
           onChange={(event) => {
             setTitle(event.target.value);
           }}
         />
       </label>
-      <label className="grid gap-1 text-sm font-medium text-foreground">
+      <label
+        className="grid gap-1 text-sm font-medium text-foreground"
+        htmlFor="collection-description"
+      >
         説明
         <Input
+          disabled={isSubmitting}
+          id="collection-description"
           value={description}
           onChange={(event) => {
             setDescription(event.target.value);
@@ -524,22 +596,25 @@ const CollectionForm = ({
         {bookmarks.length === 0 ? (
           <p className="text-sm text-muted-foreground">保存項目を追加すると選択できます。</p>
         ) : (
-          bookmarks.map((bookmark) => (
-            <label key={bookmark.id} className="flex items-center gap-2 text-sm text-foreground">
-              <input
-                checked={selectedBookmarkIds.includes(bookmark.id)}
-                className="size-4 accent-primary"
-                onChange={() => {
-                  toggleBookmark(bookmark.id);
-                }}
-                type="checkbox"
-              />
-              {bookmark.title}
-            </label>
-          ))
+          <div className="grid max-h-48 gap-2 overflow-y-auto rounded-md border bg-background p-2 pr-3">
+            {bookmarks.map((bookmark) => (
+              <label key={bookmark.id} className="flex items-center gap-2 text-sm text-foreground">
+                <input
+                  checked={selectedBookmarkIds.includes(bookmark.id)}
+                  className="size-4 accent-primary"
+                  disabled={isSubmitting}
+                  onChange={() => {
+                    toggleBookmark(bookmark.id);
+                  }}
+                  type="checkbox"
+                />
+                {bookmark.title}
+              </label>
+            ))}
+          </div>
         )}
       </fieldset>
-      <Button className="w-fit" type="submit">
+      <Button className="w-fit" disabled={isSubmitting} type="submit">
         コレクションを作成
       </Button>
     </form>
@@ -578,8 +653,19 @@ const StatusMessage = ({ children }: { children: string }) => (
   <PanelMessage role="status">{children}</PanelMessage>
 );
 
+const ErrorMessage = ({ children }: { children: string }) => (
+  <p
+    role="alert"
+    className="rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm leading-6 text-destructive"
+  >
+    {children}
+  </p>
+);
+
 const BookmarkLink = ({ bookmark }: { bookmark: Bookmark }) => {
-  if (bookmark.target.article === undefined || bookmark.target.article === null) {
+  const article = bookmark.target.article?.trim();
+
+  if (article === undefined || article === "") {
     return (
       <Link
         className="text-base font-semibold text-foreground underline-offset-4 hover:underline"
@@ -594,7 +680,7 @@ const BookmarkLink = ({ bookmark }: { bookmark: Bookmark }) => {
   return (
     <Link
       className="text-base font-semibold text-foreground underline-offset-4 hover:underline"
-      params={{ lawId: bookmark.target.lawId, article: bookmark.target.article }}
+      params={{ lawId: bookmark.target.lawId, article }}
       to="/laws/$lawId/articles/$article"
     >
       {bookmark.title}
