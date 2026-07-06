@@ -78,6 +78,31 @@ describe("app router", () => {
     expect(screen.getByText("6 ノード")).toBeInTheDocument();
   });
 
+  it("keeps saved laws list rendering when fetchedAt is missing at runtime", async () => {
+    const history = createMemoryHistory({ initialEntries: ["/laws"] });
+    const storageRepository = {
+      ...createMemoryStorageRepository().repository,
+      listSavedLaws: () =>
+        Promise.resolve([
+          {
+            law: sampleLawViewerDocument.law,
+            revision: {
+              ...sampleLawViewerDocument.revision,
+              fetchedAt: undefined as never,
+            },
+            nodeCount: sampleLawViewerDocument.nodes.length,
+            savedAt: "2026-07-06T00:00:00.000Z",
+            updatedAt: "2026-07-06T00:00:00.000Z",
+          },
+        ]),
+    };
+
+    render(<RouterProvider router={createAppRouter({ history, storageRepository })} />);
+
+    expect(await screen.findByRole("link", { name: "民法" })).toBeInTheDocument();
+    expect(screen.getByText("最終取得: 不明")).toBeInTheDocument();
+  });
+
   it("renders an empty saved laws placeholder on the laws route", async () => {
     const history = createMemoryHistory({ initialEntries: ["/laws"] });
     const storageRepository = createMemoryStorageRepository().repository;

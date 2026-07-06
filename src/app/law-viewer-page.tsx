@@ -17,6 +17,7 @@ import { Input } from "@/shared/ui/input";
 import { Skeleton } from "@/shared/ui/skeleton";
 
 import { loadLawViewerDocument } from "./law-viewer-loader";
+import { useOnlineStatus, useSavedViewerState } from "./law-viewer-hooks";
 import type { LawViewerDocument } from "./law-viewer-sample";
 
 const defaultStorageRepository = createStorageRepository();
@@ -151,7 +152,7 @@ const LawViewerReadyState = ({
   );
   const isOnline = useOnlineStatus();
   const [displayMode, setDisplayMode] = useState<LawTextDisplayMode>("readable");
-  const [savedState, setSavedState] = useState<SavedViewerState>(() => toSavedViewerState(state));
+  const [savedState, setSavedState] = useSavedViewerState(state);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | undefined>();
   const [isMobileTocOpen, setIsMobileTocOpen] = useState(false);
@@ -426,42 +427,8 @@ const collectTocArticleNumbers = (items: LawTocItem[]): string[] =>
     ...collectTocArticleNumbers(item.children),
   ]);
 
-interface SavedViewerState {
-  isSaved: boolean;
-  loadedFromStorage: boolean;
-  savedAt?: string;
-}
-
-const toSavedViewerState = (state: Extract<LawViewerState, { status: "ready" }>) => ({
-  isSaved: state.isSaved,
-  loadedFromStorage: state.loadedFromStorage,
-  ...(state.savedAt === undefined ? {} : { savedAt: state.savedAt }),
-});
-
 const normalizeArticleNumberInput = (articleNumber: string): string =>
   articleNumber.normalize("NFKC").replace(/\s+/g, "");
-
-const useOnlineStatus = () => {
-  const [isOnline, setIsOnline] = useState(() =>
-    typeof navigator === "undefined" ? true : navigator.onLine,
-  );
-
-  useEffect(() => {
-    const updateOnlineStatus = () => {
-      setIsOnline(navigator.onLine);
-    };
-
-    window.addEventListener("online", updateOnlineStatus);
-    window.addEventListener("offline", updateOnlineStatus);
-
-    return () => {
-      window.removeEventListener("online", updateOnlineStatus);
-      window.removeEventListener("offline", updateOnlineStatus);
-    };
-  }, []);
-
-  return isOnline;
-};
 
 const LawViewerLoadingState = () => (
   <section

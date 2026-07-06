@@ -109,7 +109,7 @@ export const LawsPage = ({
                       {savedLaw.law.title}
                     </Link>
                     <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
-                      <span>最終取得: {savedLaw.revision.fetchedAt.slice(0, 10)}</span>
+                      <span>最終取得: {formatSavedLawFetchedDate(savedLaw)}</span>
                       <span>{savedLaw.nodeCount.toLocaleString("ja-JP")} ノード</span>
                     </div>
                   </div>
@@ -122,6 +122,12 @@ export const LawsPage = ({
       </section>
     </section>
   );
+};
+
+const formatSavedLawFetchedDate = (savedLaw: SavedLawSummary): string => {
+  const fetchedAt = savedLaw.revision.fetchedAt;
+
+  return typeof fetchedAt === "string" && fetchedAt.length >= 10 ? fetchedAt.slice(0, 10) : "不明";
 };
 
 export const JumpPage = () => (

@@ -129,6 +129,21 @@ describe("LawDocumentView", () => {
     expect(within(document).queryByText("明治29年法律第89号")).not.toBeInTheDocument();
   });
 
+  it("keeps rendering when fetchedAt is missing at runtime", () => {
+    render(
+      <LawDocumentView
+        isSaved
+        law={law}
+        nodes={[]}
+        revision={{ ...revision, fetchedAt: undefined as never }}
+      />,
+    );
+
+    const document = screen.getByRole("article", { name: "民法" });
+
+    expect(within(document).getByText("取得: 不明")).toBeInTheDocument();
+  });
+
   it("formats law number without applying unrelated readable transforms", () => {
     render(
       <LawDocumentView
