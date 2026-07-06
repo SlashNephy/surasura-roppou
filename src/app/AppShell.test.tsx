@@ -2,6 +2,8 @@ import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { render, screen, waitFor } from "@testing-library/react";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { createMemoryStorageRepository } from "@/test/fixtures/storage";
+
 import { createAppRouter } from "./router";
 
 const primaryNavRoutes = ["法令", "ジャンプ", "撮る", "復習", "設定"] as const;
@@ -18,8 +20,9 @@ describe("AppShell", () => {
 
   it("renders desktop and mobile navigation links for main routes", async () => {
     const history = createMemoryHistory({ initialEntries: ["/laws"] });
+    const storageRepository = createMemoryStorageRepository().repository;
 
-    render(<RouterProvider router={createAppRouter({ history })} />);
+    render(<RouterProvider router={createAppRouter({ history, storageRepository })} />);
 
     await waitFor(() => {
       for (const label of primaryNavRoutes) {
@@ -30,8 +33,9 @@ describe("AppShell", () => {
 
   it("renders desktop navigation, main, and study panes", async () => {
     const history = createMemoryHistory({ initialEntries: ["/laws"] });
+    const storageRepository = createMemoryStorageRepository().repository;
 
-    render(<RouterProvider router={createAppRouter({ history })} />);
+    render(<RouterProvider router={createAppRouter({ history, storageRepository })} />);
 
     await waitFor(() => {
       expect(
@@ -44,8 +48,9 @@ describe("AppShell", () => {
 
   it("separates active and inactive navigation color classes", async () => {
     const history = createMemoryHistory({ initialEntries: ["/laws"] });
+    const storageRepository = createMemoryStorageRepository().repository;
 
-    render(<RouterProvider router={createAppRouter({ history })} />);
+    render(<RouterProvider router={createAppRouter({ history, storageRepository })} />);
 
     await waitFor(() => {
       const activeLinks = screen.getAllByRole("link", { name: "法令" });

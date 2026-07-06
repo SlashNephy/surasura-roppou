@@ -2,6 +2,7 @@ import { createRootRoute, createRoute, createRouter } from "@tanstack/react-rout
 import type { RouterHistory } from "@tanstack/react-router";
 
 import type { LawRepository } from "@/core/egov";
+import type { StorageRepository } from "@/core/storage";
 
 import { AppShell } from "./AppShell";
 import {
@@ -17,9 +18,13 @@ import {
 interface CreateAppRouterOptions {
   history?: RouterHistory;
   lawRepository?: LawRepository;
+  storageRepository?: StorageRepository;
 }
 
-const createRouteTree = ({ lawRepository }: Pick<CreateAppRouterOptions, "lawRepository"> = {}) => {
+const createRouteTree = ({
+  lawRepository,
+  storageRepository,
+}: Pick<CreateAppRouterOptions, "lawRepository" | "storageRepository"> = {}) => {
   const rootRoute = createRootRoute({
     component: AppShell,
   });
@@ -30,13 +35,17 @@ const createRouteTree = ({ lawRepository }: Pick<CreateAppRouterOptions, "lawRep
     component: HomePage,
   });
 
+  const LawsRoute = () => <LawsPage storageRepository={storageRepository} />;
+
   const lawsRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "laws",
-    component: LawsPage,
+    component: LawsRoute,
   });
 
-  const LawViewerRoute = () => <LawViewerPage repository={lawRepository} />;
+  const LawViewerRoute = () => (
+    <LawViewerPage repository={lawRepository} storageRepository={storageRepository} />
+  );
 
   const lawViewerRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -85,8 +94,12 @@ const createRouteTree = ({ lawRepository }: Pick<CreateAppRouterOptions, "lawRep
   ]);
 };
 
-export const createAppRouter = ({ history, lawRepository }: CreateAppRouterOptions = {}) =>
-  createRouter({ routeTree: createRouteTree({ lawRepository }), history });
+export const createAppRouter = ({
+  history,
+  lawRepository,
+  storageRepository,
+}: CreateAppRouterOptions = {}) =>
+  createRouter({ routeTree: createRouteTree({ lawRepository, storageRepository }), history });
 
 export const router = createAppRouter();
 

@@ -14,9 +14,11 @@ import { describe, expect, it } from "vitest";
 import { createEgovLawRepository } from "@/core/egov";
 import type { LawDocument, LawListResult, LawMetadata, LawRepository } from "@/core/egov";
 import { createJsonFetchStub, fixedTestNow as now, lawDataFixture } from "@/test/fixtures/egov";
+import { createMemoryStorageRepository, createSavedLawDocument } from "@/test/fixtures/storage";
 import { setupScrollMocks } from "@/test/scrollMocks";
 
 import { LawViewerPage, LawViewerPageContent } from "./law-viewer-page";
+import { sampleLawViewerDocument } from "./law-viewer-sample";
 import type { LawViewerState } from "./law-viewer-page";
 
 const scrollMocks = setupScrollMocks();
@@ -51,8 +53,14 @@ const pendingRepository = {
   getLawMetadata: (): Promise<LawMetadata> => Promise.reject(new Error("Not used in this test")),
 } satisfies LawRepository;
 
-const renderLawViewerRoute = (path: string, repository = createFixtureRepository().repository) => {
-  const LawViewerRoute = () => <LawViewerPage repository={repository} />;
+const renderLawViewerRoute = (
+  path: string,
+  repository = createFixtureRepository().repository,
+  storageRepository = createMemoryStorageRepository().repository,
+) => {
+  const LawViewerRoute = () => (
+    <LawViewerPage repository={repository} storageRepository={storageRepository} />
+  );
   const history = createMemoryHistory({ initialEntries: [path] });
   const rootRoute = createRootRoute({
     component: Outlet,
@@ -152,6 +160,7 @@ const nonNumericArticleState = {
     },
   ],
   isSaved: false,
+  loadedFromStorage: false,
 } satisfies LawViewerState;
 
 describe("LawViewerPageContent", () => {
@@ -197,6 +206,90 @@ describe("LawViewerPageContent", () => {
         init: { headers: { accept: "application/json" } },
       },
     ]);
+  });
+
+  it("saves the loaded law document for offline viewing", async () => {
+    const storage = createMemoryStorageRepository();
+    const { user } = renderLawViewerRoute(
+      "/laws/129AC0000000089",
+      createFixtureRepository().repository,
+      storage.repository,
+    );
+
+    expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "オフライン保存" }));
+
+    expect(screen.getByText("保存済み")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "保存解除" })).toBeInTheDocument();
+    expect(storage.getSavedDocument()?.law.title).toBe("民法");
+  });
+
+  it("shows a recoverable error when offline save fails", async () => {
+    const storageRepository = {
+      ...createMemoryStorageRepository().repository,
+      saveLawDocument: () => Promise.reject(new Error("Quota exceeded")),
+    };
+    const { user } = renderLawViewerRoute(
+      "/laws/129AC0000000089",
+      createFixtureRepository().repository,
+      storageRepository,
+    );
+
+    expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "オフライン保存" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "オフライン保存を更新できませんでした。",
+    );
+    expect(screen.getByRole("button", { name: "オフライン保存" })).toBeEnabled();
+    expect(screen.getByText("未保存")).toBeInTheDocument();
+  });
+
+  it("removes a saved law document without leaving the viewer", async () => {
+    const storage = createMemoryStorageRepository(
+      createSavedLawDocument({
+        law: sampleLawViewerDocument.law,
+        revision: sampleLawViewerDocument.revision,
+        nodes: sampleLawViewerDocument.nodes,
+      }),
+    );
+    const { user } = renderLawViewerRoute(
+      "/laws/129AC0000000089",
+      createFixtureRepository().repository,
+      storage.repository,
+    );
+
+    expect(await screen.findByRole("button", { name: "保存解除" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "保存解除" }));
+
+    expect(screen.getByRole("button", { name: "オフライン保存" })).toBeInTheDocument();
+    expect(screen.getByText("未保存")).toBeInTheDocument();
+    expect(storage.getSavedDocument()).toBeUndefined();
+  });
+
+  it("shows the saved law body when the network is unavailable", async () => {
+    const repository = {
+      listLaws: (): Promise<LawListResult> => Promise.reject(new Error("Not used in this test")),
+      getLaw: (): Promise<LawDocument> => Promise.reject(new Error("network down")),
+      getLawMetadata: (): Promise<LawMetadata> =>
+        Promise.reject(new Error("Not used in this test")),
+    } satisfies LawRepository;
+    const storage = createMemoryStorageRepository(
+      createSavedLawDocument({
+        law: sampleLawViewerDocument.law,
+        revision: sampleLawViewerDocument.revision,
+        nodes: sampleLawViewerDocument.nodes,
+      }),
+    );
+
+    renderLawViewerRoute("/laws/129AC0000000089", repository, storage.repository);
+
+    expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+    expect(screen.getByText("保存済み本文を表示中")).toBeInTheDocument();
+    expect(screen.getByText("取得: 2026-07-05")).toBeInTheDocument();
   });
 
   it("renders readable display mode by default", async () => {

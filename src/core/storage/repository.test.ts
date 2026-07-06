@@ -240,6 +240,8 @@ describe("StorageRepository", () => {
       await expect(
         database.getAllFromIndex("lawNodes", "by-law-revision", [law.lawId, revision.revisionId]),
       ).resolves.toEqual([]);
+      await expect(database.get("laws", law.lawId)).resolves.toBeUndefined();
+      await expect(database.get("lawRevisions", revision.revisionId)).resolves.toBeUndefined();
     } finally {
       database.close();
     }

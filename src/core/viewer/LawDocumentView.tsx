@@ -50,7 +50,7 @@ export const LawDocumentView = ({
         ) : null}
         <div className="min-w-0 break-words">
           <dt className="sr-only">取得日</dt>
-          <dd>取得: {revision.fetchedAt.slice(0, 10)}</dd>
+          <dd>取得: {getDisplayFetchedDate(revision.fetchedAt)}</dd>
         </div>
       </dl>
     </header>
@@ -65,3 +65,6 @@ export const LawDocumentView = ({
 
 const getDisplayLawNumber = (lawNumber: string, displayMode: LawTextDisplayMode): string =>
   applyLawTextDisplayMode(lawNumber, displayMode, "law-number");
+
+const getDisplayFetchedDate = (fetchedAt: string): string =>
+  typeof fetchedAt === "string" && fetchedAt.length >= 10 ? fetchedAt.slice(0, 10) : "不明";
