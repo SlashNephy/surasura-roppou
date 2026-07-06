@@ -99,18 +99,24 @@ export const createStorageRepository = (
         const updatedAt = now().toISOString();
         const tx = db.transaction(["laws", "lawRevisions", "lawNodes", "savedLaws"], "readwrite");
         const nodes = tx.objectStore("lawNodes");
+        const lawRevisions = tx.objectStore("lawRevisions");
         const savedLaws = tx.objectStore("savedLaws");
         const existingSavedLaw = await savedLaws.get(document.law.lawId);
+        const replacedRevisionId = existingSavedLaw?.revisionId ?? document.revision.revisionId;
         const existingNodeKeys = await nodes
           .index("by-law-revision")
-          .getAllKeys([document.law.lawId, document.revision.revisionId]);
+          .getAllKeys([document.law.lawId, replacedRevisionId]);
 
         for (const key of existingNodeKeys) {
           void nodes.delete(key);
         }
 
         void tx.objectStore("laws").put(document.law);
-        void tx.objectStore("lawRevisions").put(document.revision);
+        if (replacedRevisionId !== document.revision.revisionId) {
+          void lawRevisions.delete(replacedRevisionId);
+        }
+
+        void lawRevisions.put(document.revision);
 
         for (const [sortOrder, node] of document.nodes.entries()) {
           void nodes.put({
@@ -200,13 +206,15 @@ export const createStorageRepository = (
 
     async deleteLawDocument(lawId) {
       await withDatabase(async (db) => {
-        const savedLaw = await db.get("savedLaws", lawId);
+        const tx = db.transaction(["lawNodes", "savedLaws"], "readwrite");
+        const savedLaws = tx.objectStore("savedLaws");
+        const savedLaw = await savedLaws.get(lawId);
 
         if (savedLaw === undefined) {
+          await tx.done;
           return;
         }
 
-        const tx = db.transaction(["lawNodes", "savedLaws"], "readwrite");
         const nodes = tx.objectStore("lawNodes");
         const nodeKeys = await nodes
           .index("by-law-revision")
@@ -216,7 +224,7 @@ export const createStorageRepository = (
           void nodes.delete(key);
         }
 
-        await tx.objectStore("savedLaws").delete(lawId);
+        await savedLaws.delete(lawId);
         await tx.done;
       });
     },
@@ -322,6 +330,14 @@ export const openSurasuraDatabase = async (
     upgrade(database, oldVersion) {
       if (oldVersion < 1) {
         createVersion1Stores(database);
+      }
+    },
+    blocked() {
+      return undefined;
+    },
+    blocking(_currentVersion, _blockedVersion, event) {
+      if (event.target instanceof IDBDatabase) {
+        event.target.close();
       }
     },
   });

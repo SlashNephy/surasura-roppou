@@ -17,6 +17,7 @@ import type {
 import {
   createStorageRepository as originalCreateStorageRepository,
   deleteSurasuraDatabase,
+  openSurasuraDatabase,
   surasuraDatabaseVersion,
 } from "./repository";
 import type { StorageRepository, StorageRepositoryOptions } from "./repository";
@@ -75,6 +76,43 @@ describe("StorageRepository", () => {
         updatedAt: "2026-07-07T00:00:00.000Z",
       },
     ]);
+  });
+
+  it("replaces previous revision nodes when a saved law is refreshed with another revision", async () => {
+    const databaseName = createDatabaseName();
+    const repository = createStorageRepository({
+      databaseName,
+      now: fixedNow,
+    });
+    const nextRevision = {
+      ...revision,
+      revisionId: "129AC0000000089_20260701_0000000000000",
+      effectiveDate: "2026-07-01",
+    } satisfies LawRevision;
+    const nextNode = {
+      ...articleNode,
+      id: "129AC0000000089:129AC0000000089_20260701_0000000000000:article:1",
+      revisionId: nextRevision.revisionId,
+    } satisfies LawNode;
+
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode] });
+    await repository.saveLawDocument({ law, revision: nextRevision, nodes: [nextNode] });
+
+    const database = await openSurasuraDatabase(databaseName);
+    try {
+      await expect(
+        database.getAllFromIndex("lawNodes", "by-law-revision", [law.lawId, revision.revisionId]),
+      ).resolves.toEqual([]);
+      await expect(database.get("lawRevisions", revision.revisionId)).resolves.toBeUndefined();
+      await expect(
+        database.getAllFromIndex("lawNodes", "by-law-revision", [
+          law.lawId,
+          nextRevision.revisionId,
+        ]),
+      ).resolves.toHaveLength(1);
+    } finally {
+      database.close();
+    }
   });
 
   it("lists saved laws from newest to oldest", async () => {
@@ -183,8 +221,9 @@ describe("StorageRepository", () => {
   });
 
   it("deletes a saved law and its structural nodes without deleting user-owned notes", async () => {
+    const databaseName = createDatabaseName();
     const repository = createStorageRepository({
-      databaseName: createDatabaseName(),
+      databaseName,
       now: fixedNow,
     });
 
@@ -195,6 +234,15 @@ describe("StorageRepository", () => {
 
     await expect(repository.getLawDocument(law.lawId)).resolves.toBeUndefined();
     await expect(repository.listBookmarks({ lawId: law.lawId })).resolves.toEqual([bookmark]);
+
+    const database = await openSurasuraDatabase(databaseName);
+    try {
+      await expect(
+        database.getAllFromIndex("lawNodes", "by-law-revision", [law.lawId, revision.revisionId]),
+      ).resolves.toEqual([]);
+    } finally {
+      database.close();
+    }
   });
 
   it("exposes schema version 1 for the first offline storage migration", () => {
