@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createEgovLawRepository } from "@/core/egov";
 import type { LawDocument, LawListResult, LawMetadata, LawRepository } from "@/core/egov";
+import type { StorageRepository } from "@/core/storage";
 import { createJsonFetchStub, fixedTestNow as now, lawDataFixture } from "@/test/fixtures/egov";
 
 import { loadLawViewerDocument } from "./law-viewer-loader";
@@ -12,7 +13,11 @@ describe("loadLawViewerDocument", () => {
     const { calls, fetcher } = createJsonFetchStub(lawDataFixture);
     const repository = createEgovLawRepository({ fetcher, now });
 
-    const state = await loadLawViewerDocument("129AC0000000089", repository);
+    const state = await loadLawViewerDocument(
+      "129AC0000000089",
+      repository,
+      createStorageRepositoryStub(),
+    );
 
     expect(calls).toEqual([
       {
@@ -50,6 +55,68 @@ describe("loadLawViewerDocument", () => {
     );
   });
 
+  it("marks an online law as saved when it already exists in IndexedDB", async () => {
+    const { fetcher } = createJsonFetchStub(lawDataFixture);
+    const repository = createEgovLawRepository({ fetcher, now });
+    const storageRepository = createStorageRepositoryStub({
+      getLawDocument: vi.fn().mockResolvedValue({
+        ...sampleLawViewerDocument,
+        savedAt: "2026-07-06T00:00:00.000Z",
+      }),
+    });
+
+    const state = await loadLawViewerDocument("129AC0000000089", repository, storageRepository);
+
+    expect(state).toMatchObject({
+      status: "ready",
+      isSaved: true,
+      loadedFromStorage: false,
+      savedAt: "2026-07-06T00:00:00.000Z",
+    });
+  });
+
+  it("keeps loading the online law when saved storage lookup fails", async () => {
+    const { fetcher } = createJsonFetchStub(lawDataFixture);
+    const repository = createEgovLawRepository({ fetcher, now });
+    const storageRepository = createStorageRepositoryStub({
+      getLawDocument: vi.fn().mockRejectedValue(new Error("IndexedDB is unavailable")),
+    });
+
+    await expect(
+      loadLawViewerDocument("129AC0000000089", repository, storageRepository),
+    ).resolves.toMatchObject({
+      status: "ready",
+      law: { title: "民法" },
+      isSaved: false,
+      loadedFromStorage: false,
+    });
+  });
+
+  it("falls back to a saved law document when the network request fails", async () => {
+    const repository = {
+      listLaws: (): Promise<LawListResult> => Promise.reject(new Error("Not used in this test")),
+      getLaw: (): Promise<LawDocument> => Promise.reject(new Error("network down")),
+      getLawMetadata: (): Promise<LawMetadata> =>
+        Promise.reject(new Error("Not used in this test")),
+    } satisfies LawRepository;
+    const storageRepository = createStorageRepositoryStub({
+      getLawDocument: vi.fn().mockResolvedValue({
+        ...sampleLawViewerDocument,
+        savedAt: "2026-07-06T00:00:00.000Z",
+      }),
+    });
+
+    await expect(
+      loadLawViewerDocument("129AC0000000089", repository, storageRepository),
+    ).resolves.toMatchObject({
+      status: "ready",
+      isSaved: true,
+      loadedFromStorage: true,
+      savedAt: "2026-07-06T00:00:00.000Z",
+      law: { title: "民法" },
+    });
+  });
+
   it("maps repository failures to the viewer error state", async () => {
     const { fetcher } = createJsonFetchStub(
       {
@@ -60,7 +127,9 @@ describe("loadLawViewerDocument", () => {
     );
     const repository = createEgovLawRepository({ fetcher, now });
 
-    await expect(loadLawViewerDocument("missing", repository)).resolves.toEqual({
+    await expect(
+      loadLawViewerDocument("missing", repository, createStorageRepositoryStub()),
+    ).resolves.toEqual({
       status: "error",
       message: "法令が見つかりません。",
     });
@@ -94,7 +163,9 @@ describe("loadLawViewerDocument", () => {
     );
     const repository = createEgovLawRepository({ fetcher, now });
 
-    await expect(loadLawViewerDocument("129AC0000000089", repository)).resolves.toEqual({
+    await expect(
+      loadLawViewerDocument("129AC0000000089", repository, createStorageRepositoryStub()),
+    ).resolves.toEqual({
       status: "error",
       message: "法令を取得できませんでした。ネットワーク接続を確認してください。",
     });
@@ -108,9 +179,35 @@ describe("loadLawViewerDocument", () => {
         Promise.reject(new Error("Not used in this test")),
     } satisfies LawRepository;
 
-    await expect(loadLawViewerDocument("129AC0000000089", repository)).resolves.toEqual({
+    await expect(
+      loadLawViewerDocument("129AC0000000089", repository, createStorageRepositoryStub()),
+    ).resolves.toEqual({
       status: "error",
       message: "法令を取得できませんでした。ネットワーク接続を確認してください。",
     });
   });
+});
+
+const createStorageRepositoryStub = ({
+  getLawDocument = vi.fn().mockResolvedValue(undefined),
+}: {
+  getLawDocument?: StorageRepository["getLawDocument"];
+} = {}): StorageRepository => ({
+  getLawDocument,
+  saveLawDocument: vi.fn(),
+  listSavedLaws: vi.fn(),
+  deleteLawDocument: vi.fn(),
+  putBookmark: vi.fn(),
+  listBookmarks: vi.fn(),
+  putCollection: vi.fn(),
+  listCollections: vi.fn(),
+  putAnnotation: vi.fn(),
+  listAnnotations: vi.fn(),
+  putStudyCard: vi.fn(),
+  listDueStudyCards: vi.fn(),
+  putStudySession: vi.fn(),
+  listStudySessions: vi.fn(),
+  putOcrSession: vi.fn(),
+  listOcrSessions: vi.fn(),
+  close: vi.fn(),
 });

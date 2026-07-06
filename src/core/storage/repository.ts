@@ -206,7 +206,7 @@ export const createStorageRepository = (
 
     async deleteLawDocument(lawId) {
       await withDatabase(async (db) => {
-        const tx = db.transaction(["lawNodes", "savedLaws"], "readwrite");
+        const tx = db.transaction(["laws", "lawRevisions", "lawNodes", "savedLaws"], "readwrite");
         const savedLaws = tx.objectStore("savedLaws");
         const savedLaw = await savedLaws.get(lawId);
 
@@ -225,6 +225,8 @@ export const createStorageRepository = (
         }
 
         await savedLaws.delete(lawId);
+        void tx.objectStore("laws").delete(savedLaw.lawId);
+        void tx.objectStore("lawRevisions").delete(savedLaw.revisionId);
         await tx.done;
       });
     },

@@ -1,8 +1,10 @@
-import { type SyntheticEvent, useEffect, useMemo, useState } from "react";
+import { type SyntheticEvent, useEffect, useId, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import { ListTree } from "lucide-react";
+import { Download, ListTree, Trash2 } from "lucide-react";
 
 import type { LawRepository } from "@/core/egov";
+import { createSavedLawUseCase, createStorageRepository } from "@/core/storage";
+import type { StorageRepository } from "@/core/storage";
 import {
   LawDocumentView,
   LawTableOfContents,
@@ -16,6 +18,8 @@ import { Skeleton } from "@/shared/ui/skeleton";
 
 import { loadLawViewerDocument } from "./law-viewer-loader";
 import type { LawViewerDocument } from "./law-viewer-sample";
+
+const defaultStorageRepository = createStorageRepository();
 
 export type LawViewerState =
   | { status: "loading" }
@@ -38,9 +42,13 @@ const useLawViewerParams = () => {
 
 interface LawViewerPageProps {
   repository?: LawRepository;
+  storageRepository?: StorageRepository;
 }
 
-export const LawViewerPage = ({ repository }: LawViewerPageProps = {}) => {
+export const LawViewerPage = ({
+  repository,
+  storageRepository = defaultStorageRepository,
+}: LawViewerPageProps = {}) => {
   const { article, lawId } = useLawViewerParams();
 
   return (
@@ -49,6 +57,7 @@ export const LawViewerPage = ({ repository }: LawViewerPageProps = {}) => {
       activeArticleNumber={article}
       lawId={lawId}
       repository={repository}
+      storageRepository={storageRepository}
     />
   );
 };
@@ -57,17 +66,19 @@ const LawViewerPageLoader = ({
   activeArticleNumber,
   lawId,
   repository,
+  storageRepository,
 }: {
   activeArticleNumber?: string;
   lawId: string;
   repository?: LawRepository;
+  storageRepository: StorageRepository;
 }) => {
   const [state, setState] = useState<LawViewerState>({ status: "loading" });
 
   useEffect(() => {
     let isCurrent = true;
 
-    void loadLawViewerDocument(lawId, repository).then((nextState) => {
+    void loadLawViewerDocument(lawId, repository, storageRepository).then((nextState) => {
       if (isCurrent) {
         setState(nextState);
       }
@@ -76,10 +87,15 @@ const LawViewerPageLoader = ({
     return () => {
       isCurrent = false;
     };
-  }, [lawId, repository]);
+  }, [lawId, repository, storageRepository]);
 
   return (
-    <LawViewerPageContent activeArticleNumber={activeArticleNumber} lawId={lawId} state={state} />
+    <LawViewerPageContent
+      activeArticleNumber={activeArticleNumber}
+      lawId={lawId}
+      state={state}
+      storageRepository={storageRepository}
+    />
   );
 };
 
@@ -87,10 +103,12 @@ export const LawViewerPageContent = ({
   activeArticleNumber,
   lawId = "",
   state,
+  storageRepository = defaultStorageRepository,
 }: {
   activeArticleNumber?: string;
   lawId?: string;
   state: LawViewerState;
+  storageRepository?: StorageRepository;
 }) => {
   switch (state.status) {
     case "loading":
@@ -105,9 +123,11 @@ export const LawViewerPageContent = ({
     case "ready":
       return (
         <LawViewerReadyState
+          key={`${state.law.lawId}:${state.revision.revisionId}:${String(state.loadedFromStorage)}`}
           activeArticleNumber={activeArticleNumber}
           lawId={lawId}
           state={state}
+          storageRepository={storageRepository}
         />
       );
   }
@@ -117,13 +137,23 @@ const LawViewerReadyState = ({
   activeArticleNumber: routeArticleNumber,
   lawId,
   state,
+  storageRepository,
 }: {
   activeArticleNumber?: string;
   lawId: string;
   state: Extract<LawViewerState, { status: "ready" }>;
+  storageRepository: StorageRepository;
 }) => {
   const navigate = useNavigate();
+  const savedLawUseCase = useMemo(
+    () => createSavedLawUseCase(storageRepository),
+    [storageRepository],
+  );
+  const isOnline = useOnlineStatus();
   const [displayMode, setDisplayMode] = useState<LawTextDisplayMode>("readable");
+  const [savedState, setSavedState] = useState<SavedViewerState>(() => toSavedViewerState(state));
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | undefined>();
   const [isMobileTocOpen, setIsMobileTocOpen] = useState(false);
   const [jumpArticleNumber, setJumpArticleNumber] = useState("");
   const [hasJumpError, setHasJumpError] = useState(false);
@@ -142,8 +172,10 @@ const LawViewerReadyState = ({
   const isRouteArticleKnown =
     routeArticleNumber === undefined || articleNumbers.has(routeArticleNumber);
   const activeArticleNumber = isRouteArticleKnown ? routeArticleNumber : undefined;
+  const articleInputId = useId();
   const tocPanelId = "law-viewer-mobile-toc";
   const articleJumpErrorId = "article-jump-error";
+  const saveErrorId = "offline-save-error";
   const hasArticleError = hasJumpError || !isRouteArticleKnown;
 
   const scrollToArticle = (articleNumber: string) => {
@@ -172,6 +204,37 @@ const LawViewerReadyState = ({
       to: "/laws/$lawId/articles/$article",
       params: { lawId, article: articleNumber },
     });
+  };
+
+  const handleSaveToggle = async () => {
+    setIsSaving(true);
+    setSaveError(undefined);
+
+    try {
+      if (savedState.isSaved) {
+        await savedLawUseCase.remove(state.law.lawId);
+        setSavedState({ isSaved: false, loadedFromStorage: false });
+        return;
+      }
+
+      await savedLawUseCase.save({
+        law: state.law,
+        revision: state.revision,
+        nodes: state.nodes,
+      });
+
+      const savedDocument = await savedLawUseCase.get(state.law.lawId);
+
+      setSavedState({
+        isSaved: true,
+        loadedFromStorage: false,
+        ...(savedDocument?.savedAt === undefined ? {} : { savedAt: savedDocument.savedAt }),
+      });
+    } catch {
+      setSaveError("オフライン保存を更新できませんでした。端末の保存領域を確認してください。");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleJumpSubmit = (event: SyntheticEvent<HTMLFormElement, SubmitEvent>) => {
@@ -240,12 +303,16 @@ const LawViewerReadyState = ({
           className="grid gap-2 sm:grid-cols-[minmax(0,12rem)_auto]"
           onSubmit={handleJumpSubmit}
         >
-          <label className="grid min-w-0 gap-1 text-sm font-medium text-foreground">
+          <label
+            className="grid min-w-0 gap-1 text-sm font-medium text-foreground"
+            htmlFor={articleInputId}
+          >
             条番号
             <Input
               aria-describedby={hasJumpError ? articleJumpErrorId : undefined}
               aria-invalid={hasJumpError ? true : undefined}
               autoComplete="off"
+              id={articleInputId}
               name="article"
               onChange={(event) => {
                 setJumpArticleNumber(event.target.value);
@@ -275,6 +342,49 @@ const LawViewerReadyState = ({
         </Button>
 
         {hasArticleError ? <div className="md:col-span-full">{notFoundAlert}</div> : null}
+
+        <div className="grid min-w-0 gap-2 sm:justify-self-end">
+          <span className="text-sm font-medium text-foreground">オフライン</span>
+          <Button
+            aria-describedby={saveError === undefined ? undefined : saveErrorId}
+            className="w-fit gap-2"
+            disabled={isSaving}
+            onClick={() => {
+              void handleSaveToggle();
+            }}
+            type="button"
+            variant={savedState.isSaved ? "outline" : "default"}
+          >
+            {savedState.isSaved ? (
+              <Trash2 className="size-4" aria-hidden="true" />
+            ) : (
+              <Download className="size-4" aria-hidden="true" />
+            )}
+            {savedState.isSaved ? "保存解除" : "オフライン保存"}
+          </Button>
+        </div>
+      </div>
+
+      {saveError !== undefined ? (
+        <p
+          id={saveErrorId}
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-6 text-destructive"
+        >
+          {saveError}
+        </p>
+      ) : null}
+
+      <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+        <span>{isOnline ? "オンライン" : "オフライン"}</span>
+        {savedState.loadedFromStorage ? (
+          <span className="rounded-md border border-primary/30 bg-primary/5 px-2 py-1 text-primary">
+            保存済み本文を表示中
+          </span>
+        ) : null}
+        {savedState.savedAt !== undefined ? (
+          <span>保存日時: {savedState.savedAt.slice(0, 10)}</span>
+        ) : null}
       </div>
 
       <div
@@ -300,7 +410,7 @@ const LawViewerReadyState = ({
         <LawDocumentView
           activeArticleNumber={activeArticleNumber}
           displayMode={displayMode}
-          isSaved={state.isSaved}
+          isSaved={savedState.isSaved}
           law={state.law}
           nodes={state.nodes}
           revision={state.revision}
@@ -316,8 +426,42 @@ const collectTocArticleNumbers = (items: LawTocItem[]): string[] =>
     ...collectTocArticleNumbers(item.children),
   ]);
 
+interface SavedViewerState {
+  isSaved: boolean;
+  loadedFromStorage: boolean;
+  savedAt?: string;
+}
+
+const toSavedViewerState = (state: Extract<LawViewerState, { status: "ready" }>) => ({
+  isSaved: state.isSaved,
+  loadedFromStorage: state.loadedFromStorage,
+  ...(state.savedAt === undefined ? {} : { savedAt: state.savedAt }),
+});
+
 const normalizeArticleNumberInput = (articleNumber: string): string =>
   articleNumber.normalize("NFKC").replace(/\s+/g, "");
+
+const useOnlineStatus = () => {
+  const [isOnline, setIsOnline] = useState(() =>
+    typeof navigator === "undefined" ? true : navigator.onLine,
+  );
+
+  useEffect(() => {
+    const updateOnlineStatus = () => {
+      setIsOnline(navigator.onLine);
+    };
+
+    window.addEventListener("online", updateOnlineStatus);
+    window.addEventListener("offline", updateOnlineStatus);
+
+    return () => {
+      window.removeEventListener("online", updateOnlineStatus);
+      window.removeEventListener("offline", updateOnlineStatus);
+    };
+  }, []);
+
+  return isOnline;
+};
 
 const LawViewerLoadingState = () => (
   <section

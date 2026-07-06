@@ -1,3 +1,4 @@
+export { createSavedLawUseCase } from "./saved-law-use-case";
 export {
   createStorageRepository,
   deleteSurasuraDatabase,
@@ -13,4 +14,5 @@ export type {
   StorageRepository,
   StorageRepositoryOptions,
 } from "./repository";
+export type { SavedLawUseCase } from "./saved-law-use-case";
 export type { SavedLawRecord, SurasuraDatabase } from "./schema";

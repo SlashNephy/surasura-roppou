@@ -1,10 +1,13 @@
 import type { Law, LawNode, LawRevision } from "@/core/domain";
+import type { ISODateString } from "@/core/domain";
 
 export interface LawViewerDocument {
   law: Law;
   revision: LawRevision;
   nodes: LawNode[];
   isSaved: boolean;
+  loadedFromStorage: boolean;
+  savedAt?: ISODateString;
 }
 
 export const sampleLawViewerLawId = "129AC0000000089";
@@ -99,4 +102,5 @@ export const sampleLawViewerDocument = {
     }),
   ],
   isSaved: false,
+  loadedFromStorage: false,
 } satisfies LawViewerDocument;
