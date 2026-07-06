@@ -40,10 +40,10 @@ export const createPwaUpdateController = (
 
   const updateServiceWorker = registerServiceWorker({
     onNeedRefresh() {
-      publish({ ...state, needRefresh: true });
+      publish({ ...state, error: undefined, needRefresh: true });
     },
     onOfflineReady() {
-      publish({ ...state, offlineReady: true });
+      publish({ ...state, error: undefined, offlineReady: true });
     },
     onRegisterError(error) {
       console.error("PWA registration failed:", error);
