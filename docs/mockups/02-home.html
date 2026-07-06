@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home | すらすら六法 モックアップ</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 24px 16px 48px;
+  background: #f4f1ea; color: #27272a;
+  font-family: 'Hiragino Sans', 'Yu Gothic', sans-serif;
+  line-height: 1.6;
+}
+.page { max-width: 980px; margin: 0 auto; }
+.topnav { font-size: 12px; margin-bottom: 16px; }
+.topnav a { color: #166534; text-decoration: none; }
+h2 { font-family: 'Hiragino Mincho ProN', 'Yu Mincho', serif; font-size: 22px; margin: 0 0 4px; color: #2b2620; }
+h3 { font-size: 14px; margin: 0 0 8px; }
+.subtitle { color: #78716c; font-size: 13px; margin: 0 0 20px; }
+.section { margin-top: 24px; }
+.label { font-size: 10px; letter-spacing: .1em; color: #a8a29e; text-transform: uppercase; margin: 0 0 6px; }
+.mockup { background: #fff; border: 1px solid #d6cdbc; border-radius: 12px; overflow: hidden; margin: 12px 0; box-shadow: 0 2px 8px rgba(43,38,32,.06); }
+.mockup-header { background: #efe9dd; padding: 8px 14px; font-size: 11px; font-weight: 600; color: #57534e; border-bottom: 1px solid #d6cdbc; }
+.mockup-body { min-width: 0; }
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+@media (max-width: 760px) { .split { grid-template-columns: 1fr; } }
+.options { display: grid; gap: 10px; margin: 12px 0; }
+.option { display: flex; gap: 12px; background: #fff; border: 1px solid #e7e0d3; border-radius: 10px; padding: 12px 14px; }
+.option .letter { flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%; background: #166534; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+.option .content { min-width: 0; }
+.option .content p { margin: 4px 0 0; font-size: 13px; color: #57534e; }
+</style>
+</head>
+<body>
+<div class="page">
+<p class="topnav"><a href="index.html">← モックアップ一覧</a></p>
+<h2>Home（ランチャー + ダッシュボード）</h2>
+<p class="subtitle">左が使い込んだ状態、右が初回起動（空状態）です。空状態は自然にランチャー専用画面へ退化します。</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">通常状態（学習データあり）</div>
+    <div class="mockup-body" style="padding:0;background:#fcfbf8;">
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid #e7e0d3;background:#fffdf9;font-family:'Hiragino Sans',sans-serif;font-size:10px;color:#57534e;">
+        <span style="font-family:'Hiragino Mincho ProN',serif;font-weight:700;color:#166534;font-size:11px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;background:#166534;color:#fffdf9;border-radius:4px;font-size:10px;vertical-align:middle;">六</span> すらすら六法</span>
+        <span style="margin-left:auto;">📖 法令　📷 撮る　🎓 復習 <b style="color:#166534;">3</b>　⚙ 設定</span>
+      </div>
+      <div style="padding:22px 20px 8px;text-align:center;">
+        <div style="font-family:'Hiragino Mincho ProN',serif;font-size:13px;color:#44403c;margin-bottom:10px;">条文参照を、すぐ開く。</div>
+        <div style="background:#fff;border:1.5px solid #d6cdbc;border-radius:10px;padding:10px 12px;max-width:340px;margin:0 auto;text-align:left;font-family:'Hiragino Sans',sans-serif;font-size:11px;color:#a8a29e;box-shadow:0 1px 4px rgba(43,38,32,.06);">🔍 国賠法1条、民709、行政手続法14条…</div>
+        <div style="font-family:'Hiragino Sans',sans-serif;font-size:10px;color:#57534e;margin-top:8px;display:flex;gap:6px;justify-content:center;">
+          <span style="border:1px solid #d6cdbc;border-radius:6px;padding:3px 10px;background:#fff;">📷 撮って開く</span>
+          <span style="border:1px solid #d6cdbc;border-radius:6px;padding:3px 10px;background:#fff;">📋 貼り付けて開く</span>
+        </div>
+      </div>
+      <div style="padding:14px 16px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-family:'Hiragino Sans',sans-serif;font-size:10px;">
+        <div style="grid-column:1/-1;background:#166534;border-radius:10px;padding:10px 14px;color:#fff;display:flex;align-items:center;gap:10px;">
+          <span style="font-size:14px;">🎓</span>
+          <span><b>今日の復習が3件あります</b><br><span style="opacity:.75;">国賠法1条 ほか ・ 約5分</span></span>
+          <span style="margin-left:auto;background:#fff;color:#166534;border-radius:6px;padding:4px 12px;font-weight:700;">開始</span>
+        </div>
+        <div style="background:#fff;border:1px solid #e7e0d3;border-radius:10px;padding:10px 12px;">
+          <div style="color:#a8a29e;font-size:9px;letter-spacing:.08em;margin-bottom:6px;">最近開いた条文</div>
+          <div style="font-family:'Hiragino Mincho ProN',serif;font-size:11px;line-height:2.0;color:#27272a;">国家賠償法 第1条<br>民法 第709条<br>行政手続法 第14条</div>
+        </div>
+        <div style="background:#fff;border:1px solid #e7e0d3;border-radius:10px;padding:10px 12px;">
+          <div style="color:#a8a29e;font-size:9px;letter-spacing:.08em;margin-bottom:6px;">ブックマーク</div>
+          <div style="font-family:'Hiragino Mincho ProN',serif;font-size:11px;line-height:2.0;color:#27272a;">📁 行政法パック <span style="font-family:'Hiragino Sans',sans-serif;color:#a8a29e;">12</span><br>📁 民法・債権 <span style="font-family:'Hiragino Sans',sans-serif;color:#a8a29e;">8</span><br>🔖 憲法 第21条</div>
+        </div>
+        <div style="grid-column:1/-1;display:flex;justify-content:space-between;color:#a8a29e;font-size:9px;padding:0 2px;">
+          <span>✓ オフライン保存 6法令（12.3MB）・最終同期 今日 09:00</span>
+          <span>すべて表示 →</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">初回起動（空状態 = ランチャーに退化）</div>
+    <div class="mockup-body" style="padding:0;background:#fcfbf8;">
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid #e7e0d3;background:#fffdf9;font-family:'Hiragino Sans',sans-serif;font-size:10px;color:#57534e;">
+        <span style="font-family:'Hiragino Mincho ProN',serif;font-weight:700;color:#166534;font-size:11px;"><span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;background:#166534;color:#fffdf9;border-radius:4px;font-size:10px;vertical-align:middle;">六</span> すらすら六法</span>
+        <span style="margin-left:auto;">📖 法令　📷 撮る　🎓 復習　⚙ 設定</span>
+      </div>
+      <div style="padding:56px 20px 20px;text-align:center;">
+        <div style="font-family:'Hiragino Mincho ProN',serif;font-size:16px;font-weight:700;color:#2b2620;margin-bottom:4px;">撮って、開いて、すらすら読める。</div>
+        <div style="font-family:'Hiragino Sans',sans-serif;font-size:10px;color:#78716c;margin-bottom:16px;">e-Gov 法令データに基づく法令ビューワー</div>
+        <div style="background:#fff;border:1.5px solid #d6cdbc;border-radius:10px;padding:12px 14px;max-width:340px;margin:0 auto;text-align:left;font-family:'Hiragino Sans',sans-serif;font-size:11px;color:#a8a29e;box-shadow:0 1px 4px rgba(43,38,32,.06);">🔍 国賠法1条、民709、行政手続法14条…</div>
+        <div style="font-family:'Hiragino Sans',sans-serif;font-size:10px;color:#57534e;margin-top:10px;display:flex;gap:6px;justify-content:center;">
+          <span style="border:1px solid #d6cdbc;border-radius:6px;padding:4px 12px;background:#fff;">📷 撮って開く</span>
+          <span style="border:1px solid #d6cdbc;border-radius:6px;padding:4px 12px;background:#fff;">📋 貼り付けて開く</span>
+        </div>
+        <div style="font-family:'Hiragino Sans',sans-serif;font-size:10px;color:#a8a29e;margin-top:28px;">
+          よく読まれている法令：
+          <div style="font-family:'Hiragino Mincho ProN',serif;color:#44403c;font-size:11px;margin-top:6px;line-height:2.0;">
+            <span style="border:1px solid #e7e0d3;border-radius:14px;padding:2px 10px;background:#fff;">日本国憲法</span>
+            <span style="border:1px solid #e7e0d3;border-radius:14px;padding:2px 10px;background:#fff;">民法</span>
+            <span style="border:1px solid #e7e0d3;border-radius:14px;padding:2px 10px;background:#fff;">刑法</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>設計メモ</h3>
+  <p style="font-size:13px;color:#71717a;">「今日の復習」だけは面積を全幅+深緑の塗りで別格扱いにしています。習慣化装置は見えないと機能しないためです（復習が0件の日はこのバナー自体が消え、カード2枚が上に詰まります）。空状態では「よく読まれている法令」のチップを置き、検索語を思いつかない初見ユーザーにも最初の一歩を用意しています。</p>
+</div>
+
+</div>
+</body>
+</html>

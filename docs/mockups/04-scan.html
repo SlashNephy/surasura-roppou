@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>撮る（OCR） | すらすら六法 モックアップ</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 24px 16px 48px;
+  background: #f4f1ea; color: #27272a;
+  font-family: 'Hiragino Sans', 'Yu Gothic', sans-serif;
+  line-height: 1.6;
+}
+.page { max-width: 980px; margin: 0 auto; }
+.topnav { font-size: 12px; margin-bottom: 16px; }
+.topnav a { color: #166534; text-decoration: none; }
+h2 { font-family: 'Hiragino Mincho ProN', 'Yu Mincho', serif; font-size: 22px; margin: 0 0 4px; color: #2b2620; }
+h3 { font-size: 14px; margin: 0 0 8px; }
+.subtitle { color: #78716c; font-size: 13px; margin: 0 0 20px; }
+.section { margin-top: 24px; }
+.label { font-size: 10px; letter-spacing: .1em; color: #a8a29e; text-transform: uppercase; margin: 0 0 6px; }
+.mockup { background: #fff; border: 1px solid #d6cdbc; border-radius: 12px; overflow: hidden; margin: 12px 0; box-shadow: 0 2px 8px rgba(43,38,32,.06); }
+.mockup-header { background: #efe9dd; padding: 8px 14px; font-size: 11px; font-weight: 600; color: #57534e; border-bottom: 1px solid #d6cdbc; }
+.mockup-body { min-width: 0; }
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+@media (max-width: 760px) { .split { grid-template-columns: 1fr; } }
+.options { display: grid; gap: 10px; margin: 12px 0; }
+.option { display: flex; gap: 12px; background: #fff; border: 1px solid #e7e0d3; border-radius: 10px; padding: 12px 14px; }
+.option .letter { flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%; background: #166534; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+.option .content { min-width: 0; }
+.option .content p { margin: 4px 0 0; font-size: 13px; color: #57534e; }
+</style>
+</head>
+<body>
+<div class="page">
+<p class="topnav"><a href="index.html">← モックアップ一覧</a></p>
+<h2>撮る（OCR 取り込み）</h2>
+<p class="subtitle">入口は「撮る・画像を選ぶ」（OS のカメラ/ライブラリ選択に委譲）と「貼り付け」の2アクションのみ。テキスト入力はコマンドパレットが担う。</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">モバイル：入口</div>
+    <div class="mockup-body" style="padding:0;background:#fcfbf8;">
+      <div style="max-width:240px;margin:0 auto;padding:24px 16px;font-family:'Hiragino Sans',sans-serif;">
+        <div style="text-align:center;margin-bottom:16px;">
+          <div style="font-family:'Hiragino Mincho ProN',serif;font-size:14px;font-weight:700;color:#2b2620;">問題集や資料から<br>条文を開く</div>
+          <div style="font-size:9px;color:#78716c;margin-top:6px;">🔒 画像は端末内で処理され、保存・送信されません</div>
+        </div>
+        <div style="background:#166534;border-radius:14px;padding:30px 20px;text-align:center;color:#fff;margin-bottom:8px;">
+          <div style="font-size:26px;">📷</div>
+          <div style="font-weight:700;font-size:13px;margin-top:6px;">撮る・画像を選ぶ</div>
+          <div style="font-size:9px;opacity:.7;margin-top:2px;">カメラかライブラリを選択できます</div>
+        </div>
+        <div style="background:#fff;border:1px solid #d6cdbc;border-radius:10px;padding:10px;text-align:center;font-size:11px;color:#44403c;">📋 クリップボードから貼り付け</div>
+        <div style="margin-top:16px;font-size:9px;color:#a8a29e;">
+          <div style="letter-spacing:.08em;margin-bottom:6px;">最近の取り込み</div>
+          <div style="background:#fff;border:1px solid #e7e0d3;border-radius:8px;padding:8px 10px;display:flex;gap:8px;align-items:center;color:#57534e;font-size:10px;">
+            <span style="width:26px;height:26px;background:#e7e0d3;border-radius:4px;display:inline-block;flex-shrink:0;"></span>
+            <span>今日 14:20 ・ 3件検出<br><span style="font-family:'Hiragino Mincho ProN',serif;">国賠法1条 ほか</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">デスクトップ：入口（ドロップゾーン化）</div>
+    <div class="mockup-body" style="padding:0;background:#fcfbf8;">
+      <div style="padding:24px 20px;font-family:'Hiragino Sans',sans-serif;">
+        <div style="text-align:center;margin-bottom:14px;">
+          <div style="font-family:'Hiragino Mincho ProN',serif;font-size:14px;font-weight:700;color:#2b2620;">問題集や資料から条文を開く</div>
+          <div style="font-size:9px;color:#78716c;margin-top:4px;">🔒 画像は端末内で処理され、保存・送信されません</div>
+        </div>
+        <div style="border:2px dashed #86b898;background:#f6faf6;border-radius:14px;padding:34px 20px;text-align:center;color:#44403c;">
+          <div style="font-size:22px;">🖼</div>
+          <div style="font-weight:700;font-size:12px;margin-top:6px;">画像をここにドロップ</div>
+          <div style="font-size:10px;color:#78716c;margin-top:4px;">または <u style="color:#166534;">ファイルを選択</u> ・ <b style="border:1px solid #d6cdbc;border-radius:4px;padding:0 5px;background:#fff;font-weight:400;">⌘V</b> で貼り付け</div>
+          <div style="font-size:9px;color:#a8a29e;margin-top:8px;">カメラ付きの端末では撮影も選べます</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup" style="margin-top:16px;">
+  <div class="mockup-header">結果確認：検出した参照と画像ハイライト</div>
+  <div class="mockup-body" style="padding:0;background:#fcfbf8;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;min-height:300px;">
+      <div style="background:#2b2620;padding:12px;position:relative;">
+        <div style="background:#f5f0e6;border-radius:4px;height:100%;padding:12px 10px;font-family:'Hiragino Mincho ProN',serif;font-size:9px;line-height:1.9;color:#44403c;position:relative;">
+          <div>問3　次の記述のうち、正しいものはどれか。</div>
+          <div style="margin-top:6px;">1　<span style="background:rgba(22,101,52,.18);outline:2px solid #166534;border-radius:2px;">国賠法1条</span>の責任が成立するためには、公務員の故意又は過失が必要である。</div>
+          <div style="margin-top:6px;">2　<span style="background:rgba(22,101,52,.18);outline:2px solid #166534;border-radius:2px;">民法709条</span>とは異なり、加害公務員個人は…</div>
+          <div style="margin-top:6px;">3　<span style="background:rgba(22,101,52,.10);outline:2px dashed #78716c;border-radius:2px;">行訴法3条</span>に定める処分の取消しの…</div>
+          <div style="position:absolute;bottom:8px;right:10px;font-family:'Hiragino Sans',sans-serif;font-size:8px;color:#a8a29e;">🔄 回転 ・ ✂ トリミング ・ ☀ 明るさ</div>
+        </div>
+      </div>
+      <div style="padding:12px;font-family:'Hiragino Sans',sans-serif;">
+        <div style="font-size:9px;color:#78716c;margin-bottom:8px;"><b style="color:#166534;">3件</b> の条文参照を検出しました</div>
+        <div style="display:grid;gap:6px;font-size:10px;">
+          <div style="background:#fff;border:1px solid #bbe0c3;border-radius:8px;padding:8px 10px;">
+            <div style="font-family:'Hiragino Mincho ProN',serif;font-size:11px;font-weight:700;color:#14532d;">国家賠償法 第1条</div>
+            <div style="font-size:9px;color:#a8a29e;">「国賠法1条」 ・ 確信度 高</div>
+            <div style="display:flex;gap:4px;margin-top:6px;font-size:9px;">
+              <span style="background:#166534;color:#fff;border-radius:5px;padding:2px 10px;">開く</span>
+              <span style="border:1px solid #d6cdbc;border-radius:5px;padding:2px 10px;background:#fff;color:#44403c;">復習に追加</span>
+              <span style="color:#a8a29e;padding:2px 6px;">無視</span>
+            </div>
+          </div>
+          <div style="background:#fff;border:1px solid #bbe0c3;border-radius:8px;padding:8px 10px;">
+            <div style="font-family:'Hiragino Mincho ProN',serif;font-size:11px;font-weight:700;color:#14532d;">民法 第709条</div>
+            <div style="font-size:9px;color:#a8a29e;">「民法709条」 ・ 確信度 高</div>
+            <div style="display:flex;gap:4px;margin-top:6px;font-size:9px;">
+              <span style="background:#166534;color:#fff;border-radius:5px;padding:2px 10px;">開く</span>
+              <span style="border:1px solid #d6cdbc;border-radius:5px;padding:2px 10px;background:#fff;color:#44403c;">復習に追加</span>
+              <span style="color:#a8a29e;padding:2px 6px;">無視</span>
+            </div>
+          </div>
+          <div style="background:#fff;border:1px dashed #d6cdbc;border-radius:8px;padding:8px 10px;">
+            <div style="font-family:'Hiragino Mincho ProN',serif;font-size:11px;color:#57534e;">行政事件訴訟法 第3条 ?</div>
+            <div style="font-size:9px;color:#a8a29e;">「行訴法3条」 ・ 確信度 低 ・ <u>候補を確認</u></div>
+          </div>
+        </div>
+        <div style="margin-top:10px;border-top:1px solid #e7e0d3;padding-top:8px;font-size:9px;">
+          <span style="background:#fff;border:1px solid #166534;color:#166534;border-radius:5px;padding:3px 10px;font-weight:600;">✓ 2件をまとめて復習リストへ</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>設計メモ</h3>
+  <div class="options">
+    <div class="option">
+      <div class="letter">1</div>
+      <div class="content"><h3>入口は2アクションに集約</h3><p>モバイルはカメラ/ライブラリの分岐を OS ネイティブの選択シートに委ね、アプリ側では選ばせない。デスクトップは画面全体をドロップゾーンにし、ファイル選択と ⌘V ペーストも同じゾーンで受ける。</p></div>
+    </div>
+    <div class="option">
+      <div class="letter">2</div>
+      <div class="content"><h3>プライバシー宣言を入口の顔に</h3><p>「🔒 端末内で処理・保存されません」を見出し直下の定位置に置く。撮る対象が著作物（問題集）なので、この安心感が利用率を左右する。</p></div>
+    </div>
+    <div class="option">
+      <div class="letter">3</div>
+      <div class="content"><h3>画像と候補の対応を色と線種で表現</h3><p>確信度 高＝実線の緑枠、低＝破線のグレー枠。画像上のハイライトと候補カードが同じ文法で対応し、カードへのホバーで画像側の枠が点灯する連動を想定。OCR 全文テキストは表示しない。</p></div>
+    </div>
+    <div class="option">
+      <div class="letter">4</div>
+      <div class="content"><h3>一括操作を出口に置く</h3><p>問題集1ページに参照が複数あるのが常態なので、「まとめて復習リストへ」を確認フローの最後に固定する。</p></div>
+    </div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>
