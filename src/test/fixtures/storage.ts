@@ -16,11 +16,25 @@ import type {
 } from "@/core/storage";
 
 export const createMemoryStorageRepository = (
-  initialDocument?: SavedLawDocument,
+  initialDocumentOrOptions?: SavedLawDocument | MemoryStorageRepositoryOptions,
 ): {
   getSavedDocument(): SavedLawDocument | undefined;
+  getBookmarks(): Bookmark[];
+  getCollections(): Collection[];
   repository: StorageRepository;
 } => {
+  const initialDocument =
+    initialDocumentOrOptions === undefined || "law" in initialDocumentOrOptions
+      ? initialDocumentOrOptions
+      : initialDocumentOrOptions.savedLawDocument;
+  let bookmarks =
+    initialDocumentOrOptions === undefined || "law" in initialDocumentOrOptions
+      ? []
+      : [...(initialDocumentOrOptions.bookmarks ?? [])];
+  let collections =
+    initialDocumentOrOptions === undefined || "law" in initialDocumentOrOptions
+      ? []
+      : [...(initialDocumentOrOptions.collections ?? [])];
   let savedDocument = initialDocument;
   let savedAt = initialDocument?.savedAt;
   let updatedAt = initialDocument?.revision.fetchedAt ?? initialDocument?.savedAt;
@@ -28,6 +42,12 @@ export const createMemoryStorageRepository = (
   return {
     getSavedDocument() {
       return savedDocument;
+    },
+    getBookmarks() {
+      return bookmarks;
+    },
+    getCollections() {
+      return collections;
     },
     repository: {
       saveLawDocument(document) {
@@ -63,10 +83,26 @@ export const createMemoryStorageRepository = (
         }
         return Promise.resolve();
       },
-      putBookmark: vi.fn<(bookmark: Bookmark) => Promise<void>>(),
-      listBookmarks: vi.fn<() => Promise<Bookmark[]>>(() => Promise.resolve([])),
-      putCollection: vi.fn<(collection: Collection) => Promise<void>>(),
-      listCollections: vi.fn<() => Promise<Collection[]>>(() => Promise.resolve([])),
+      putBookmark(bookmark) {
+        bookmarks = [
+          ...bookmarks.filter((existingBookmark) => existingBookmark.id !== bookmark.id),
+          bookmark,
+        ];
+        return Promise.resolve();
+      },
+      listBookmarks() {
+        return Promise.resolve(bookmarks);
+      },
+      putCollection(collection) {
+        collections = [
+          ...collections.filter((existingCollection) => existingCollection.id !== collection.id),
+          collection,
+        ];
+        return Promise.resolve();
+      },
+      listCollections() {
+        return Promise.resolve(collections);
+      },
       putAnnotation: vi.fn<(annotation: Annotation) => Promise<void>>(),
       listAnnotations: vi.fn<() => Promise<Annotation[]>>(() => Promise.resolve([])),
       putStudyCard: vi.fn<(card: StudyCard) => Promise<void>>(),
@@ -79,6 +115,12 @@ export const createMemoryStorageRepository = (
     },
   };
 };
+
+interface MemoryStorageRepositoryOptions {
+  savedLawDocument?: SavedLawDocument;
+  bookmarks?: Bookmark[];
+  collections?: Collection[];
+}
 
 export const createSavedLawDocument = ({
   law,

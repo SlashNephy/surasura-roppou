@@ -1,5 +1,14 @@
 import { Link, Outlet } from "@tanstack/react-router";
-import { BookOpen, Camera, GraduationCap, Home, Search, Settings, Sparkles } from "lucide-react";
+import {
+  BookMarked,
+  BookOpen,
+  Camera,
+  GraduationCap,
+  Home,
+  Search,
+  Settings,
+  Sparkles,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { Badge } from "@/shared/ui/badge";
@@ -10,13 +19,14 @@ import { cn } from "@/shared/utils/cn";
 import { PwaUpdatePrompt } from "./PwaUpdatePrompt";
 
 interface NavItem {
-  to: "/laws" | "/jump" | "/scanner" | "/study" | "/settings";
+  to: "/laws" | "/saved" | "/jump" | "/scanner" | "/study" | "/settings";
   label: string;
   icon: LucideIcon;
 }
 
 const primaryNavItems: NavItem[] = [
   { to: "/laws", label: "法令", icon: BookOpen },
+  { to: "/saved", label: "保存", icon: BookMarked },
   { to: "/jump", label: "ジャンプ", icon: Search },
   { to: "/scanner", label: "撮る", icon: Camera },
   { to: "/study", label: "復習", icon: GraduationCap },
@@ -122,7 +132,7 @@ const StudyPanel = () => (
 const MobileNavigation = () => (
   <nav
     aria-label="モバイルナビゲーション"
-    className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t bg-background/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.25rem)] pt-2 backdrop-blur md:hidden"
+    className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t bg-background/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.25rem)] pt-2 backdrop-blur md:hidden"
   >
     {primaryNavItems.map((item) => (
       <Link

@@ -14,6 +14,7 @@ import {
   SettingsPage,
   StudyPage,
 } from "./pages";
+import { SavedCollectionPage, SavedPage } from "./saved-page";
 
 interface CreateAppRouterOptions {
   history?: RouterHistory;
@@ -59,6 +60,22 @@ const createRouteTree = ({
     component: LawViewerRoute,
   });
 
+  const SavedRoute = () => <SavedPage storageRepository={storageRepository} />;
+
+  const savedRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "saved",
+    component: SavedRoute,
+  });
+
+  const SavedCollectionRoute = () => <SavedCollectionPage storageRepository={storageRepository} />;
+
+  const savedCollectionRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "saved/collections/$collectionId",
+    component: SavedCollectionRoute,
+  });
+
   const jumpRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "jump",
@@ -87,6 +104,8 @@ const createRouteTree = ({
     indexRoute,
     lawsRoute,
     lawViewerRoute.addChildren([lawViewerArticleRoute]),
+    savedRoute,
+    savedCollectionRoute,
     jumpRoute,
     scannerRoute,
     studyRoute,

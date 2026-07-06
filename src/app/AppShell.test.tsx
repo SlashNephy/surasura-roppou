@@ -6,7 +6,7 @@ import { createMemoryStorageRepository } from "@/test/fixtures/storage";
 
 import { createAppRouter } from "./router";
 
-const primaryNavRoutes = ["法令", "ジャンプ", "撮る", "復習", "設定"] as const;
+const primaryNavRoutes = ["法令", "保存", "ジャンプ", "撮る", "復習", "設定"] as const;
 const scrollTo = window.scrollTo;
 
 describe("AppShell", () => {
