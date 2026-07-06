@@ -127,6 +127,14 @@ export interface StudySession {
   results: QuizResult[];
 }
 
+export interface OcrSession {
+  id: string;
+  sourceText?: string;
+  detectedReferences: DetectedLawReference[];
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+}
+
 export interface DetectedLawReference {
   id: string;
   rawText: string;
