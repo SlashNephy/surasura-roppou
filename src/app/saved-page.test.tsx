@@ -157,6 +157,60 @@ describe("SavedPage", () => {
       "/saved",
     );
   });
+
+  it("shows a form error when bookmark creation fails", async () => {
+    const repository = createRejectingStorageRepository({
+      putBookmark: vi.fn(() => Promise.reject(new Error("storage unavailable"))),
+    });
+    const user = userEvent.setup();
+
+    renderSavedRoute("/saved", repository);
+
+    await screen.findByRole("heading", { name: "保存リスト" });
+    await user.type(screen.getByLabelText("保存タイトル"), "民法1条");
+    await user.type(screen.getByLabelText("法令ID"), "129AC0000000089");
+    await user.click(screen.getByRole("button", { name: "保存項目を追加" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("保存項目を追加できませんでした。");
+  });
+
+  it("shows a form error when collection creation fails", async () => {
+    const repository = createRejectingStorageRepository({
+      putCollection: vi.fn(() => Promise.reject(new Error("storage unavailable"))),
+    });
+    const user = userEvent.setup();
+
+    renderSavedRoute("/saved", repository);
+
+    await screen.findByRole("heading", { name: "保存リスト" });
+    await user.type(screen.getByLabelText("コレクション名"), "民法総則");
+    await user.click(screen.getByRole("button", { name: "コレクションを作成" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "コレクションを作成できませんでした。",
+    );
+  });
+
+  it("creates a bookmark with the fallback ID generator when crypto is unavailable", async () => {
+    const storage = createMemoryStorageRepository();
+    const user = userEvent.setup();
+
+    renderSavedRoute("/saved", storage.repository);
+
+    await screen.findByRole("heading", { name: "保存リスト" });
+    await user.type(screen.getByLabelText("保存タイトル"), "民法1条");
+    await user.type(screen.getByLabelText("法令ID"), "129AC0000000089");
+
+    await withUnavailableCrypto(async () => {
+      await user.click(screen.getByRole("button", { name: "保存項目を追加" }));
+    });
+
+    expect(await screen.findByRole("link", { name: "民法1条" })).toBeInTheDocument();
+    const [bookmark] = storage.getBookmarks();
+
+    expect(bookmark.id).toMatch(/^[a-z0-9]+-[a-z0-9]+$/);
+    expect(bookmark.title).toBe("民法1条");
+  });
 });
 
 const renderSavedRoute = (
@@ -193,3 +247,22 @@ const createRejectingStorageRepository = (
   ...createMemoryStorageRepository().repository,
   ...overrides,
 });
+
+const withUnavailableCrypto = async (callback: () => Promise<void>) => {
+  const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, "crypto");
+
+  Object.defineProperty(globalThis, "crypto", {
+    configurable: true,
+    value: undefined,
+  });
+
+  try {
+    await callback();
+  } finally {
+    if (originalDescriptor === undefined) {
+      Reflect.deleteProperty(globalThis, "crypto");
+    } else {
+      Object.defineProperty(globalThis, "crypto", originalDescriptor);
+    }
+  }
+};

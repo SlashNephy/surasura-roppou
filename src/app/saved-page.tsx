@@ -1,4 +1,4 @@
-import { type SyntheticEvent, useEffect, useMemo, useState } from "react";
+import { type SyntheticEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { Archive, FolderPlus, StickyNote, type LucideIcon } from "lucide-react";
 
@@ -36,6 +36,12 @@ type CollectionPageState =
       status: "loading";
     };
 
+interface SavedPageData {
+  bookmarks: Bookmark[];
+  collections: Collection[];
+  savedLaws: SavedLawSummary[];
+}
+
 export const SavedPage = ({ storageRepository = defaultStorageRepository }: SavedPageProps) => {
   const [savedLaws, setSavedLaws] = useState<SavedLawSummary[]>([]);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
@@ -46,32 +52,42 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
     [storageRepository],
   );
 
-  const reload = async () => {
+  const loadSavedPageData = useCallback(async (): Promise<SavedPageData> => {
     const [nextSavedLaws, nextBookmarks, nextCollections] = await Promise.all([
       savedLawUseCase.list(),
       storageRepository.listBookmarks(),
       storageRepository.listCollections(),
     ]);
-    setSavedLaws(nextSavedLaws);
-    setBookmarks(nextBookmarks);
-    setCollections(nextCollections);
+
+    return {
+      bookmarks: nextBookmarks,
+      collections: nextCollections,
+      savedLaws: nextSavedLaws,
+    };
+  }, [savedLawUseCase, storageRepository]);
+
+  const applySavedPageData = useCallback((data: SavedPageData) => {
+    setSavedLaws(data.savedLaws);
+    setBookmarks(data.bookmarks);
+    setCollections(data.collections);
     setError(undefined);
-  };
+  }, []);
+
+  const reload = useCallback(async () => {
+    try {
+      applySavedPageData(await loadSavedPageData());
+    } catch {
+      setError("保存リストを読み込めませんでした。");
+    }
+  }, [applySavedPageData, loadSavedPageData]);
 
   useEffect(() => {
     let isCurrent = true;
 
-    void Promise.all([
-      savedLawUseCase.list(),
-      storageRepository.listBookmarks(),
-      storageRepository.listCollections(),
-    ])
-      .then(([nextSavedLaws, nextBookmarks, nextCollections]) => {
+    void loadSavedPageData()
+      .then((data) => {
         if (isCurrent) {
-          setSavedLaws(nextSavedLaws);
-          setBookmarks(nextBookmarks);
-          setCollections(nextCollections);
-          setError(undefined);
+          applySavedPageData(data);
         }
       })
       .catch(() => {
@@ -83,8 +99,7 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
     return () => {
       isCurrent = false;
     };
-  }, [savedLawUseCase, storageRepository]);
-
+  }, [applySavedPageData, loadSavedPageData]);
   return (
     <section className="mx-auto grid w-full max-w-6xl gap-8 px-5 py-8 md:px-6">
       <div className="grid gap-3">
@@ -97,14 +112,7 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
         </p>
       </div>
 
-      {error === undefined ? null : (
-        <p
-          role="status"
-          className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground"
-        >
-          {error}
-        </p>
-      )}
+      {error === undefined ? null : <StatusMessage>{error}</StatusMessage>}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem] xl:items-start">
         <div className="grid gap-6">
@@ -171,12 +179,7 @@ export const SavedCollectionPage = ({
   if (state.collectionId !== collectionId || state.status === "loading") {
     return (
       <section className="mx-auto grid w-full max-w-4xl gap-6 px-5 py-8 md:px-6">
-        <p
-          role="status"
-          className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground"
-        >
-          コレクションを読み込んでいます。
-        </p>
+        <StatusMessage>コレクションを読み込んでいます。</StatusMessage>
       </section>
     );
   }
@@ -184,12 +187,7 @@ export const SavedCollectionPage = ({
   if (state.status === "error") {
     return (
       <section className="mx-auto flex min-h-[calc(100dvh-10rem)] w-full max-w-2xl flex-col justify-center gap-4 px-5 py-10">
-        <p
-          role="status"
-          className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground"
-        >
-          {state.error}
-        </p>
+        <StatusMessage>{state.error}</StatusMessage>
         <Button asChild className="w-fit" variant="outline">
           <Link to="/saved">保存リストへ戻る</Link>
         </Button>
@@ -350,33 +348,40 @@ const BookmarkForm = ({
   const [article, setArticle] = useState("");
   const [tags, setTags] = useState("");
   const [note, setNote] = useState("");
+  const [error, setError] = useState<string | undefined>();
 
   const handleSubmit = async (event: SyntheticEvent<HTMLFormElement, SubmitEvent>) => {
     event.preventDefault();
+    setError(undefined);
 
     if (title.trim() === "" || lawId.trim() === "") {
       return;
     }
 
     const now = new Date().toISOString();
-    await storageRepository.putBookmark({
-      id: generateStorageId(),
-      target: {
-        lawId: lawId.trim(),
-        ...(article.trim() === "" ? {} : { article: article.trim() }),
-      },
-      title: title.trim(),
-      ...(note.trim() === "" ? {} : { note: note.trim() }),
-      tags: parseTags(tags),
-      createdAt: now,
-      updatedAt: now,
-    });
-    setTitle("");
-    setLawId("");
-    setArticle("");
-    setTags("");
-    setNote("");
-    await onCreated();
+
+    try {
+      await storageRepository.putBookmark({
+        id: generateStorageId(),
+        target: {
+          lawId: lawId.trim(),
+          ...(article.trim() === "" ? {} : { article: article.trim() }),
+        },
+        title: title.trim(),
+        ...(note.trim() === "" ? {} : { note: note.trim() }),
+        tags: parseTags(tags),
+        createdAt: now,
+        updatedAt: now,
+      });
+      await onCreated();
+      setTitle("");
+      setLawId("");
+      setArticle("");
+      setTags("");
+      setNote("");
+    } catch {
+      setError("保存項目を追加できませんでした。");
+    }
   };
 
   return (
@@ -387,6 +392,7 @@ const BookmarkForm = ({
       }}
     >
       <h2 className="text-lg font-semibold text-foreground">保存項目を追加</h2>
+      {error === undefined ? null : <StatusMessage>{error}</StatusMessage>}
       <label className="grid gap-1 text-sm font-medium text-foreground">
         保存タイトル
         <Input
@@ -452,27 +458,34 @@ const CollectionForm = ({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [selectedBookmarkIds, setSelectedBookmarkIds] = useState<string[]>([]);
+  const [error, setError] = useState<string | undefined>();
 
   const handleSubmit = async (event: SyntheticEvent<HTMLFormElement, SubmitEvent>) => {
     event.preventDefault();
+    setError(undefined);
 
     if (title.trim() === "") {
       return;
     }
 
     const now = new Date().toISOString();
-    await storageRepository.putCollection({
-      id: generateStorageId(),
-      title: title.trim(),
-      ...(description.trim() === "" ? {} : { description: description.trim() }),
-      bookmarkIds: selectedBookmarkIds,
-      createdAt: now,
-      updatedAt: now,
-    });
-    setTitle("");
-    setDescription("");
-    setSelectedBookmarkIds([]);
-    await onCreated();
+
+    try {
+      await storageRepository.putCollection({
+        id: generateStorageId(),
+        title: title.trim(),
+        ...(description.trim() === "" ? {} : { description: description.trim() }),
+        bookmarkIds: selectedBookmarkIds,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await onCreated();
+      setTitle("");
+      setDescription("");
+      setSelectedBookmarkIds([]);
+    } catch {
+      setError("コレクションを作成できませんでした。");
+    }
   };
 
   const toggleBookmark = (bookmarkId: string) => {
@@ -491,6 +504,7 @@ const CollectionForm = ({
       }}
     >
       <h2 className="text-lg font-semibold text-foreground">コレクションを作成</h2>
+      {error === undefined ? null : <StatusMessage>{error}</StatusMessage>}
       <label className="grid gap-1 text-sm font-medium text-foreground">
         コレクション名
         <Input
@@ -553,6 +567,15 @@ const SectionHeading = ({
   </div>
 );
 
+const StatusMessage = ({ children }: { children: string }) => (
+  <p
+    role="status"
+    className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground"
+  >
+    {children}
+  </p>
+);
+
 const BookmarkLink = ({ bookmark }: { bookmark: Bookmark }) => {
   if (bookmark.target.article === undefined || bookmark.target.article === null) {
     return (
@@ -587,7 +610,11 @@ const formatDate = (value: string): string =>
   typeof value === "string" && value.length >= 10 ? value.slice(0, 10) : "不明";
 
 const generateStorageId = (): string => {
-  const browserCrypto = globalThis.crypto;
+  const browserCrypto = (globalThis as { crypto?: Crypto }).crypto;
+
+  if (browserCrypto === undefined) {
+    return generateFallbackStorageId();
+  }
 
   if (typeof browserCrypto.randomUUID === "function") {
     return browserCrypto.randomUUID();
@@ -600,5 +627,8 @@ const generateStorageId = (): string => {
     return `${Date.now().toString(36)}-${values[0].toString(36)}${values[1].toString(36)}`;
   }
 
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
+  return generateFallbackStorageId();
 };
+
+const generateFallbackStorageId = (): string =>
+  `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
