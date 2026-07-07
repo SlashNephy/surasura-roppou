@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { type ReactNode, useMemo } from "react";
 
 import type { LawNode, LawNodeType } from "@/core/domain";
 import { cn } from "@/shared/utils/cn";
@@ -10,6 +10,7 @@ interface LawNodeListProps {
   nodes: LawNode[];
   activeArticleNumber?: string;
   displayMode?: LawTextDisplayMode;
+  renderArticleActions?: (article: LawNode) => ReactNode;
 }
 
 type HeadingLawNodeType = Exclude<LawNodeType, "Article" | "Paragraph" | "Item" | "Subitem">;
@@ -33,6 +34,7 @@ export const LawNodeList = ({
   activeArticleNumber,
   displayMode = "readable",
   nodes,
+  renderArticleActions,
 }: LawNodeListProps) => {
   const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
   const topLevelNodes = useMemo(() => nodes.filter((node) => node.parentId === undefined), [nodes]);
@@ -48,6 +50,7 @@ export const LawNodeList = ({
           isUrlAddressableArticleContext={true}
           node={node}
           nodeById={nodeById}
+          renderArticleActions={renderArticleActions}
         />
       ))}
     </div>
@@ -61,6 +64,7 @@ const LawNodeBlock = ({
   isUrlAddressableArticleContext,
   node,
   nodeById,
+  renderArticleActions,
 }: {
   activeArticleNumber: string | undefined;
   depth: number;
@@ -68,6 +72,7 @@ const LawNodeBlock = ({
   isUrlAddressableArticleContext: boolean;
   node: LawNode;
   nodeById: Map<string, LawNode>;
+  renderArticleActions: ((article: LawNode) => ReactNode) | undefined;
 }) => {
   const childArticleContext = computeChildArticleContext(isUrlAddressableArticleContext, node.type);
   const children = node.children
@@ -94,7 +99,7 @@ const LawNodeBlock = ({
           data-active={isActiveArticle ? "true" : undefined}
           aria-current={isActiveArticle ? "location" : undefined}
           aria-label={node.title ?? `条文 ${node.number ?? node.path}`}
-          className="relative scroll-mt-20 py-4 md:py-5"
+          className="group relative scroll-mt-20 py-4 md:py-5"
         >
           {isActiveArticle ? (
             <span
@@ -102,14 +107,19 @@ const LawNodeBlock = ({
               className="absolute top-4 bottom-4 -left-4 w-2 rounded-l-xs border-y-2 border-l-2 border-primary md:-left-6"
             />
           ) : null}
-          <Heading className="font-serif text-lg font-semibold text-foreground">
-            {displayTitle}
-            {displayCaption === undefined ? null : (
-              <span className="ml-2 text-base font-normal text-secondary-foreground">
-                {displayCaption}
-              </span>
-            )}
-          </Heading>
+          <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+            <Heading className="min-w-0 font-serif text-lg font-semibold text-foreground break-words">
+              {displayTitle}
+              {displayCaption === undefined ? null : (
+                <span className="ml-2 text-base font-normal text-secondary-foreground">
+                  {displayCaption}
+                </span>
+              )}
+            </Heading>
+            {isUrlAddressableArticle && renderArticleActions !== undefined ? (
+              <div className="flex shrink-0 flex-wrap gap-2">{renderArticleActions(node)}</div>
+            ) : null}
+          </div>
           <div className="mt-4 grid gap-3">
             {children.length > 0 ? (
               renderChildBlocks({
@@ -119,6 +129,7 @@ const LawNodeBlock = ({
                 displayMode,
                 isUrlAddressableArticleContext: childArticleContext,
                 nodeById,
+                renderArticleActions,
               })
             ) : (
               <p className="font-serif leading-8 text-foreground break-words">{displayText}</p>
@@ -159,6 +170,7 @@ const LawNodeBlock = ({
             displayMode,
             isUrlAddressableArticleContext: childArticleContext,
             nodeById,
+            renderArticleActions,
           })}
         </div>
       );
@@ -190,6 +202,7 @@ const LawNodeBlock = ({
         displayMode,
         isUrlAddressableArticleContext: childArticleContext,
         nodeById,
+        renderArticleActions,
       })}
     </section>
   );
@@ -202,6 +215,7 @@ const renderChildBlocks = ({
   displayMode,
   isUrlAddressableArticleContext,
   nodeById,
+  renderArticleActions,
 }: {
   activeArticleNumber: string | undefined;
   children: LawNode[];
@@ -209,6 +223,7 @@ const renderChildBlocks = ({
   displayMode: LawTextDisplayMode;
   isUrlAddressableArticleContext: boolean;
   nodeById: Map<string, LawNode>;
+  renderArticleActions: ((article: LawNode) => ReactNode) | undefined;
 }) =>
   children.map((child) => (
     <LawNodeBlock
@@ -219,6 +234,7 @@ const renderChildBlocks = ({
       isUrlAddressableArticleContext={isUrlAddressableArticleContext}
       node={child}
       nodeById={nodeById}
+      renderArticleActions={renderArticleActions}
     />
   ));
 

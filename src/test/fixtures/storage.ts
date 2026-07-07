@@ -28,8 +28,11 @@ export const createMemoryStorageRepository = (
       ? { savedLawDocument: initialDocumentOrOptions }
       : initialDocumentOrOptions;
   const initialDocument = options.savedLawDocument;
+  let annotations = [...(options.annotations ?? [])];
   let bookmarks = [...(options.bookmarks ?? [])];
   let collections = [...(options.collections ?? [])];
+  let studyCards = [...(options.studyCards ?? [])];
+  let studySessions = [...(options.studySessions ?? [])];
   let savedDocument = initialDocument;
   let savedAt = initialDocument?.savedAt;
   let updatedAt = initialDocument?.revision.fetchedAt ?? initialDocument?.savedAt;
@@ -103,12 +106,38 @@ export const createMemoryStorageRepository = (
       listCollections() {
         return Promise.resolve(collections);
       },
-      putAnnotation: vi.fn<(annotation: Annotation) => Promise<void>>(),
-      listAnnotations: vi.fn<() => Promise<Annotation[]>>(() => Promise.resolve([])),
-      putStudyCard: vi.fn<(card: StudyCard) => Promise<void>>(),
-      listDueStudyCards: vi.fn<() => Promise<StudyCard[]>>(() => Promise.resolve([])),
-      putStudySession: vi.fn<(session: StudySession) => Promise<void>>(),
-      listStudySessions: vi.fn<() => Promise<StudySession[]>>(() => Promise.resolve([])),
+      putAnnotation(annotation) {
+        annotations = [
+          ...annotations.filter((existingAnnotation) => existingAnnotation.id !== annotation.id),
+          annotation,
+        ];
+        return Promise.resolve();
+      },
+      listAnnotations(query) {
+        const filteredAnnotations =
+          query?.lawId === undefined
+            ? annotations
+            : annotations.filter((annotation) => annotation.target.lawId === query.lawId);
+
+        return Promise.resolve(filteredAnnotations);
+      },
+      putStudyCard(card) {
+        studyCards = [...studyCards.filter((existingCard) => existingCard.id !== card.id), card];
+        return Promise.resolve();
+      },
+      listDueStudyCards(dueAtOrBefore) {
+        return Promise.resolve(studyCards.filter((card) => card.dueAt <= dueAtOrBefore));
+      },
+      putStudySession(session) {
+        studySessions = [
+          ...studySessions.filter((existingSession) => existingSession.id !== session.id),
+          session,
+        ];
+        return Promise.resolve();
+      },
+      listStudySessions() {
+        return Promise.resolve(studySessions);
+      },
       putOcrSession: vi.fn<(session: OcrSession) => Promise<void>>(),
       listOcrSessions: vi.fn<() => Promise<OcrSession[]>>(() => Promise.resolve([])),
       close: vi.fn<() => Promise<void>>(),
@@ -118,8 +147,11 @@ export const createMemoryStorageRepository = (
 
 interface MemoryStorageRepositoryOptions {
   savedLawDocument?: SavedLawDocument;
+  annotations?: Annotation[];
   bookmarks?: Bookmark[];
   collections?: Collection[];
+  studyCards?: StudyCard[];
+  studySessions?: StudySession[];
 }
 
 export const createSavedLawDocument = ({

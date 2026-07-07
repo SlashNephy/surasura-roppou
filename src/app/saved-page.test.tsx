@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Bookmark, Collection } from "@/core/domain";
-import type { StorageRepository } from "@/core/storage";
+import type { SavedDataExport, StorageRepository } from "@/core/storage";
 import { createMemoryStorageRepository, createSavedLawDocument } from "@/test/fixtures/storage";
 import { setupScrollMocks } from "@/test/scrollMocks";
 
@@ -52,6 +52,67 @@ describe("SavedPage", () => {
       "href",
       "/saved/collections/collection-1",
     );
+  });
+
+  it("exports saved data as a JSON download", async () => {
+    const bookmark = createBookmark();
+    const collection = createCollection(bookmark.id);
+    const storage = createMemoryStorageRepository({
+      bookmarks: [bookmark],
+      collections: [collection],
+      savedLawDocument: createSavedLawDocument({
+        law: sampleLawViewerDocument.law,
+        revision: sampleLawViewerDocument.revision,
+        nodes: sampleLawViewerDocument.nodes,
+      }),
+    });
+    const user = userEvent.setup();
+    let exportedBlob: Blob | undefined;
+    const createObjectURL = vi.fn<(blob: Blob) => string>((blob) => {
+      exportedBlob = blob;
+      return "blob:saved-data";
+    });
+    const revokeObjectURL = vi.fn<(url: string) => void>();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {
+      // jsdom does not perform downloads; the generated Blob is asserted below.
+    });
+
+    try {
+      await withObjectUrl(createObjectURL, revokeObjectURL, async () => {
+        renderSavedRoute("/saved", storage.repository);
+
+        await screen.findByRole("heading", { name: "保存リスト" });
+        await user.click(screen.getByRole("button", { name: "JSONをエクスポート" }));
+
+        expect(await screen.findByRole("status")).toHaveTextContent("JSONを書き出しました。");
+      });
+
+      expect(createObjectURL).toHaveBeenCalledOnce();
+      expect(click).toHaveBeenCalledOnce();
+      expect(revokeObjectURL).toHaveBeenCalledWith("blob:saved-data");
+
+      if (exportedBlob === undefined) {
+        throw new Error("Expected export blob to be created");
+      }
+
+      const payload = JSON.parse(await exportedBlob.text()) as SavedDataExport;
+
+      expect(payload.bookmarks).toEqual([bookmark]);
+      expect(payload.collections).toEqual([collection]);
+      expect(payload.version).toBe(1);
+      expect(payload.savedLaws).toHaveLength(1);
+      expect(payload.savedLaws[0]).toMatchObject({
+        law: { lawId: "129AC0000000089", title: "民法" },
+        revision: { fetchedAt: "2026-07-05T00:00:00.000Z" },
+        savedAt: "2026-07-06T00:00:00.000Z",
+      });
+      expect(payload).toHaveProperty("exportedAt", expect.any(String));
+      expect(
+        payload.savedLaws[0]?.nodes.some((node) => node.type === "Article" && node.number === "1"),
+      ).toBe(true);
+    } finally {
+      click.mockRestore();
+    }
   });
 
   it("creates a tagged bookmark with a memo from the saved list", async () => {
@@ -440,6 +501,40 @@ const withUnavailableCrypto = async (callback: () => Promise<void>) => {
       Reflect.deleteProperty(globalThis, "crypto");
     } else {
       Object.defineProperty(globalThis, "crypto", originalDescriptor);
+    }
+  }
+};
+
+const withObjectUrl = async (
+  createObjectURL: (blob: Blob) => string,
+  revokeObjectURL: (url: string) => void,
+  callback: () => Promise<void>,
+) => {
+  const originalCreateDescriptor = Object.getOwnPropertyDescriptor(URL, "createObjectURL");
+  const originalRevokeDescriptor = Object.getOwnPropertyDescriptor(URL, "revokeObjectURL");
+
+  Object.defineProperty(URL, "createObjectURL", {
+    configurable: true,
+    value: createObjectURL,
+  });
+  Object.defineProperty(URL, "revokeObjectURL", {
+    configurable: true,
+    value: revokeObjectURL,
+  });
+
+  try {
+    await callback();
+  } finally {
+    if (originalCreateDescriptor === undefined) {
+      Reflect.deleteProperty(URL, "createObjectURL");
+    } else {
+      Object.defineProperty(URL, "createObjectURL", originalCreateDescriptor);
+    }
+
+    if (originalRevokeDescriptor === undefined) {
+      Reflect.deleteProperty(URL, "revokeObjectURL");
+    } else {
+      Object.defineProperty(URL, "revokeObjectURL", originalRevokeDescriptor);
     }
   }
 };
