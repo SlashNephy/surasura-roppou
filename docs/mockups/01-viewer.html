@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>法令ビューワー | すらすら六法 モックアップ</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 24px 16px 48px;
+  background: #f4f1ea; color: #27272a;
+  font-family: 'Hiragino Sans', 'Yu Gothic', sans-serif;
+  line-height: 1.6;
+}
+.page { max-width: 980px; margin: 0 auto; }
+.topnav { font-size: 12px; margin-bottom: 16px; }
+.topnav a { color: #166534; text-decoration: none; }
+h2 { font-family: 'Hiragino Mincho ProN', 'Yu Mincho', serif; font-size: 22px; margin: 0 0 4px; color: #2b2620; }
+h3 { font-size: 14px; margin: 0 0 8px; }
+.subtitle { color: #78716c; font-size: 13px; margin: 0 0 20px; }
+.section { margin-top: 24px; }
+.label { font-size: 10px; letter-spacing: .1em; color: #a8a29e; text-transform: uppercase; margin: 0 0 6px; }
+.mockup { background: #fff; border: 1px solid #d6cdbc; border-radius: 12px; overflow: hidden; margin: 12px 0; box-shadow: 0 2px 8px rgba(43,38,32,.06); }
+.mockup-header { background: #efe9dd; padding: 8px 14px; font-size: 11px; font-weight: 600; color: #57534e; border-bottom: 1px solid #d6cdbc; }
+.mockup-body { min-width: 0; }
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+@media (max-width: 760px) { .split { grid-template-columns: 1fr; } }
+.options { display: grid; gap: 10px; margin: 12px 0; }
+.option { display: flex; gap: 12px; background: #fff; border: 1px solid #e7e0d3; border-radius: 10px; padding: 12px 14px; }
+.option .letter { flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%; background: #166534; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+.option .content { min-width: 0; }
+.option .content p { margin: 4px 0 0; font-size: 13px; color: #57534e; }
+</style>
+</head>
+<body>
+<div class="page">
+<p class="topnav"><a href="index.html">← モックアップ一覧</a></p>
+<h2>法令ビューワー（デスクトップ）</h2>
+<p class="subtitle">明朝×ゴシックのハイブリッド・リーダー特化3カラム・深緑アクセント・余白ブラケット選択を反映した最終版。</p>
+
+<div class="mockup">
+  <div class="mockup-header">国家賠償法を開いた状態（第1条を選択中）</div>
+  <div class="mockup-body" style="padding:0;background:#fcfbf8;">
+
+    <!-- ヘッダー -->
+    <div style="display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid #e7e0d3;background:#fffdf9;font-family:'Hiragino Sans','Yu Gothic',sans-serif;font-size:12px;">
+      <div style="display:flex;align-items:center;gap:8px;font-family:'Hiragino Mincho ProN',serif;font-weight:700;font-size:14px;color:#166534;white-space:nowrap;">
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;background:#166534;color:#fffdf9;border-radius:6px;font-size:13px;">六</span>
+        すらすら六法
+      </div>
+      <div style="flex:1;max-width:400px;display:flex;align-items:center;gap:6px;background:#fff;border:1px solid #d6cdbc;border-radius:8px;padding:6px 10px;color:#a8a29e;">
+        🔍 <span>国賠法1条、民709、行政手続法14条…</span>
+        <span style="margin-left:auto;border:1px solid #e7e0d3;border-radius:4px;padding:0 4px;font-size:10px;">/</span>
+      </div>
+      <nav style="display:flex;gap:2px;margin-left:auto;color:#57534e;white-space:nowrap;">
+        <span style="padding:6px 10px;border-radius:6px;background:#dcfce7;color:#166534;font-weight:600;">📖 法令</span>
+        <span style="padding:6px 10px;border-radius:6px;">📷 撮る</span>
+        <span style="padding:6px 10px;border-radius:6px;">🎓 復習 <span style="background:#166534;color:#fff;border-radius:8px;font-size:10px;padding:0 5px;">3</span></span>
+        <span style="padding:6px 10px;border-radius:6px;">⚙ 設定</span>
+      </nav>
+    </div>
+
+    <div style="display:grid;grid-template-columns:200px 1fr 210px;min-height:430px;">
+
+      <!-- 左：目次 -->
+      <div style="border-right:1px solid #e7e0d3;padding:12px;font-size:11px;background:#faf8f2;">
+        <div style="font-family:'Hiragino Mincho ProN',serif;color:#2b2620;">
+          <div style="font-weight:700;font-size:13px;line-height:1.5;">国家賠償法</div>
+          <div style="color:#78716c;font-size:10px;margin:2px 0 8px;">昭和22年法律第125号</div>
+        </div>
+        <div style="font-family:'Hiragino Sans',sans-serif;display:flex;gap:4px;margin-bottom:10px;">
+          <span style="background:#dcfce7;color:#166534;border-radius:4px;padding:1px 6px;font-size:9px;">✓ オフライン保存済み</span>
+        </div>
+        <div style="font-family:'Hiragino Sans',sans-serif;color:#a8a29e;font-size:9px;letter-spacing:.08em;margin-bottom:6px;">目次</div>
+        <div style="font-family:'Hiragino Mincho ProN',serif;line-height:2.0;color:#44403c;">
+          <div style="background:#dcfce7;border-left:3px solid #166534;padding-left:8px;margin-left:-11px;color:#14532d;font-weight:600;">第1条　公務員の不法行為と賠償責任</div>
+          <div>第2条　営造物の設置管理の瑕疵と賠償責任</div>
+          <div>第3条　賠償責任者</div>
+          <div>第4条　民法の適用</div>
+          <div>第5条　他の法律の適用</div>
+          <div>第6条　相互保証</div>
+          <div style="color:#78716c;margin-top:6px;">附則</div>
+        </div>
+        <div style="font-family:'Hiragino Sans',sans-serif;margin-top:14px;padding-top:10px;border-top:1px solid #e7e0d3;color:#78716c;font-size:10px;">
+          <div style="display:flex;justify-content:space-between;"><span>条番号へ移動</span><span style="border:1px solid #d6cdbc;border-radius:4px;padding:0 5px;">第◯条 ⏎</span></div>
+        </div>
+      </div>
+
+      <!-- 中央：本文 -->
+      <div style="padding:16px 28px 16px 40px;overflow:hidden;">
+        <!-- 本文ツールバー -->
+        <div style="font-family:'Hiragino Sans',sans-serif;display:flex;align-items:center;gap:8px;font-size:10px;color:#57534e;margin-bottom:14px;">
+          <div style="display:flex;border:1px solid #d6cdbc;border-radius:6px;overflow:hidden;">
+            <span style="padding:3px 10px;background:#166534;color:#fff;">読みやすい表示</span>
+            <span style="padding:3px 10px;background:#fff;">原文</span>
+          </div>
+          <span style="border:1px solid #d6cdbc;border-radius:6px;padding:3px 8px;background:#fff;">文A 文字サイズ</span>
+          <span style="border:1px solid #d6cdbc;border-radius:6px;padding:3px 8px;background:#fff;">法令内検索</span>
+          <span style="margin-left:auto;color:#a8a29e;">基準日 2026-04-01 ・ e-Gov 取得 2026-07-01</span>
+        </div>
+
+        <!-- 第1条（選択中：余白ブラケット） -->
+        <div style="position:relative;padding:4px 0 14px;">
+          <div style="position:absolute;left:-18px;top:8px;bottom:16px;width:8px;border-left:2px solid #166534;border-top:2px solid #166534;border-bottom:2px solid #166534;border-radius:2px 0 0 2px;"></div>
+          <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px;">
+            <span style="font-family:'Hiragino Mincho ProN','Yu Mincho',serif;font-size:15px;font-weight:700;color:#27272a;">第1条<span style="font-weight:400;color:#57534e;">（公務員の不法行為と賠償責任）</span></span>
+            <span style="font-family:'Hiragino Sans',sans-serif;margin-left:auto;color:#a8a29e;font-size:12px;">🔖保存　🗂カード化　⧉コピー　🔗</span>
+          </div>
+          <p style="font-family:'Hiragino Mincho ProN','Yu Mincho',serif;font-size:14.5px;line-height:2.05;color:#27272a;margin:0;">国又は公共団体の<a style="color:#166534;border-bottom:1px dotted #166534;">公権力の行使</a>に当る公務員が、その職務を行うについて、故意又は過失によつて違法に他人に損害を加えたときは、国又は公共団体が、これを賠償する責に任ずる。</p>
+          <p style="font-family:'Hiragino Mincho ProN','Yu Mincho',serif;font-size:14.5px;line-height:2.05;color:#27272a;margin:10px 0 0;">２　前項の場合において、公務員に故意又は重大な過失があつたときは、国又は公共団体は、その公務員に対して<a style="color:#166534;border-bottom:1px dotted #166534;">求償権</a>を有する。</p>
+        </div>
+
+        <!-- 第2条 -->
+        <div style="padding:14px 0;">
+          <div style="margin-bottom:10px;">
+            <span style="font-family:'Hiragino Mincho ProN','Yu Mincho',serif;font-size:15px;font-weight:700;color:#27272a;">第2条<span style="font-weight:400;color:#57534e;">（営造物の設置管理の瑕疵と賠償責任）</span></span>
+          </div>
+          <p style="font-family:'Hiragino Mincho ProN','Yu Mincho',serif;font-size:14.5px;line-height:2.05;color:#27272a;margin:0;">道路、河川その他の公の営造物の設置又は管理に瑕疵があつたために他人に損害を生じたときは、国又は公共団体は、これを賠償する責に任ずる。</p>
+          <p style="font-family:'Hiragino Mincho ProN','Yu Mincho',serif;font-size:14.5px;line-height:2.05;color:#27272a;margin:10px 0 0;">２　前項の場合において、他に損害の原因について責に任ずべき者があるときは、国又は公共団体は、これに対して求償権を有する。</p>
+        </div>
+      </div>
+
+      <!-- 右：コンテキストパネル -->
+      <div style="border-left:1px solid #e7e0d3;background:#faf8f2;padding:12px;font-family:'Hiragino Sans','Yu Gothic',sans-serif;font-size:11px;">
+        <div style="color:#78716c;font-size:10px;margin-bottom:8px;">選択中: <b style="color:#166534;">第1条</b></div>
+        <div style="display:flex;gap:2px;border-bottom:1px solid #e7e0d3;margin-bottom:10px;font-size:10px;">
+          <span style="padding:4px 8px;border-bottom:2px solid #166534;color:#166534;font-weight:600;">メモ</span>
+          <span style="padding:4px 8px;color:#78716c;">定義語</span>
+          <span style="padding:4px 8px;color:#78716c;">関連</span>
+          <span style="padding:4px 8px;color:#78716c;">復習</span>
+        </div>
+        <div style="background:#fff;border:1px solid #e7e0d3;border-radius:8px;padding:10px;margin-bottom:8px;">
+          <div style="color:#a8a29e;font-size:9px;margin-bottom:4px;">2026-07-02</div>
+          <div style="font-family:'Hiragino Mincho ProN',serif;line-height:1.7;color:#44403c;">「公権力の行使」は最広義説。私経済作用と営造物管理を除くすべて（判例）。</div>
+          <div style="margin-top:6px;"><span style="background:#dcfce7;color:#166534;border-radius:4px;padding:0 6px;font-size:9px;">行政法</span></div>
+        </div>
+        <div style="border:1px dashed #d6cdbc;border-radius:8px;padding:8px;text-align:center;color:#78716c;">＋ この条文にメモを追加</div>
+        <div style="margin-top:12px;padding-top:10px;border-top:1px solid #e7e0d3;">
+          <div style="color:#a8a29e;font-size:9px;letter-spacing:.08em;margin-bottom:6px;">この条文から</div>
+          <div style="display:grid;gap:4px;">
+            <span style="background:#166534;color:#fff;border-radius:6px;padding:5px 8px;text-align:center;font-weight:600;">🗂 復習カードを作る</span>
+            <span style="background:#fff;border:1px solid #d6cdbc;border-radius:6px;padding:5px 8px;text-align:center;color:#44403c;">🔖 ブックマーク</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- フッター（出典） -->
+    <div style="font-family:'Hiragino Sans',sans-serif;border-top:1px solid #e7e0d3;background:#fffdf9;padding:6px 16px;font-size:9px;color:#a8a29e;">
+      出典: e-Gov 法令検索（法令番号 昭和二十二年法律第百二十五号）・取得 2026-07-01 09:00 ・ 表示は読みやすい加工を含みます（原文は「原文」タブで確認できます）
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>設計メモ</h3>
+  <div class="options">
+    <div class="option">
+      <div class="letter">1</div>
+      <div class="content"><h3>選択は余白ブラケット</h3><p>選択中の条文は左余白の深緑ブラケットで示し、本文領域には手を加えない。同じブラケットを復習クイズの根拠条文表示にも使い、画面間で「注目中の条文」の表現を揃える。</p></div>
+    </div>
+    <div class="option">
+      <div class="letter">2</div>
+      <div class="content"><h3>条・項は原文の佇まい</h3><p>条見出しは「第1条（見出し）」の明朝見出し、項番号は原文どおりの全角数字。バッジやチップは使わない。緑の出番は選択・目次ハイライト・定義語リンク・アクションに限定。</p></div>
+    </div>
+    <div class="option">
+      <div class="letter">3</div>
+      <div class="content"><h3>ツールバーに読み味の主導権</h3><p>「読みやすい表示/原文」切替・文字サイズ・法令内検索・基準日と取得日時を本文直上に常設し、法的正確性の要件（design-doc 8.4）を読書中も満たす。</p></div>
+    </div>
+    <div class="option">
+      <div class="letter">4</div>
+      <div class="content"><h3>目次も明朝</h3><p>法令名・条見出しなど「法令の文脈テキスト」は目次でも明朝。タブやボタンなど操作部品だけゴシック。</p></div>
+    </div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>

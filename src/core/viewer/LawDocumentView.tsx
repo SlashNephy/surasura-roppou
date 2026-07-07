@@ -1,5 +1,6 @@
 import type { Law, LawNode, LawRevision } from "@/core/domain";
 import { Badge } from "@/shared/ui/badge";
+import { formatIsoDateLabel } from "@/shared/utils/dates";
 
 import { applyLawTextDisplayMode } from "./displayMode";
 import type { LawTextDisplayMode } from "./displayMode";
@@ -30,7 +31,7 @@ export const LawDocumentView = ({
           <Badge variant={isSaved ? "default" : "outline"}>{isSaved ? "保存済み" : "未保存"}</Badge>
         </div>
         <div className="grid min-w-0 gap-2">
-          <h1 className="min-w-0 text-2xl font-semibold text-foreground break-words md:text-3xl">
+          <h1 className="min-w-0 font-serif text-2xl font-semibold text-foreground break-words md:text-3xl">
             {law.title}
           </h1>
           {law.lawNumber !== undefined ? (
@@ -66,5 +67,4 @@ export const LawDocumentView = ({
 const getDisplayLawNumber = (lawNumber: string, displayMode: LawTextDisplayMode): string =>
   applyLawTextDisplayMode(lawNumber, displayMode, "law-number");
 
-const getDisplayFetchedDate = (fetchedAt: string): string =>
-  typeof fetchedAt === "string" && fetchedAt.length >= 10 ? fetchedAt.slice(0, 10) : "不明";
+const getDisplayFetchedDate = (fetchedAt: string): string => formatIsoDateLabel(fetchedAt);

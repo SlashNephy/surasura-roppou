@@ -85,8 +85,13 @@ export const createMemoryStorageRepository = (
         ];
         return Promise.resolve();
       },
-      listBookmarks() {
-        return Promise.resolve(bookmarks);
+      listBookmarks(query) {
+        const filteredBookmarks =
+          query?.lawId === undefined
+            ? bookmarks
+            : bookmarks.filter((bookmark) => bookmark.target.lawId === query.lawId);
+
+        return Promise.resolve(filteredBookmarks);
       },
       putCollection(collection) {
         collections = [

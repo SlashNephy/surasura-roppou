@@ -19,6 +19,7 @@ import { setupScrollMocks } from "@/test/scrollMocks";
 
 import { LawViewerPage, LawViewerPageContent } from "./law-viewer-page";
 import { sampleLawViewerDocument } from "./law-viewer-sample";
+import { createAppRouter } from "./router";
 import type { LawViewerState } from "./law-viewer-page";
 
 const scrollMocks = setupScrollMocks();
@@ -504,5 +505,21 @@ describe("LawViewerPageContent", () => {
     expect(articleInput).toHaveAttribute("name", "article");
     expect(articleInput).toHaveAttribute("autocomplete", "off");
     expect(articleInput).not.toHaveAttribute("inputmode", "numeric");
+  });
+
+  it("renders the study context panel and the source footer", async () => {
+    const history = createMemoryHistory({ initialEntries: ["/laws/129AC0000000089"] });
+    const { fetcher } = createJsonFetchStub(lawDataFixture);
+    const lawRepository = createEgovLawRepository({ fetcher, now });
+    const storageRepository = createMemoryStorageRepository().repository;
+
+    render(
+      <RouterProvider router={createAppRouter({ history, lawRepository, storageRepository })} />,
+    );
+
+    expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "学習コンテキスト" })).toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "法令の目次" })).toBeInTheDocument();
+    expect(screen.getByText(/出典: e-Gov 法令検索/)).toBeInTheDocument();
   });
 });

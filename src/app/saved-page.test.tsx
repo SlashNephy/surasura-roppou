@@ -15,6 +15,45 @@ import { parseTags } from "./saved-page-utils";
 setupScrollMocks();
 
 describe("SavedPage", () => {
+  it("shows empty states when saved lists have no items", async () => {
+    renderSavedRoute("/saved");
+
+    expect(await screen.findByRole("heading", { name: "保存リスト" })).toBeInTheDocument();
+    expect(screen.getByText("保存済み法令はまだありません。")).toBeInTheDocument();
+    expect(screen.getByText("保存項目はまだありません。")).toBeInTheDocument();
+    expect(screen.getByText("コレクションはまだありません。")).toBeInTheDocument();
+  });
+
+  it("renders preloaded saved laws, bookmarks, and collections on initial load", async () => {
+    const bookmark = createBookmark();
+    const collection = createCollection(bookmark.id);
+    const storage = createMemoryStorageRepository({
+      bookmarks: [bookmark],
+      collections: [collection],
+      savedLawDocument: createSavedLawDocument({
+        law: sampleLawViewerDocument.law,
+        revision: sampleLawViewerDocument.revision,
+        nodes: sampleLawViewerDocument.nodes,
+      }),
+    });
+
+    renderSavedRoute("/saved", storage.repository);
+
+    expect(await screen.findByRole("heading", { name: "保存リスト" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "民法" })).toHaveAttribute(
+      "href",
+      "/laws/129AC0000000089",
+    );
+    expect(screen.getByRole("link", { name: "民法1条" })).toHaveAttribute(
+      "href",
+      "/laws/129AC0000000089/articles/1",
+    );
+    expect(screen.getByRole("link", { name: "民法総則" })).toHaveAttribute(
+      "href",
+      "/saved/collections/collection-1",
+    );
+  });
+
   it("creates a tagged bookmark with a memo from the saved list", async () => {
     const storage = createMemoryStorageRepository({
       savedLawDocument: createSavedLawDocument({

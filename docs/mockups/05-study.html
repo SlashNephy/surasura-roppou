@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>復習 | すらすら六法 モックアップ</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 24px 16px 48px;
+  background: #f4f1ea; color: #27272a;
+  font-family: 'Hiragino Sans', 'Yu Gothic', sans-serif;
+  line-height: 1.6;
+}
+.page { max-width: 980px; margin: 0 auto; }
+.topnav { font-size: 12px; margin-bottom: 16px; }
+.topnav a { color: #166534; text-decoration: none; }
+h2 { font-family: 'Hiragino Mincho ProN', 'Yu Mincho', serif; font-size: 22px; margin: 0 0 4px; color: #2b2620; }
+h3 { font-size: 14px; margin: 0 0 8px; }
+.subtitle { color: #78716c; font-size: 13px; margin: 0 0 20px; }
+.section { margin-top: 24px; }
+.label { font-size: 10px; letter-spacing: .1em; color: #a8a29e; text-transform: uppercase; margin: 0 0 6px; }
+.mockup { background: #fff; border: 1px solid #d6cdbc; border-radius: 12px; overflow: hidden; margin: 12px 0; box-shadow: 0 2px 8px rgba(43,38,32,.06); }
+.mockup-header { background: #efe9dd; padding: 8px 14px; font-size: 11px; font-weight: 600; color: #57534e; border-bottom: 1px solid #d6cdbc; }
+.mockup-body { min-width: 0; }
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+@media (max-width: 760px) { .split { grid-template-columns: 1fr; } }
+.options { display: grid; gap: 10px; margin: 12px 0; }
+.option { display: flex; gap: 12px; background: #fff; border: 1px solid #e7e0d3; border-radius: 10px; padding: 12px 14px; }
+.option .letter { flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%; background: #166534; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+.option .content { min-width: 0; }
+.option .content p { margin: 4px 0 0; font-size: 13px; color: #57534e; }
+</style>
+</head>
+<body>
+<div class="page">
+<p class="topnav"><a href="index.html">← モックアップ一覧</a></p>
+<h2>復習</h2>
+<p class="subtitle">左＝復習ホーム、右＝クイズ実行中（回答後の状態）。design-doc 14.3「回答後は必ず根拠条文を表示」を画面の主役にしています。</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">復習ホーム</div>
+    <div class="mockup-body" style="padding:0;background:#fcfbf8;">
+      <div style="padding:16px;font-family:'Hiragino Sans',sans-serif;">
+        <div style="background:#166534;border-radius:12px;padding:14px 16px;color:#fff;margin-bottom:10px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div>
+              <div style="font-weight:700;font-size:13px;">今日の復習　3件</div>
+              <div style="font-size:9px;opacity:.75;margin-top:2px;">約5分 ・ 前回 昨日 21:04</div>
+            </div>
+            <span style="margin-left:auto;background:#fff;color:#166534;border-radius:8px;padding:6px 18px;font-weight:700;font-size:12px;">開始</span>
+          </div>
+          <div style="display:flex;gap:3px;margin-top:10px;">
+            <span style="height:4px;flex:1;background:#4ade80;border-radius:2px;"></span>
+            <span style="height:4px;flex:1;background:#4ade80;border-radius:2px;"></span>
+            <span style="height:4px;flex:1;background:rgba(255,255,255,.25);border-radius:2px;"></span>
+            <span style="height:4px;flex:1;background:rgba(255,255,255,.25);border-radius:2px;"></span>
+            <span style="height:4px;flex:1;background:rgba(255,255,255,.25);border-radius:2px;"></span>
+          </div>
+          <div style="font-size:8px;opacity:.6;margin-top:3px;">今週 2/5 日達成</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:10px;">
+          <div style="background:#fff;border:1px solid #e7e0d3;border-radius:10px;padding:10px 12px;">
+            <div style="color:#a8a29e;font-size:9px;letter-spacing:.08em;margin-bottom:6px;">苦手な条文</div>
+            <div style="font-family:'Hiragino Mincho ProN',serif;font-size:11px;line-height:1.9;color:#27272a;">国家賠償法 第2条 <span style="font-family:'Hiragino Sans',sans-serif;color:#b91c1c;font-size:9px;">×4</span><br>行政手続法 第14条 <span style="font-family:'Hiragino Sans',sans-serif;color:#b91c1c;font-size:9px;">×3</span></div>
+          </div>
+          <div style="background:#fff;border:1px solid #e7e0d3;border-radius:10px;padding:10px 12px;">
+            <div style="color:#a8a29e;font-size:9px;letter-spacing:.08em;margin-bottom:6px;">カードの内訳</div>
+            <div style="line-height:1.9;color:#44403c;">復習中 12 ・ 苦手 5<br>定着 34 ・ 未学習 8</div>
+          </div>
+          <div style="grid-column:1/-1;background:#fff;border:1px solid #e7e0d3;border-radius:10px;padding:10px 12px;">
+            <div style="color:#a8a29e;font-size:9px;letter-spacing:.08em;margin-bottom:6px;">科目別（行政書士プリセット）</div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;font-size:9px;">
+              <span style="background:#dcfce7;color:#166534;border-radius:12px;padding:2px 10px;">行政法 21</span>
+              <span style="border:1px solid #e7e0d3;border-radius:12px;padding:2px 10px;color:#57534e;">民法 18</span>
+              <span style="border:1px solid #e7e0d3;border-radius:12px;padding:2px 10px;color:#57534e;">憲法 9</span>
+              <span style="border:1px solid #e7e0d3;border-radius:12px;padding:2px 10px;color:#57534e;">商法 3</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">クイズ実行中：穴埋め・回答後</div>
+    <div class="mockup-body" style="padding:0;background:#fcfbf8;">
+      <div style="padding:14px 16px;font-family:'Hiragino Sans',sans-serif;">
+        <div style="display:flex;align-items:center;font-size:9px;color:#a8a29e;margin-bottom:10px;">
+          <span>今日の復習 2/3</span>
+          <div style="flex:1;height:3px;background:#e7e0d3;border-radius:2px;margin:0 10px;"><div style="width:66%;height:3px;background:#166534;border-radius:2px;"></div></div>
+          <span>✕ 中断</span>
+        </div>
+        <div style="background:#fff;border:1px solid #e7e0d3;border-radius:12px;padding:16px 18px;">
+          <div style="font-size:9px;color:#a8a29e;margin-bottom:8px;">穴埋め ・ <span style="font-family:'Hiragino Mincho ProN',serif;color:#57534e;">国家賠償法 第1条</span></div>
+          <p style="font-family:'Hiragino Mincho ProN',serif;font-size:13px;line-height:2.1;color:#27272a;margin:0;">国又は公共団体の<mark style="background:#dcfce7;color:#14532d;padding:0 6px;border-radius:4px;font-weight:700;">公権力の行使</mark>に当る公務員が、その職務を行うについて、<mark style="background:#dcfce7;color:#14532d;padding:0 6px;border-radius:4px;font-weight:700;">故意又は過失</mark>によつて違法に他人に損害を加えたときは…</p>
+          <div style="margin-top:10px;background:#f6faf6;border:1px solid #bbe0c3;border-radius:8px;padding:8px 12px;font-size:10px;color:#14532d;display:flex;align-items:center;gap:8px;">
+            ✓ 正解　<span style="color:#57534e;font-family:'Hiragino Sans',sans-serif;">あなたの回答: 公権力の行使 / 故意又は過失</span>
+          </div>
+          <div style="margin-top:10px;border-top:1px solid #f0ece3;padding-top:10px;position:relative;padding-left:14px;">
+            <div style="position:absolute;left:0;top:12px;bottom:4px;width:6px;border-left:2px solid #166534;border-top:2px solid #166534;border-bottom:2px solid #166534;border-radius:2px 0 0 2px;"></div>
+            <div style="font-size:9px;color:#a8a29e;margin-bottom:4px;">根拠条文（タップでビューワーへ）</div>
+            <div style="font-family:'Hiragino Mincho ProN',serif;font-size:11px;font-weight:700;color:#27272a;">第1条<span style="font-weight:400;color:#57534e;">（公務員の不法行為と賠償責任）</span></div>
+            <p style="font-family:'Hiragino Mincho ProN',serif;font-size:11px;line-height:1.9;color:#44403c;margin:4px 0 0;">国又は公共団体の公権力の行使に当る公務員が…これを賠償する責に任ずる。</p>
+            <div style="font-size:8px;color:#a8a29e;margin-top:4px;">基準日 2026-04-01 ・ e-Gov</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;margin-top:12px;font-size:10px;text-align:center;">
+          <div style="background:#fff;border:1px solid #fca5a5;color:#b91c1c;border-radius:8px;padding:8px 4px;">もう一度<br><span style="font-size:8px;color:#a8a29e;">&lt;1分</span></div>
+          <div style="background:#fff;border:1px solid #d6cdbc;color:#92400e;border-radius:8px;padding:8px 4px;">難しい<br><span style="font-size:8px;color:#a8a29e;">2日</span></div>
+          <div style="background:#166534;border:1px solid #166534;color:#fff;border-radius:8px;padding:8px 4px;font-weight:700;">普通<br><span style="font-size:8px;opacity:.7;">4日</span></div>
+          <div style="background:#fff;border:1px solid #d6cdbc;color:#166534;border-radius:8px;padding:8px 4px;">簡単<br><span style="font-size:8px;color:#a8a29e;">8日</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>設計メモ</h3>
+  <div class="options">
+    <div class="option">
+      <div class="letter">1</div>
+      <div class="content"><h3>根拠条文に選択ブラケットを再利用</h3><p>回答後の根拠条文には、ビューワーで決めた「余白ブラケット」をそのまま使います。クイズ→ビューワーへタップ遷移したとき、同じブラケットが同じ条文に付いて迎えるので、画面間の連続性が生まれます。</p></div>
+    </div>
+    <div class="option">
+      <div class="letter">2</div>
+      <div class="content"><h3>評価ボタンに次回間隔を予告</h3><p>「もう一度/難しい/普通/簡単」の下に次回復習日（&lt;1分/2日/4日/8日）を小さく併記。Anki 系の定石で、間隔反復の仕組みが自然に伝わります。</p></div>
+    </div>
+    <div class="option">
+      <div class="letter">3</div>
+      <div class="content"><h3>連続日数は控えめに</h3><p>習慣化の演出は「今週 2/5 日」の細いバーだけ。炎アイコンや連続記録の煽りは、資格学習ツールの信頼感を損なうので入れません。</p></div>
+    </div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>

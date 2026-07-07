@@ -12,6 +12,7 @@ import {
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
+import { formatIsoDateLabel } from "@/shared/utils/dates";
 
 import { parseTags } from "./saved-page-utils";
 
@@ -275,7 +276,7 @@ const SavedLawList = ({ savedLaws }: { savedLaws: SavedLawSummary[] }) => (
                   {savedLaw.law.title}
                 </Link>
                 <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
-                  <span>最終取得: {formatDate(savedLaw.revision.fetchedAt)}</span>
+                  <span>最終取得: {formatIsoDateLabel(savedLaw.revision.fetchedAt)}</span>
                   <span>{savedLaw.nodeCount.toLocaleString("ja-JP")} ノード</span>
                 </div>
               </div>
@@ -311,7 +312,9 @@ const BookmarkList = ({
                 法令: {lawTitlesById?.get(bookmark.target.lawId) ?? bookmark.target.lawId}
               </p>
               {bookmark.note === undefined ? null : (
-                <p className="text-sm leading-6 text-muted-foreground">{bookmark.note}</p>
+                <p className="whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground">
+                  {bookmark.note}
+                </p>
               )}
               {bookmark.tags.length === 0 ? null : (
                 <div className="flex flex-wrap gap-2">
@@ -687,9 +690,6 @@ const BookmarkLink = ({ bookmark }: { bookmark: Bookmark }) => {
     </Link>
   );
 };
-
-const formatDate = (value: string): string =>
-  typeof value === "string" && value.length >= 10 ? value.slice(0, 10) : "不明";
 
 const generateStorageId = (): string => {
   const browserCrypto = (globalThis as { crypto?: Crypto }).crypto;

@@ -12,9 +12,11 @@ import {
   buildLawTableOfContents,
 } from "@/core/viewer";
 import type { LawTextDisplayMode, LawTocItem } from "@/core/viewer";
+import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Skeleton } from "@/shared/ui/skeleton";
+import { formatIsoDateLabel } from "@/shared/utils/dates";
 
 import { loadLawViewerDocument } from "./law-viewer-loader";
 import { useOnlineStatus, useSavedViewerState } from "./law-viewer-hooks";
@@ -266,158 +268,209 @@ const LawViewerReadyState = ({
   );
 
   return (
-    <section className="mx-auto grid w-full max-w-6xl gap-5 px-4 py-6 md:px-6 md:py-8">
-      <div className="grid gap-4 rounded-md border bg-card p-4 text-card-foreground shadow-xs md:grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] md:items-end">
-        <div className="grid min-w-0 gap-2">
-          <span className="text-sm font-medium text-foreground">表示</span>
-          <div
-            aria-label="表示モード"
-            className="inline-flex w-fit rounded-md border bg-background p-1"
-            role="group"
-          >
-            <Button
-              aria-pressed={displayMode === "readable"}
-              className="h-8 px-3"
-              onClick={() => {
-                setDisplayMode("readable");
-              }}
-              type="button"
-              variant={displayMode === "readable" ? "default" : "ghost"}
-            >
-              読みやすい表示
-            </Button>
-            <Button
-              aria-pressed={displayMode === "original"}
-              className="h-8 px-3"
-              onClick={() => {
-                setDisplayMode("original");
-              }}
-              type="button"
-              variant={displayMode === "original" ? "default" : "ghost"}
-            >
-              原文表示
-            </Button>
-          </div>
-        </div>
-
-        <form
-          className="grid gap-2 sm:grid-cols-[minmax(0,12rem)_auto]"
-          onSubmit={handleJumpSubmit}
-        >
-          <label
-            className="grid min-w-0 gap-1 text-sm font-medium text-foreground"
-            htmlFor={articleInputId}
-          >
-            条番号
-            <Input
-              aria-describedby={hasJumpError ? articleJumpErrorId : undefined}
-              aria-invalid={hasJumpError ? true : undefined}
-              autoComplete="off"
-              id={articleInputId}
-              name="article"
-              onChange={(event) => {
-                setJumpArticleNumber(event.target.value);
-                setHasJumpError(false);
-              }}
-              placeholder="例: 1"
-              value={jumpArticleNumber}
-            />
-          </label>
-          <Button className="w-fit self-end" type="submit">
-            移動
-          </Button>
-        </form>
-
-        <Button
-          aria-controls={tocPanelId}
-          aria-expanded={isMobileTocOpen}
-          className="w-fit gap-2 lg:hidden"
-          onClick={() => {
-            setIsMobileTocOpen((current) => !current);
-          }}
-          type="button"
-          variant="outline"
-        >
-          <ListTree className="size-4" />
-          目次
-        </Button>
-
-        {hasArticleError ? <div className="md:col-span-full">{notFoundAlert}</div> : null}
-
-        <div className="grid min-w-0 gap-2 sm:justify-self-end">
-          <span className="text-sm font-medium text-foreground">オフライン</span>
-          <Button
-            aria-describedby={saveError === undefined ? undefined : saveErrorId}
-            className="w-fit gap-2"
-            disabled={isSaving}
-            onClick={() => {
-              void handleSaveToggle();
-            }}
-            type="button"
-            variant={savedState.isSaved ? "outline" : "default"}
-          >
+    <>
+      <section className="mx-auto grid w-full max-w-7xl lg:grid-cols-[15rem_minmax(0,1fr)_16rem]">
+        <aside aria-label="法令の目次" className="hidden border-r bg-muted/40 lg:block">
+          <div className="sticky top-14 grid max-h-[calc(100dvh-3.5rem)] content-start gap-3 overflow-y-auto p-4">
+            <div className="grid gap-1">
+              <p className="min-w-0 font-serif text-base font-semibold text-foreground break-words">
+                {state.law.title}
+              </p>
+              {state.law.lawNumber !== undefined ? (
+                <p className="min-w-0 text-xs text-muted-foreground break-words">
+                  {state.law.lawNumber}
+                </p>
+              ) : null}
+            </div>
             {savedState.isSaved ? (
-              <Trash2 className="size-4" aria-hidden="true" />
-            ) : (
-              <Download className="size-4" aria-hidden="true" />
-            )}
-            {savedState.isSaved ? "保存解除" : "オフライン保存"}
-          </Button>
-        </div>
-      </div>
-
-      {saveError !== undefined ? (
-        <p
-          id={saveErrorId}
-          role="alert"
-          className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-6 text-destructive"
-        >
-          {saveError}
-        </p>
-      ) : null}
-
-      <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-        <span>{isOnline ? "オンライン" : "オフライン"}</span>
-        {savedState.loadedFromStorage ? (
-          <span className="rounded-md border border-primary/30 bg-primary/5 px-2 py-1 text-primary">
-            保存済み本文を表示中
-          </span>
-        ) : null}
-        {savedState.savedAt !== undefined ? (
-          <span>保存日時: {savedState.savedAt.slice(0, 10)}</span>
-        ) : null}
-      </div>
-
-      <div
-        id={tocPanelId}
-        className="rounded-md border bg-card p-3 shadow-xs lg:hidden"
-        hidden={!isMobileTocOpen}
-      >
-        <LawTableOfContents
-          activeArticleNumber={activeArticleNumber}
-          items={tocItems}
-          onSelectArticle={navigateToArticle}
-        />
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-start">
-        <aside className="hidden rounded-md border bg-card p-3 shadow-xs lg:block">
-          <LawTableOfContents
-            activeArticleNumber={activeArticleNumber}
-            items={tocItems}
-            onSelectArticle={navigateToArticle}
-          />
+              <Badge variant="secondary" className="w-fit">
+                オフライン保存済み
+              </Badge>
+            ) : null}
+            <p className="text-[10px] font-medium tracking-widest text-muted-foreground">目次</p>
+            <LawTableOfContents
+              activeArticleNumber={activeArticleNumber}
+              items={tocItems}
+              onSelectArticle={navigateToArticle}
+            />
+          </div>
         </aside>
-        <LawDocumentView
-          activeArticleNumber={activeArticleNumber}
-          displayMode={displayMode}
-          isSaved={savedState.isSaved}
-          law={state.law}
-          nodes={state.nodes}
-          revision={state.revision}
-        />
-      </div>
-    </section>
+
+        <div className="min-w-0 px-4 py-6 md:px-8">
+          <div className="mb-4 grid gap-3 rounded-md border bg-card p-3 text-card-foreground shadow-xs md:flex md:flex-wrap md:items-end">
+            <div className="grid min-w-0 gap-2">
+              <span className="text-sm font-medium text-foreground">表示</span>
+              <div
+                aria-label="表示モード"
+                className="inline-flex w-fit rounded-md border bg-background p-1"
+                role="group"
+              >
+                <Button
+                  aria-pressed={displayMode === "readable"}
+                  className="h-8 px-3"
+                  onClick={() => {
+                    setDisplayMode("readable");
+                  }}
+                  type="button"
+                  variant={displayMode === "readable" ? "default" : "ghost"}
+                >
+                  読みやすい表示
+                </Button>
+                <Button
+                  aria-pressed={displayMode === "original"}
+                  className="h-8 px-3"
+                  onClick={() => {
+                    setDisplayMode("original");
+                  }}
+                  type="button"
+                  variant={displayMode === "original" ? "default" : "ghost"}
+                >
+                  原文表示
+                </Button>
+              </div>
+            </div>
+
+            <form
+              className="grid gap-2 sm:grid-cols-[minmax(0,10rem)_auto]"
+              onSubmit={handleJumpSubmit}
+            >
+              <label
+                className="grid min-w-0 gap-1 text-sm font-medium text-foreground"
+                htmlFor={articleInputId}
+              >
+                条番号
+                <Input
+                  aria-describedby={hasJumpError ? articleJumpErrorId : undefined}
+                  aria-invalid={hasJumpError ? true : undefined}
+                  autoComplete="off"
+                  id={articleInputId}
+                  name="article"
+                  onChange={(event) => {
+                    setJumpArticleNumber(event.target.value);
+                    setHasJumpError(false);
+                  }}
+                  placeholder="例: 1"
+                  value={jumpArticleNumber}
+                />
+              </label>
+              <Button className="w-fit self-end" type="submit">
+                移動
+              </Button>
+            </form>
+
+            <Button
+              aria-controls={tocPanelId}
+              aria-expanded={isMobileTocOpen}
+              className="w-fit gap-2 lg:hidden"
+              onClick={() => {
+                setIsMobileTocOpen((current) => !current);
+              }}
+              type="button"
+              variant="outline"
+            >
+              <ListTree className="size-4" />
+              目次
+            </Button>
+
+            <div className="grid min-w-0 gap-2 md:ml-auto">
+              <span className="text-sm font-medium text-foreground">オフライン</span>
+              <Button
+                aria-describedby={saveError === undefined ? undefined : saveErrorId}
+                className="w-fit gap-2"
+                disabled={isSaving}
+                onClick={() => {
+                  void handleSaveToggle();
+                }}
+                type="button"
+                variant={savedState.isSaved ? "outline" : "default"}
+              >
+                {savedState.isSaved ? (
+                  <Trash2 className="size-4" aria-hidden="true" />
+                ) : (
+                  <Download className="size-4" aria-hidden="true" />
+                )}
+                {savedState.isSaved ? "保存解除" : "オフライン保存"}
+              </Button>
+            </div>
+
+            {hasArticleError ? <div className="md:w-full">{notFoundAlert}</div> : null}
+          </div>
+
+          {saveError !== undefined ? (
+            <p
+              id={saveErrorId}
+              role="alert"
+              className="mb-4 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-6 text-destructive"
+            >
+              {saveError}
+            </p>
+          ) : null}
+
+          <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <span>{isOnline ? "オンライン" : "オフライン"}</span>
+            {savedState.loadedFromStorage ? (
+              <span className="rounded-md border border-primary/30 bg-primary/5 px-2 py-1 text-primary">
+                保存済み本文を表示中
+              </span>
+            ) : null}
+            {savedState.savedAt !== undefined ? (
+              <span>保存日時: {savedState.savedAt.slice(0, 10)}</span>
+            ) : null}
+          </div>
+
+          <div
+            id={tocPanelId}
+            className="mb-4 rounded-md border bg-card p-3 shadow-xs lg:hidden"
+            hidden={!isMobileTocOpen}
+          >
+            <LawTableOfContents
+              activeArticleNumber={activeArticleNumber}
+              items={tocItems}
+              onSelectArticle={navigateToArticle}
+            />
+          </div>
+
+          <LawDocumentView
+            activeArticleNumber={activeArticleNumber}
+            displayMode={displayMode}
+            isSaved={savedState.isSaved}
+            law={state.law}
+            nodes={state.nodes}
+            revision={state.revision}
+          />
+        </div>
+
+        <aside aria-label="学習コンテキスト" className="hidden border-l bg-muted/40 lg:block">
+          <div className="sticky top-14 grid max-h-[calc(100dvh-3.5rem)] content-start gap-3 overflow-y-auto p-4 text-sm">
+            <p className="text-xs text-muted-foreground">
+              選択中:{" "}
+              <span className="font-medium text-primary">
+                {activeArticleNumber === undefined ? "なし" : `第${activeArticleNumber}条`}
+              </span>
+            </p>
+            {(["メモ", "定義語", "関連条文", "復習カード"] as const).map((panelTitle) => (
+              <section key={panelTitle} className="rounded-md border bg-card p-3">
+                <h2 className="text-sm font-medium text-foreground">{panelTitle}</h2>
+                <p className="mt-2 text-xs leading-5 text-muted-foreground">準備中</p>
+              </section>
+            ))}
+            <div className="grid gap-2 border-t pt-3">
+              <Button disabled type="button" className="w-full">
+                復習カードを作る（準備中）
+              </Button>
+              <Button disabled type="button" variant="outline" className="w-full">
+                ブックマーク（準備中）
+              </Button>
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      <footer className="border-t bg-popover px-4 py-2 text-xs text-muted-foreground md:px-6">
+        出典: e-Gov 法令検索 ・ 取得 {getDisplaySourceDate(state.revision.fetchedAt)} ・
+        読みやすい表示は原文に表示上の加工を含みます（「原文表示」で確認できます）
+      </footer>
+    </>
   );
 };
 
@@ -480,3 +533,5 @@ const LawViewerOfflineState = ({ lawTitle }: { lawTitle: string }) => (
     </Button>
   </section>
 );
+
+const getDisplaySourceDate = (fetchedAt: string): string => formatIsoDateLabel(fetchedAt);
