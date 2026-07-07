@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Camera, ClipboardPaste, GraduationCap, Search } from "lucide-react";
 
-import { createSavedLawUseCase, createStorageRepository } from "@/core/storage";
-import type { SavedLawSummary, StorageRepository } from "@/core/storage";
+import { createStorageRepository } from "@/core/storage";
+import type { StorageRepository } from "@/core/storage";
 import { Button } from "@/shared/ui/button";
+
+import { useSavedLaws } from "./use-saved-laws";
 
 const defaultStorageRepository = createStorageRepository();
 
@@ -20,36 +21,7 @@ export const HomePage = ({
 }: {
   storageRepository?: StorageRepository;
 }) => {
-  const [savedLaws, setSavedLaws] = useState<SavedLawSummary[]>([]);
-  const [savedLawsError, setSavedLawsError] = useState<string | undefined>();
-  const savedLawUseCase = useMemo(
-    () => createSavedLawUseCase(storageRepository),
-    [storageRepository],
-  );
-
-  useEffect(() => {
-    let isCurrent = true;
-
-    void savedLawUseCase
-      .list()
-      .then((nextSavedLaws) => {
-        if (isCurrent) {
-          setSavedLaws(nextSavedLaws);
-          setSavedLawsError(undefined);
-        }
-      })
-      .catch(() => {
-        if (isCurrent) {
-          setSavedLaws([]);
-          setSavedLawsError("保存済み法令を読み込めませんでした。");
-        }
-      });
-
-    return () => {
-      isCurrent = false;
-    };
-  }, [savedLawUseCase]);
-
+  const { savedLaws, savedLawsError } = useSavedLaws(storageRepository);
   const hasSavedLaws = savedLaws.length > 0;
 
   return (

@@ -44,7 +44,7 @@ describe("SearchPalette", () => {
     const user = userEvent.setup();
     const { history } = await renderShell();
 
-    await user.click(screen.getByRole("button", { name: "検索" }));
+    await user.click(screen.getByRole("button", { name: /^検索/ }));
 
     const dialog = await screen.findByRole("dialog", { name: "検索" });
     expect(dialog).toBeInTheDocument();

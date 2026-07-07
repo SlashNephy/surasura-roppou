@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { BookOpenCheck, Camera } from "lucide-react";
 
-import { createSavedLawUseCase, createStorageRepository } from "@/core/storage";
+import { createStorageRepository } from "@/core/storage";
 import type { SavedLawSummary, StorageRepository } from "@/core/storage";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
+import { formatIsoDateLabel } from "@/shared/utils/dates";
+
+import { useSavedLaws } from "./use-saved-laws";
 
 const defaultStorageRepository = createStorageRepository();
 
@@ -14,35 +16,7 @@ export const LawsPage = ({
 }: {
   storageRepository?: StorageRepository;
 }) => {
-  const [savedLaws, setSavedLaws] = useState<SavedLawSummary[]>([]);
-  const [savedLawsError, setSavedLawsError] = useState<string | undefined>();
-  const savedLawUseCase = useMemo(
-    () => createSavedLawUseCase(storageRepository),
-    [storageRepository],
-  );
-
-  useEffect(() => {
-    let isCurrent = true;
-
-    void savedLawUseCase
-      .list()
-      .then((nextSavedLaws) => {
-        if (isCurrent) {
-          setSavedLaws(nextSavedLaws);
-          setSavedLawsError(undefined);
-        }
-      })
-      .catch(() => {
-        if (isCurrent) {
-          setSavedLaws([]);
-          setSavedLawsError("保存済み法令を読み込めませんでした。");
-        }
-      });
-
-    return () => {
-      isCurrent = false;
-    };
-  }, [savedLawUseCase]);
+  const { savedLaws, savedLawsError } = useSavedLaws(storageRepository);
 
   return (
     <section className="mx-auto grid w-full max-w-4xl gap-8 px-5 py-8 md:px-6">
@@ -102,18 +76,17 @@ export const LawsPage = ({
   );
 };
 
-const formatSavedLawFetchedDate = (savedLaw: SavedLawSummary): string => {
-  const fetchedAt = savedLaw.revision.fetchedAt;
-
-  return typeof fetchedAt === "string" && fetchedAt.length >= 10 ? fetchedAt.slice(0, 10) : "不明";
-};
+const formatSavedLawFetchedDate = (savedLaw: SavedLawSummary): string =>
+  formatIsoDateLabel(savedLaw.revision.fetchedAt);
 
 export const ScannerPage = () => (
   <section className="mx-auto grid w-full max-w-md gap-4 px-5 py-12 text-center">
     <h1 className="font-serif text-2xl font-semibold text-foreground">
       問題集や資料から条文を開く
     </h1>
-    <p className="text-xs text-muted-foreground">🔒 画像は端末内で処理され、保存・送信されません</p>
+    <p className="text-xs text-muted-foreground">
+      <span aria-hidden="true">🔒 </span>画像は端末内で処理され、保存・送信されません
+    </p>
     <Button disabled type="button" className="h-auto w-full flex-col gap-1 py-8">
       <Camera className="size-6" aria-hidden="true" />
       <span className="font-semibold">撮る・画像を選ぶ（準備中）</span>
