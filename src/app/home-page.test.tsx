@@ -43,6 +43,7 @@ describe("HomePage", () => {
     renderHome(storage.repository);
 
     expect(await screen.findByRole("heading", { name: "オフライン保存済み" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "すべて表示" })).toHaveAttribute("href", "/saved");
     expect(screen.getByRole("link", { name: "民法" })).toHaveAttribute(
       "href",
       "/laws/129AC0000000089",

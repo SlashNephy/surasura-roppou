@@ -17,6 +17,8 @@ const routes = [
   ["/laws", "法令を探す"],
   ["/laws/129AC0000000089", "民法"],
   ["/laws/129AC0000000089/articles/1", "民法"],
+  ["/saved", "保存リスト"],
+  ["/saved/collections/missing", "コレクションが見つかりません"],
   ["/scanner", "問題集や資料から条文を開く"],
   ["/study", "復習"],
   ["/settings", "設定"],
@@ -71,6 +73,10 @@ describe("app router", () => {
     expect(await screen.findByRole("link", { name: "民法" })).toHaveAttribute(
       "href",
       "/laws/129AC0000000089",
+    );
+    expect(screen.getByRole("link", { name: "保存リストを開く" })).toHaveAttribute(
+      "href",
+      "/saved",
     );
     expect(screen.getByText("最終取得: 2026-07-05")).toBeInTheDocument();
     expect(screen.getByText("6 ノード")).toBeInTheDocument();

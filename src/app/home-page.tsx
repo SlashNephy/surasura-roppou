@@ -75,9 +75,17 @@ export const HomePage = ({
             </Link>
           </Button>
           <section aria-labelledby="home-saved-laws-heading" className="grid gap-3">
-            <h2 id="home-saved-laws-heading" className="text-lg font-semibold text-foreground">
-              オフライン保存済み
-            </h2>
+            <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+              <h2 id="home-saved-laws-heading" className="text-lg font-semibold text-foreground">
+                オフライン保存済み
+              </h2>
+              <Link
+                className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+                to="/saved"
+              >
+                すべて表示
+              </Link>
+            </div>
             <ul className="grid gap-2 sm:grid-cols-2">
               {savedLaws.map((savedLaw) => (
                 <li key={savedLaw.law.lawId} className="rounded-md border bg-card p-4">

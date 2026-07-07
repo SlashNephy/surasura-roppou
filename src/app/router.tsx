@@ -6,6 +6,7 @@ import type { StorageRepository } from "@/core/storage";
 
 import { AppShell } from "./AppShell";
 import { HomePage, LawsPage, LawViewerPage, ScannerPage, SettingsPage, StudyPage } from "./pages";
+import { SavedCollectionPage, SavedPage } from "./saved-page";
 
 interface CreateAppRouterOptions {
   history?: RouterHistory;
@@ -53,6 +54,22 @@ const createRouteTree = ({
     component: LawViewerRoute,
   });
 
+  const SavedRoute = () => <SavedPage storageRepository={storageRepository} />;
+
+  const savedRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "saved",
+    component: SavedRoute,
+  });
+
+  const SavedCollectionRoute = () => <SavedCollectionPage storageRepository={storageRepository} />;
+
+  const savedCollectionRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "saved/collections/$collectionId",
+    component: SavedCollectionRoute,
+  });
+
   const scannerRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "scanner",
@@ -75,6 +92,8 @@ const createRouteTree = ({
     indexRoute,
     lawsRoute,
     lawViewerRoute.addChildren([lawViewerArticleRoute]),
+    savedRoute,
+    savedCollectionRoute,
     scannerRoute,
     studyRoute,
     settingsRoute,

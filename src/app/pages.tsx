@@ -30,11 +30,19 @@ export const LawsPage = ({
       </div>
 
       <section aria-labelledby="saved-laws-heading" className="grid gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <BookOpenCheck className="size-4 text-primary" aria-hidden="true" />
-          <h2 id="saved-laws-heading" className="text-lg font-semibold text-foreground">
-            保存済み法令
-          </h2>
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <BookOpenCheck className="size-4 text-primary" aria-hidden="true" />
+            <h2 id="saved-laws-heading" className="text-lg font-semibold text-foreground">
+              保存済み法令
+            </h2>
+          </div>
+          <Link
+            className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+            to="/saved"
+          >
+            保存リストを開く
+          </Link>
         </div>
         {savedLawsError !== undefined ? (
           <p
