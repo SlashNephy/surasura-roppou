@@ -13,8 +13,10 @@ import {
   CommandList,
 } from "@/shared/ui/command";
 
+import type { PrimaryRoute } from "./routes";
+
 interface PaletteDestination {
-  to: "/laws" | "/scanner" | "/study" | "/settings";
+  to: PrimaryRoute;
   label: string;
   icon: LucideIcon;
 }
@@ -71,7 +73,6 @@ export const SearchPalette = () => {
   return (
     <>
       <Button
-        aria-label="検索"
         type="button"
         variant="outline"
         className="h-9 min-w-0 gap-2 px-3 font-normal text-muted-foreground md:w-full md:max-w-sm md:justify-start"
@@ -79,6 +80,8 @@ export const SearchPalette = () => {
           setIsOpen(true);
         }}
       >
+        {/* 可視ラベル（例文）をアクセシブルネームに含めるため aria-label は使わない (WCAG 2.5.3) */}
+        <span className="sr-only">検索</span>
         <Search className="size-4" aria-hidden="true" />
         <span className="hidden truncate md:inline">国賠法1条、民709、行政手続法14条…</span>
         <kbd

@@ -16,6 +16,7 @@ import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Skeleton } from "@/shared/ui/skeleton";
+import { formatIsoDateLabel } from "@/shared/utils/dates";
 
 import { loadLawViewerDocument } from "./law-viewer-loader";
 import { useOnlineStatus, useSavedViewerState } from "./law-viewer-hooks";
@@ -272,11 +273,13 @@ const LawViewerReadyState = ({
         <aside aria-label="法令の目次" className="hidden border-r bg-muted/40 lg:block">
           <div className="sticky top-14 grid max-h-[calc(100dvh-3.5rem)] content-start gap-3 overflow-y-auto p-4">
             <div className="grid gap-1">
-              <p className="font-serif text-base font-semibold text-foreground">
+              <p className="min-w-0 font-serif text-base font-semibold text-foreground break-words">
                 {state.law.title}
               </p>
               {state.law.lawNumber !== undefined ? (
-                <p className="text-xs text-muted-foreground">{state.law.lawNumber}</p>
+                <p className="min-w-0 text-xs text-muted-foreground break-words">
+                  {state.law.lawNumber}
+                </p>
               ) : null}
             </div>
             {savedState.isSaved ? (
@@ -531,5 +534,4 @@ const LawViewerOfflineState = ({ lawTitle }: { lawTitle: string }) => (
   </section>
 );
 
-const getDisplaySourceDate = (fetchedAt: string): string =>
-  typeof fetchedAt === "string" && fetchedAt.length >= 10 ? fetchedAt.slice(0, 10) : "不明";
+const getDisplaySourceDate = (fetchedAt: string): string => formatIsoDateLabel(fetchedAt);

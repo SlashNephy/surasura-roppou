@@ -5,10 +5,11 @@ import type { LucideIcon } from "lucide-react";
 import { cn } from "@/shared/utils/cn";
 
 import { PwaUpdatePrompt } from "./PwaUpdatePrompt";
+import type { PrimaryRoute } from "./routes";
 import { SearchPalette } from "./SearchPalette";
 
 interface NavItem {
-  to: "/laws" | "/scanner" | "/study" | "/settings";
+  to: PrimaryRoute;
   label: string;
   icon: LucideIcon;
 }
