@@ -15,19 +15,32 @@ Last updated: 2026-07-07
 
 ## 2. 参照アンカー
 
-保存物が共通で使う参照型を次のとおり定める。
+参照型は新設せず、既存の `src/core/domain/references.ts` の `LawReferenceTarget` を拡張して使う。
+追加するフィールドは条文指紋のみである。
 
 ```ts
+// references.ts の既存型に追加
 interface LawReferenceTarget {
   lawId: string;
-  path: string; // 例: "part:1/chapter:1/article:709"
-  revisionId: string; // 作成時点の版。常に開ける退避先
-  fingerprint: string; // 条文指紋（3 章）
-  createdAt: ISODateString;
+  revisionId?: string | null;
+  article?: string | null;
+  paragraph?: string | null;
+  item?: string | null;
+  path?: string | null;
+  fingerprint?: string | null; // 追加: 条文指紋（3 章）
 }
+
+// 保存物（ブックマーク・メモ・復習カード）のアンカーはこの制約を満たす
+type AnchoredArticleReference = ArticleReference & {
+  revisionId: string; // 作成時点の版。常に開ける退避先
+  fingerprint: string;
+};
 ```
 
-path は既存の LawNode.path と同じ形式を使う。
+解決キーは階層 path ではなく**論理的な条番号（article、必要に応じて paragraph / item）**を使う。
+編・章・節の構成は改正で再編されることがあるが、条番号（枝番含む）は安定しているためである。
+path は解決には使わない（ビューワーが article から該当ノードを引く）。
+アンカー自体は作成時刻を持たない。作成・更新時刻は親モデル（Bookmark、StudyCard など）の createdAt / updatedAt に委ねる。
 revisionId は「作成時にユーザーが見ていた条文」を将来も再現するための退避先であり、既定の解決先ではない。
 
 ## 3. 条文指紋
@@ -42,7 +55,7 @@ revisionId は「作成時にユーザーが見ていた条文」を将来も再
 参照を開くときの手順を次のとおり定める。
 
 1. 基準日で版を選ぶ: 「施行日 ≤ 基準日」を満たす最新版。
-2. その版の中で path を解決する。
+2. その版の中で article（あれば paragraph / item も）を解決する。
 3. 解決した条文から指紋を再計算し、保存済み指紋と比較する。
 4. 一致すればそのまま表示する（改正があっても当該条文が無傷なら通知しない）。
 5. 不一致なら「改正の可能性」バッジを表示する。バッジから、作成時の版（revisionId）と現在の解決先を見比べる画面へ遷移できる。
@@ -52,7 +65,7 @@ revisionId は「作成時にユーザーが見ていた条文」を将来も再
 - **新しい条文に付け替える**: fingerprint と revisionId を現在の解決先で更新する。
 - **この版のまま固定する**: 以後この参照は revisionId 固定で開き、バッジを常設する。
 
-path 解決自体が失敗した場合（条の削除・繰り下げ）は、指紋不一致と同じ導線に「現在の版に該当する条が見つかりません」という文言で合流させる。
+article の解決自体が失敗した場合（条の削除・繰り下げ）は、指紋不一致と同じ導線に「現在の版に該当する条が見つかりません」という文言で合流させる。
 
 ## 5. 基準日
 
@@ -72,6 +85,7 @@ path 解決自体が失敗した場合（条の削除・繰り下げ）は、指
 - `/laws/:lawId/articles/:article` は**基準日依存 URL**: 開いた人の基準日設定で版を解決する。
 - `/laws/:lawId/:revisionId/articles/:article` は**版固定 URL**: 共有と、ときどき六法（Android）連携にはこちらを使う。
 - 保存物から共有リンクを発行するときは、そのとき表示している版の版固定 URL を出す（受け取り側の基準日設定に左右されない）。
+- URL の `:article`・アンカーの article・Resolver 出力の article は同一の正規化表現（枝番はハイフン区切り）とし、既存 `buildLawArticleUrl` を正とする。
 
 ## 8. 前提と縮退
 
@@ -82,5 +96,6 @@ path 解決自体が失敗した場合（条の削除・繰り下げ）は、指
 ## 9. データ移行
 
 - 保存済み法令（SavedLaw）は既に revisionId を持つため変更しない。
-- ブックマーク・メモ・復習カードは未実装のため、本設計の LawReferenceTarget を初版スキーマとして導入する（破壊的移行なし）。
-- IndexedDB のスキーマ変更は [ADR 2026-07-06: IndexedDB storage version 1](../../adr/2026-07-06-indexeddb-storage-version-1.md) の後続バージョンとして扱う。
+- `LawReferenceTarget` への fingerprint 追加は optional フィールドの追加であり、既存データに対して非破壊である。
+- ブックマーク・メモは未実装のため、アンカー必須制約（AnchoredArticleReference）を初版スキーマとして導入する（破壊的移行なし）。
+- IndexedDB のスキーマ変更は [ADR 2026-07-06: IndexedDB storage version 1](../../adr/2026-07-06-indexeddb-storage-version-1.md) の後続バージョンとして扱う（復習カード側の移行は復習設計書の 9 章を参照）。

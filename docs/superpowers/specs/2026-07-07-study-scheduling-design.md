@@ -16,12 +16,16 @@ Last updated: 2026-07-07
 
 ## 2. データモデル
 
+時刻の規約: ISODateString はすべて UTC の瞬間（Z 付き ISO 8601）として保存する。
+日単位の丸めは行わず、期限判定は瞬間同士の比較で行う（端末のタイムゾーン変更で off-by-one が起きない）。
+
 ```ts
 // ① 追記専用の回答ログ（真実の源）
 interface ReviewLog {
   id: string;
   cardId: string;
-  grade: "again" | "hard" | "good" | "easy";
+  sessionId?: string; // 復習セッションへの紐付け（任意）
+  grade: "again" | "hard" | "good" | "easy"; // 既存の QuizRating と同一の 4 値
   reviewedAt: ISODateString;
   durationMs?: number;
   scheduler: string; // 例: "fixed-interval@1"。算定方式の混在を後から検出できるようにする
@@ -62,7 +66,12 @@ IndexedDB のストア構成:
 | reviewLogs    | id      | cardId, reviewedAt       |
 | cardSchedules | cardId  | dueAt                    |
 
-design-doc 10 章の StudyCard ドラフトから `dueAt / intervalDays / ease / mistakes / lastReviewedAt` を分離・廃止し、上記 3 型に置き換える。
+既存実装（`src/core/domain/models.ts`）との関係を次のとおり定める。
+
+- **StudyCard**: 現行実装が持つ `dueAt / intervalDays / ease / mistakes / lastReviewedAt` を廃止し、スケジュール情報は CardSchedule に一本化する。
+- **QuizResult**: 廃止する。保持していた情報は ReviewLog が担う（`rating` → grade、`answeredAt` → reviewedAt、`elapsedMs` → durationMs。`wasCorrect` は「grade が again 以外」として導出できるため保存しない）。
+- **StudySession**: `results: QuizResult[]` を廃止し、セッションのメタデータ（id、startedAt、finishedAt、cardIds）に縮小する。セッションと回答の紐付けは ReviewLog.sessionId で行う。
+- 回答の保存は「ReviewLog の追記 + StudySession の更新」を同一トランザクションで行い、真実の源は常に ReviewLog とする。
 
 ## 3. スケジューラ
 
@@ -79,7 +88,7 @@ MVP 実装 `fixed-interval@1` の規則（**数値は暫定のチューニング
 - 学習ステップ: 未卒業カードは 1分 → 10分 → 卒業（interval 1 日）。easy は即卒業で interval 3 日。
 - 復習: again は lapses を +1 して 10 分後に再出題し、通過で interval 1 日から再開。hard は ×1.2（最低 +1 日）。good は ×2.0。easy は ×2.8。
 - 上限: interval 365 日。
-- dueAt は reviewedAt + interval で計算し、日単位に切り上げる。ランダムなゆらぎ（fuzz）は MVP では入れない。
+- dueAt は reviewedAt + intervalDays × 24 時間の UTC 瞬間演算で求める（日単位の丸めなし）。ランダムなゆらぎ（fuzz）は MVP では入れない。
 
 ## 4. 状態ラベルの導出規則
 
@@ -110,8 +119,25 @@ MVP 実装 `fixed-interval@1` の規則（**数値は暫定のチューニング
 design-doc 7.3 の JSON export に、studyCards と **reviewLogs を含める**。
 ログを含めることで、端末移行後も任意のスケジューラで状態を再構築できる。
 ファイルにはスキーマ version フィールドを持たせ、import 時に検証する。
+`StudyCard.id` と `ReviewLog.id` は `ReviewLog.cardId` と `CardSchedule.derivedFrom` の前提なので、export / import で**再採番せずそのまま往復させる**。import 時に同一 id が既存する場合は上書きとする。
+CardSchedule は export に含めない（import 後にログから再計算する）。
 
-## 8. FSRS 系への移行パス
+## 8. 既存実装からのデータ移行
+
+IndexedDB を次バージョンへ上げ、次の移行を一度に行う（[ADR 2026-07-06: IndexedDB storage version 1](../../adr/2026-07-06-indexeddb-storage-version-1.md) の後続）。
+
+1. `reviewLogs` と `cardSchedules` ストアを新設する（インデックスは 2 章の表）。
+2. `studyCards` ストアからスケジュール系フィールドを除去し、`by-due-at` インデックスを削除する。
+3. 既存 `studySessions.results`（QuizResult）を ReviewLog へ変換して投入する（scheduler には `"legacy-import"` を記録し、sessionId に元セッションの id を入れる）。変換後、results フィールドを除去する。
+4. 変換した ReviewLog から全カードの CardSchedule を再計算する。
+
+リポジトリ API への影響も明記する。
+
+- `listDueStudyCards` は「`cardSchedules` の dueAt インデックスを引き、得られた cardId で `studyCards` を結合する」実装に置き換える。
+- セッション保存 API は「ReviewLog の追記 + StudySession 更新」の同一トランザクション化に合わせて見直す。
+- export / import のスキーマ version を上げ、旧形式の import には変換を適用する。
+
+## 9. FSRS 系への移行パス
 
 1. 新スケジューラを `fsrs@1` として実装する（同じ純関数インターフェース）。
 2. 全カードについて履歴を replay して CardSchedule を再計算する。

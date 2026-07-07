@@ -34,7 +34,7 @@ Last updated: 2026-07-07
 正規化後の入力に対して、次の 2 部構成のみを受理する。
 
 ```text
-参照     := 法令名部 条番号部
+参照     := 法令名部 条番号部?
 条番号部 := 条 項? 号?
 条       := "第"? 数字列 "条"? 枝番*        // 709 / 709条 / 第709条 / 242条の2
 枝番     := "の" 数字列
@@ -92,6 +92,13 @@ interface LawReferenceCandidate {
 }
 ```
 
+article の文字列表現（枝番はハイフン区切り）は、既存 `src/core/domain/references.ts` の `buildLawArticleUrl` が URL の `:article` に使う表現と同一とする。
+Resolver の出力・URL・保存物のアンカーで article 表現を揃え、変換を挟まない。
+
+既存実装からの移行: 現行 `src/core/domain/models.ts` の `LawReferenceCandidate` は `score: number` を、`DetectedLawReference` は `confidence: number` を持つ。
+M4 の実装で `score` を `rank` に置き換え、`confidence` を削除する（`LawReferenceCandidate extends Partial<ArticleReference>` の構造は維持する）。
+利用箇所は未実装のため、この置き換えに実行時の互換問題はない。テストフィクスチャの移行は 7 章で扱う。
+
 将来 OCR（M5）で数値的な確信度が必要になった場合は、rank を保ったまま同ランク内の tiebreaker として数値を追加する（rank の 3 値は UI 契約として維持する）。
 
 ## 7. テストフィクスチャ計画
@@ -113,6 +120,9 @@ interface LawReferenceCandidate {
 
 受け入れ基準はフィクスチャ全件の一致とする。
 e-Gov フォールバックはフィクスチャではモック応答を使い、オフライン時はフォールバックが発火しないことも 1 件含める。
+
+既存フィクスチャからの移行: 現行の `lawReferences.ts` は `expected.confidenceFloor` を持つ単一パース結果の schema であり、本仕様の「先頭 3 候補 + rank」schema に**置き換える**（confidenceFloor は廃止）。
+現行フィクスチャに含まれる条番号部の漢数字ケース（`民法第七百九条の二` など）は本仕様では対象外のため、`deferred`（M5 の OCR 正規化で再検討）として別グループに移し、MVP の受け入れ対象から外す。
 
 ## 8. 対象外（明示）
 
