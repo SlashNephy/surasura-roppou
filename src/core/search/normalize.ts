@@ -26,6 +26,9 @@ export const normalizeForSearch = (text: string): NormalizedText => {
 
       // 補助面（サロゲートペア）の文字も UTF-16 単位ごとに 1 エントリ入れ、
       // sourceIndex.length === normalized.length を保つ。
+      // for-of は文字列をコードポイント単位で反復してサロゲートペアを 1 要素に
+      // 束ねてしまい、この UTF-16 単位のオフセット契約を壊すため添字ループを使う。
+      // eslint-disable-next-line @typescript-eslint/prefer-for-of
       for (let unitIndex = 0; unitIndex < character.length; unitIndex += 1) {
         characters.push(character[unitIndex]);
         sourceIndex.push(offset);
