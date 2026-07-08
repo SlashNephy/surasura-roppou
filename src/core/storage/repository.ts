@@ -333,6 +333,10 @@ export const openSurasuraDatabase = async (
       if (oldVersion < 1) {
         createVersion1Stores(database);
       }
+
+      if (oldVersion < 2) {
+        createVersion2Stores(database);
+      }
     },
     blocked() {
       return undefined;
@@ -391,6 +395,18 @@ const createVersion1Stores = (database: IDBPDatabase<SurasuraDatabase>) => {
   const ocrSessions = database.createObjectStore("ocrSessions", { keyPath: "id" });
   ocrSessions.createIndex("by-created-at", "createdAt");
   ocrSessions.createIndex("by-updated-at", "updatedAt");
+};
+
+const createVersion2Stores = (database: IDBPDatabase<SurasuraDatabase>) => {
+  const lawCatalog = database.createObjectStore("lawCatalog", { keyPath: "lawId" });
+  lawCatalog.createIndex("by-title", "title");
+  lawCatalog.createIndex("by-cached-at", "cachedAt");
+
+  const searchPostings = database.createObjectStore("searchPostings", {
+    keyPath: ["lawId", "bigram"],
+  });
+  searchPostings.createIndex("by-bigram", "bigram");
+  searchPostings.createIndex("by-law-id", "lawId");
 };
 
 const toOrderedNodes = (records: StoredLawNode[]): LawNode[] =>
