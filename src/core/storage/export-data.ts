@@ -20,6 +20,7 @@ export interface SavedDataExport {
   studySessions: StudySession[];
 }
 
+// listDueStudyCards は指定日時以前のカードを返すため、遠い未来の日時で全カードを取得する。
 const allDueStudyCardsDate = "9999-12-31T23:59:59.999Z";
 
 export const createSavedDataExport = async (
@@ -35,18 +36,25 @@ export const createSavedDataExport = async (
       repository.listDueStudyCards(allDueStudyCardsDate),
       repository.listStudySessions(),
     ]);
-  const savedLawDocuments = await Promise.all(
-    savedLawSummaries.map((savedLaw) => repository.getLawDocument(savedLaw.law.lawId)),
-  );
+  const savedLawDocuments: SavedLawDocument[] = [];
+  for (const savedLaw of savedLawSummaries) {
+    try {
+      const document = await repository.getLawDocument(savedLaw.law.lawId);
+
+      if (document !== undefined) {
+        savedLawDocuments.push(document);
+      }
+    } catch {
+      // 壊れた保存本文はスキップし、ブックマークなど他の利用者データを優先して出力する。
+    }
+  }
 
   return {
     annotations,
     bookmarks,
     collections,
     exportedAt,
-    savedLaws: savedLawDocuments.filter(
-      (document): document is SavedLawDocument => document !== undefined,
-    ),
+    savedLaws: savedLawDocuments,
     studyCards,
     studySessions,
     version: 1,

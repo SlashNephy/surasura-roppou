@@ -337,7 +337,7 @@ describe("LawViewerPageContent", () => {
     expect(within(article).getByRole("heading", { name: "第1条" })).toBeInTheDocument();
   });
 
-  it("copies an article in the selected purpose formats", async () => {
+  it("copies an article in the unified format from the article hover action", async () => {
     const clipboard = vi.fn<(text: string) => Promise<void>>(() => Promise.resolve());
     const { user } = renderLawViewerContentRoute("/laws/129AC0000000089/articles/1", {
       status: "ready",
@@ -345,38 +345,47 @@ describe("LawViewerPageContent", () => {
     });
 
     await withClipboard(clipboard, async () => {
-      await screen.findByRole("article", { name: "第一条" });
-      const contextPanel = screen.getByRole("complementary", { name: "学習コンテキスト" });
+      const article = await screen.findByRole("article", { name: "第一条" });
       const articleUrl = `${window.location.origin}/laws/129AC0000000089/articles/1`;
-      const originalText =
-        "第一条\u3000私権は、公共の福祉（公共の利益を含む。）に適合しなければならない。";
 
-      await user.click(within(contextPanel).getByRole("button", { name: "原文コピー" }));
-      expect(clipboard).toHaveBeenLastCalledWith(originalText);
+      await user.click(within(article).getByRole("button", { name: "第一条をコピー" }));
 
-      await user.click(within(contextPanel).getByRole("button", { name: "表示コピー" }));
-      expect(clipboard).toHaveBeenLastCalledWith(
-        "第1条 私権は、公共の福祉(公共の利益を含む。)に適合しなければならない。",
-      );
-
-      await user.click(within(contextPanel).getByRole("button", { name: "出典付きコピー" }));
       expect(clipboard).toHaveBeenLastCalledWith(
         [
-          originalText,
+          "第一条",
           "",
-          "出典: 民法 第一条（e-Gov 法令検索、取得日: 2026-07-05）",
+          "私権は、公共の福祉（公共の利益を含む。）に適合しなければならない。",
+          "",
           articleUrl,
         ].join("\n"),
       );
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    });
+  });
 
-      await user.click(within(contextPanel).getByRole("button", { name: "Markdownコピー" }));
-      expect(clipboard).toHaveBeenLastCalledWith(
-        [`> ${originalText}`, "", `[民法 第一条](${articleUrl})`].join("\n"),
-      );
+  it("does not show success notifications after article or URL copy", async () => {
+    const clipboard = vi.fn<(text: string) => Promise<void>>(() => Promise.resolve());
+    const { user } = renderLawViewerContentRoute("/laws/129AC0000000089/articles/1", {
+      status: "ready",
+      ...sampleLawViewerDocument,
+    });
 
-      await user.click(within(contextPanel).getByRole("button", { name: "URLコピー" }));
-      expect(clipboard).toHaveBeenLastCalledWith(articleUrl);
-      expect(screen.getByRole("status")).toHaveTextContent("共有URLをコピーしました。");
+    await withClipboard(clipboard, async () => {
+      const article = await screen.findByRole("article", { name: "第一条" });
+
+      await user.click(within(article).getByRole("button", { name: "第一条をコピー" }));
+
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+      await user.click(within(article).getByRole("button", { name: "第一条のURLコピー" }));
+
+      await waitFor(() => {
+        expect(screen.getByRole("article", { name: "第一条" })).toHaveAttribute(
+          "data-active",
+          "true",
+        );
+      });
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
     });
   });
 
@@ -387,10 +396,9 @@ describe("LawViewerPageContent", () => {
     });
 
     await withClipboard(undefined, async () => {
-      await screen.findByRole("article", { name: "第一条" });
-      const contextPanel = screen.getByRole("complementary", { name: "学習コンテキスト" });
+      const article = await screen.findByRole("article", { name: "第一条" });
 
-      await user.click(within(contextPanel).getByRole("button", { name: "URLコピー" }));
+      await user.click(within(article).getByRole("button", { name: "第一条をコピー" }));
 
       expect(screen.getByRole("alert")).toHaveTextContent("コピー機能を利用できません。");
     });
@@ -422,6 +430,30 @@ describe("LawViewerPageContent", () => {
 
     await waitFor(() => {
       expect(history.location.pathname).toBe("/laws/129AC0000000089/articles/2");
+    });
+  });
+
+  it("copies the article URL and selects the article from the inline URL action", async () => {
+    const clipboard = vi.fn<(text: string) => Promise<void>>(() => Promise.resolve());
+    const { history, user } = renderLawViewerRoute("/laws/129AC0000000089");
+
+    await withClipboard(clipboard, async () => {
+      await screen.findByRole("article", { name: "民法" });
+      const secondArticle = screen.getByRole("article", { name: "第二条" });
+
+      await user.click(within(secondArticle).getByRole("button", { name: "第二条のURLコピー" }));
+
+      await waitFor(() => {
+        expect(history.location.pathname).toBe("/laws/129AC0000000089/articles/2");
+        expect(screen.getByRole("article", { name: "第二条" })).toHaveAttribute(
+          "data-active",
+          "true",
+        );
+      });
+      expect(clipboard).toHaveBeenLastCalledWith(
+        `${window.location.origin}/laws/129AC0000000089/articles/2`,
+      );
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
     });
   });
 

@@ -89,7 +89,9 @@ describe("SavedPage", () => {
 
       expect(createObjectURL).toHaveBeenCalledOnce();
       expect(click).toHaveBeenCalledOnce();
-      expect(revokeObjectURL).toHaveBeenCalledWith("blob:saved-data");
+      await waitFor(() => {
+        expect(revokeObjectURL).toHaveBeenCalledWith("blob:saved-data");
+      });
 
       if (exportedBlob === undefined) {
         throw new Error("Expected export blob to be created");
@@ -110,6 +112,39 @@ describe("SavedPage", () => {
       expect(
         payload.savedLaws[0]?.nodes.some((node) => node.type === "Article" && node.number === "1"),
       ).toBe(true);
+    } finally {
+      click.mockRestore();
+    }
+  });
+
+  it("revokes the export object URL when the download click fails", async () => {
+    const storage = createMemoryStorageRepository({
+      savedLawDocument: createSavedLawDocument({
+        law: sampleLawViewerDocument.law,
+        revision: sampleLawViewerDocument.revision,
+        nodes: sampleLawViewerDocument.nodes,
+      }),
+    });
+    const user = userEvent.setup();
+    const createObjectURL = vi.fn<(blob: Blob) => string>(() => "blob:saved-data");
+    const revokeObjectURL = vi.fn<(url: string) => void>();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {
+      throw new Error("download blocked");
+    });
+
+    try {
+      await withObjectUrl(createObjectURL, revokeObjectURL, async () => {
+        renderSavedRoute("/saved", storage.repository);
+
+        await screen.findByRole("heading", { name: "保存リスト" });
+        await user.click(screen.getByRole("button", { name: "JSONをエクスポート" }));
+
+        expect(await screen.findByRole("alert")).toHaveTextContent("JSONを書き出せませんでした。");
+      });
+
+      await waitFor(() => {
+        expect(revokeObjectURL).toHaveBeenCalledWith("blob:saved-data");
+      });
     } finally {
       click.mockRestore();
     }

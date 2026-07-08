@@ -21,6 +21,9 @@ export const createMemoryStorageRepository = (
   getSavedDocument(): SavedLawDocument | undefined;
   getBookmarks(): Bookmark[];
   getCollections(): Collection[];
+  getAnnotations(): Annotation[];
+  getStudyCards(): StudyCard[];
+  getStudySessions(): StudySession[];
   repository: StorageRepository;
 } => {
   const options: MemoryStorageRepositoryOptions =
@@ -46,6 +49,15 @@ export const createMemoryStorageRepository = (
     },
     getCollections() {
       return collections;
+    },
+    getAnnotations() {
+      return annotations;
+    },
+    getStudyCards() {
+      return studyCards;
+    },
+    getStudySessions() {
+      return studySessions;
     },
     repository: {
       saveLawDocument(document) {

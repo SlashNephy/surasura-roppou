@@ -144,14 +144,20 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
         type: "application/json",
       });
       const url = URL.createObjectURL(blob);
+      const revokeObjectUrl = URL.revokeObjectURL.bind(URL);
       const link = document.createElement("a");
 
-      link.href = url;
-      link.download = `surasura-roppou-export-${exportedAt.slice(0, 10)}.json`;
-      document.body.append(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      try {
+        link.href = url;
+        link.download = `surasura-roppou-export-${exportedAt.slice(0, 10)}.json`;
+        document.body.append(link);
+        link.click();
+      } finally {
+        link.remove();
+        window.setTimeout(() => {
+          revokeObjectUrl(url);
+        }, 100);
+      }
       setExportMessage("JSONを書き出しました。");
     } catch {
       setExportError(
@@ -723,7 +729,12 @@ const PanelMessage = ({ children, role }: { children: string; role?: "status" })
 const EmptyState = ({ children }: { children: string }) => <PanelMessage>{children}</PanelMessage>;
 
 const StatusMessage = ({ children }: { children: string }) => (
-  <PanelMessage role="status">{children}</PanelMessage>
+  <p
+    role="status"
+    className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm leading-6 text-primary"
+  >
+    {children}
+  </p>
 );
 
 const ErrorMessage = ({ children }: { children: string }) => (

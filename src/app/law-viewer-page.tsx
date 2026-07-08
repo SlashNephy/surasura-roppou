@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { Clipboard, Download, LinkIcon, ListTree, Trash2 } from "lucide-react";
 
 import type { LawNode } from "@/core/domain";
+import { buildLawArticleUrl } from "@/core/domain";
 import type { LawRepository } from "@/core/egov";
 import { createSavedLawUseCase, createStorageRepository } from "@/core/storage";
 import type { StorageRepository } from "@/core/storage";
@@ -13,7 +14,7 @@ import {
   buildArticleCopyText,
   buildLawTableOfContents,
 } from "@/core/viewer";
-import type { ArticleCopyFormat, LawTextDisplayMode, LawTocItem } from "@/core/viewer";
+import type { LawTextDisplayMode, LawTocItem } from "@/core/viewer";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
@@ -159,7 +160,6 @@ const LawViewerReadyState = ({
   const [savedState, setSavedState] = useSavedViewerState(state);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | undefined>();
-  const [copyMessage, setCopyMessage] = useState<string | undefined>();
   const [copyError, setCopyError] = useState<string | undefined>();
   const [isMobileTocOpen, setIsMobileTocOpen] = useState(false);
   const [jumpArticleNumber, setJumpArticleNumber] = useState("");
@@ -179,10 +179,6 @@ const LawViewerReadyState = ({
   const isRouteArticleKnown =
     routeArticleNumber === undefined || articleNumbers.has(routeArticleNumber);
   const activeArticleNumber = isRouteArticleKnown ? routeArticleNumber : undefined;
-  const activeArticle = useMemo(
-    () => findArticleByNumber(state.nodes, activeArticleNumber),
-    [activeArticleNumber, state.nodes],
-  );
   const articleInputId = useId();
   const tocPanelId = "law-viewer-mobile-toc";
   const articleJumpErrorId = "article-jump-error";
@@ -190,22 +186,20 @@ const LawViewerReadyState = ({
   const hasArticleError = hasJumpError || !isRouteArticleKnown;
 
   useEffect(() => {
-    if (copyMessage === undefined && copyError === undefined) {
+    if (copyError === undefined) {
       return;
     }
 
     const timeoutId = window.setTimeout(() => {
-      setCopyMessage(undefined);
       setCopyError(undefined);
     }, 4000);
 
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [copyError, copyMessage]);
+  }, [copyError]);
 
-  const handleArticleCopy = async (article: LawNode, format: ArticleCopyFormat) => {
-    setCopyMessage(undefined);
+  const handleArticleCopy = async (article: LawNode) => {
     setCopyError(undefined);
 
     const clipboard = getClipboard();
@@ -220,14 +214,39 @@ const LawViewerReadyState = ({
         buildArticleCopyText({
           article,
           baseUrl: window.location.origin,
-          format,
           law: state.law,
-          revision: state.revision,
+          nodes: state.nodes,
         }),
       );
-      setCopyMessage(copyMessageByFormat[format]);
     } catch {
       setCopyError("コピー機能を利用できません。ブラウザの権限または接続方式を確認してください。");
+    }
+  };
+
+  const handleArticleUrlCopy = async (article: LawNode) => {
+    setCopyError(undefined);
+
+    const clipboard = getClipboard();
+    const url = new URL(
+      buildLawArticleUrl({
+        lawId: state.law.lawId,
+        ...(article.number === undefined ? {} : { article: article.number }),
+      }),
+      window.location.origin,
+    ).toString();
+
+    try {
+      if (clipboard === undefined) {
+        throw new Error("Clipboard unavailable");
+      }
+
+      await clipboard.writeText(url);
+    } catch {
+      setCopyError("コピー機能を利用できません。ブラウザの権限または接続方式を確認してください。");
+    } finally {
+      if (article.number !== undefined) {
+        navigateToArticle(article.number);
+      }
     }
   };
 
@@ -256,6 +275,7 @@ const LawViewerReadyState = ({
     void navigate({
       to: "/laws/$lawId/articles/$article",
       params: { lawId, article: articleNumber },
+      resetScroll: false,
     });
   };
 
@@ -456,15 +476,6 @@ const LawViewerReadyState = ({
             </p>
           ) : null}
 
-          {copyMessage !== undefined ? (
-            <p
-              role="status"
-              className="mb-4 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm leading-6 text-primary"
-            >
-              {copyMessage}
-            </p>
-          ) : null}
-
           {copyError !== undefined ? (
             <p
               role="alert"
@@ -507,8 +518,11 @@ const LawViewerReadyState = ({
             renderArticleActions={(article) => (
               <ArticleQuickActions
                 article={article}
-                onCopy={(copyTarget, format) => {
-                  void handleArticleCopy(copyTarget, format);
+                onCopy={(copyTarget) => {
+                  void handleArticleCopy(copyTarget);
+                }}
+                onUrlCopy={(copyTarget) => {
+                  void handleArticleUrlCopy(copyTarget);
                 }}
               />
             )}
@@ -531,19 +545,6 @@ const LawViewerReadyState = ({
               </section>
             ))}
             <div className="grid gap-2 border-t pt-3">
-              {activeArticle === undefined ? null : (
-                <section className="grid gap-2">
-                  <h2 className="text-xs font-medium tracking-widest text-muted-foreground">
-                    コピー
-                  </h2>
-                  <ArticleCopyActions
-                    article={activeArticle}
-                    onCopy={(article, format) => {
-                      void handleArticleCopy(article, format);
-                    }}
-                  />
-                </section>
-              )}
               <Button disabled type="button" className="w-full">
                 復習カードを作る（準備中）
               </Button>
@@ -572,83 +573,29 @@ const collectTocArticleNumbers = (items: LawTocItem[]): string[] =>
 const normalizeArticleNumberInput = (articleNumber: string): string =>
   articleNumber.normalize("NFKC").replace(/\s+/g, "");
 
-const findArticleByNumber = (
-  nodes: LawNode[],
-  articleNumber: string | undefined,
-): LawNode | undefined => {
-  if (articleNumber === undefined) {
-    return undefined;
-  }
-
-  return nodes.find((node) => node.type === "Article" && node.number === articleNumber);
-};
-
 const getClipboard = (): Pick<Clipboard, "writeText"> | undefined =>
   (navigator as Navigator & { clipboard?: Pick<Clipboard, "writeText"> }).clipboard;
-
-const copyMessageByFormat: Record<ArticleCopyFormat, string> = {
-  original: "原文をコピーしました。",
-  readable: "読みやすい表示をコピーしました。",
-  source: "出典付きコピーを作成しました。",
-  markdown: "Markdown引用をコピーしました。",
-  url: "共有URLをコピーしました。",
-};
-
-const articleCopyActions = [
-  { format: "original", icon: Clipboard, label: "原文コピー" },
-  { format: "readable", icon: Clipboard, label: "表示コピー" },
-  { format: "source", icon: Clipboard, label: "出典付きコピー" },
-  { format: "markdown", icon: Clipboard, label: "Markdownコピー" },
-  { format: "url", icon: LinkIcon, label: "URLコピー" },
-] as const satisfies readonly {
-  format: ArticleCopyFormat;
-  icon: typeof Clipboard;
-  label: string;
-}[];
-
-const ArticleCopyActions = ({
-  article,
-  onCopy,
-}: {
-  article: LawNode;
-  onCopy: (article: LawNode, format: ArticleCopyFormat) => void;
-}) => (
-  <div className="grid gap-2">
-    {articleCopyActions.map(({ format, icon: Icon, label }) => (
-      <Button
-        key={format}
-        className="h-8 justify-start gap-1.5 px-2 text-xs"
-        onClick={() => {
-          onCopy(article, format);
-        }}
-        type="button"
-        variant="outline"
-      >
-        <Icon className="size-3.5" aria-hidden="true" />
-        {label}
-      </Button>
-    ))}
-  </div>
-);
 
 const ArticleQuickActions = ({
   article,
   onCopy,
+  onUrlCopy,
 }: {
   article: LawNode;
-  onCopy: (article: LawNode, format: ArticleCopyFormat) => void;
+  onCopy: (article: LawNode) => void;
+  onUrlCopy: (article: LawNode) => void;
 }) => {
   const articleLabel = article.title ?? article.number ?? "条文";
 
   return (
     <>
       <Button
-        aria-label={`${articleLabel}を出典付きコピー`}
+        aria-label={`${articleLabel}をコピー`}
         className="size-7 p-0 text-muted-foreground opacity-100 transition-opacity lg:opacity-0 lg:group-hover:opacity-100 lg:focus-visible:opacity-100"
         onClick={() => {
-          onCopy(article, "source");
+          onCopy(article);
         }}
-        title="出典付きコピー"
+        title="コピー"
         type="button"
         variant="ghost"
       >
@@ -658,7 +605,7 @@ const ArticleQuickActions = ({
         aria-label={`${articleLabel}のURLコピー`}
         className="size-7 p-0 text-muted-foreground opacity-100 transition-opacity lg:opacity-0 lg:group-hover:opacity-100 lg:focus-visible:opacity-100"
         onClick={() => {
-          onCopy(article, "url");
+          onUrlCopy(article);
         }}
         title="URLコピー"
         type="button"

@@ -153,4 +153,114 @@ describe("createSavedDataExport", () => {
     });
     expect(repository.getLawDocument).toHaveBeenCalledWith(law.lawId);
   });
+
+  it("continues exporting user metadata when a saved law document fails to load", async () => {
+    const summary = {
+      law,
+      revision,
+      nodeCount: 1,
+      savedAt: "2026-07-06T00:00:00.000Z",
+      updatedAt: "2026-07-06T00:00:00.000Z",
+    } satisfies SavedLawSummary;
+    const repository = {
+      ...createMemoryStorageRepository({
+        annotations: [annotation],
+        bookmarks: [bookmark],
+        collections: [collection],
+        studyCards: [studyCard],
+        studySessions: [studySession],
+      }).repository,
+      getLawDocument: vi.fn<StorageRepository["getLawDocument"]>(() =>
+        Promise.reject(new Error("IndexedDB read failed")),
+      ),
+      listSavedLaws: vi.fn<StorageRepository["listSavedLaws"]>(() => Promise.resolve([summary])),
+    };
+
+    await expect(
+      createSavedDataExport(repository, "2026-07-07T00:00:00.000Z"),
+    ).resolves.toMatchObject({
+      annotations: [annotation],
+      bookmarks: [bookmark],
+      collections: [collection],
+      savedLaws: [],
+      studyCards: [studyCard],
+      studySessions: [studySession],
+      version: 1,
+    });
+    expect(repository.getLawDocument).toHaveBeenCalledWith(law.lawId);
+  });
+
+  it("loads saved law documents one at a time to limit export memory usage", async () => {
+    const secondLaw = {
+      ...law,
+      lawId: "322AC0000000049",
+      title: "刑法",
+    } satisfies Law;
+    const firstSummary = {
+      law,
+      revision,
+      nodeCount: 1,
+      savedAt: "2026-07-06T00:00:00.000Z",
+      updatedAt: "2026-07-06T00:00:00.000Z",
+    } satisfies SavedLawSummary;
+    const secondSummary = {
+      law: secondLaw,
+      revision: { ...revision, lawId: secondLaw.lawId },
+      nodeCount: 1,
+      savedAt: "2026-07-06T00:00:00.000Z",
+      updatedAt: "2026-07-06T00:00:00.000Z",
+    } satisfies SavedLawSummary;
+    let resolveFirstDocument: (
+      document: Awaited<ReturnType<StorageRepository["getLawDocument"]>>,
+    ) => void = () => undefined;
+    const firstDocument = new Promise<Awaited<ReturnType<StorageRepository["getLawDocument"]>>>(
+      (resolve) => {
+        resolveFirstDocument = resolve;
+      },
+    );
+    const repository = {
+      ...createMemoryStorageRepository().repository,
+      getLawDocument: vi.fn<StorageRepository["getLawDocument"]>((lawId) => {
+        if (lawId === law.lawId) {
+          return firstDocument;
+        }
+
+        return Promise.resolve(
+          createSavedLawDocument({
+            law: secondLaw,
+            nodes: [article],
+            revision: { ...revision, lawId: secondLaw.lawId },
+          }),
+        );
+      }),
+      listSavedLaws: vi.fn<StorageRepository["listSavedLaws"]>(() =>
+        Promise.resolve([firstSummary, secondSummary]),
+      ),
+    };
+
+    const exportPromise = createSavedDataExport(repository, "2026-07-07T00:00:00.000Z");
+
+    await vi.waitFor(() => {
+      expect(repository.getLawDocument).toHaveBeenCalled();
+    });
+    expect(repository.getLawDocument).toHaveBeenCalledTimes(1);
+    expect(repository.getLawDocument).toHaveBeenCalledWith(law.lawId);
+
+    resolveFirstDocument(
+      createSavedLawDocument({
+        law,
+        nodes: [article],
+        revision,
+      }),
+    );
+
+    const exported = await exportPromise;
+
+    expect(exported.savedLaws.map((savedLaw) => savedLaw.law.lawId)).toEqual([
+      law.lawId,
+      secondLaw.lawId,
+    ]);
+    expect(repository.getLawDocument).toHaveBeenCalledTimes(2);
+    expect(repository.getLawDocument).toHaveBeenLastCalledWith(secondLaw.lawId);
+  });
 });
