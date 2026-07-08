@@ -17,4 +17,4 @@ export type {
 } from "./repository";
 export type { SavedDataExport } from "./export-data";
 export type { SavedLawUseCase } from "./saved-law-use-case";
-export type { SavedLawRecord, SurasuraDatabase } from "./schema";
+export type { LawCatalogEntry, SavedLawRecord, SearchPosting, SurasuraDatabase } from "./schema";
