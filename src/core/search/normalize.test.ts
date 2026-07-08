@@ -10,6 +10,8 @@ describe("normalizeForSearch", () => {
     { name: "互換文字を分解して全文字を同じ由来に写す", input: "㍿", normalized: "株式会社", sourceIndex: [0, 0, 0, 0] },
     { name: "空文字は空を返す", input: "", normalized: "", sourceIndex: [] },
     { name: "空白のみは空を返す", input: "　\n ", normalized: "", sourceIndex: [] },
+    { name: "補助面の漢字も UTF-16 単位で対応づける", input: "𠮟る", normalized: "𠮟る", sourceIndex: [0, 0, 2] },
+    { name: "絵文字も UTF-16 単位で対応づける", input: "a😀b", normalized: "a😀b", sourceIndex: [0, 1, 1, 3] },
   ])("$name", ({ input, normalized, sourceIndex }) => {
     expect(normalizeForSearch(input)).toEqual({ normalized, sourceIndex });
   });
@@ -22,5 +24,10 @@ describe("normalizeForSearch", () => {
     const origEnd = sourceIndex[start + 2];
 
     expect(text.slice(origStart, origEnd)).toBe("秘密");
+  });
+
+  it("sourceIndex の長さは normalized の長さと一致する（補助面文字を含む）", () => {
+    const { normalized, sourceIndex } = normalizeForSearch("𠮟る😀法");
+    expect(sourceIndex).toHaveLength(normalized.length);
   });
 });
