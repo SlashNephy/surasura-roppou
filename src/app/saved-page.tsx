@@ -1,9 +1,10 @@
 import { type SyntheticEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
-import { Archive, FolderPlus, StickyNote, type LucideIcon } from "lucide-react";
+import { Archive, Download, FolderPlus, StickyNote, type LucideIcon } from "lucide-react";
 
 import type { Bookmark, Collection } from "@/core/domain";
 import {
+  createSavedDataExport,
   createSavedLawUseCase,
   createStorageRepository,
   type SavedLawSummary,
@@ -51,6 +52,9 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [error, setError] = useState<string | undefined>();
+  const [exportMessage, setExportMessage] = useState<string | undefined>();
+  const [exportError, setExportError] = useState<string | undefined>();
+  const [isExporting, setIsExporting] = useState(false);
   const savedLawUseCase = useMemo(
     () => createSavedLawUseCase(storageRepository),
     [storageRepository],
@@ -108,19 +112,91 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
       isCurrent = false;
     };
   }, [applySavedPageData, loadSavedPageData]);
+
+  useEffect(() => {
+    if (exportMessage === undefined && exportError === undefined) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setExportMessage(undefined);
+      setExportError(undefined);
+    }, 4000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [exportError, exportMessage]);
+
+  const handleExport = async () => {
+    if (isExporting) {
+      return;
+    }
+
+    setExportMessage(undefined);
+    setExportError(undefined);
+    setIsExporting(true);
+
+    try {
+      const exportedAt = new Date().toISOString();
+      const exportData = await createSavedDataExport(storageRepository, exportedAt);
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const revokeObjectUrl = URL.revokeObjectURL.bind(URL);
+      const link = document.createElement("a");
+
+      try {
+        link.href = url;
+        link.download = `surasura-roppou-export-${exportedAt.slice(0, 10)}.json`;
+        document.body.append(link);
+        link.click();
+      } finally {
+        link.remove();
+        window.setTimeout(() => {
+          revokeObjectUrl(url);
+        }, 100);
+      }
+      setExportMessage("JSONを書き出しました。");
+    } catch {
+      setExportError(
+        "JSONを書き出せませんでした。保存データを読み込める状態で再試行してください。",
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <section className="mx-auto grid w-full max-w-6xl gap-8 px-5 py-8 md:px-6">
-      <div className="grid gap-3">
-        <p className="text-sm font-medium text-primary">Saved</p>
-        <h1 className="text-3xl font-semibold tracking-normal text-foreground md:text-4xl">
-          保存リスト
-        </h1>
-        <p className="max-w-2xl text-base leading-7 text-muted-foreground">
-          保存した法令、メモ付きの条文、学習用コレクションをまとめて管理します。
-        </p>
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-4">
+        <div className="grid min-w-0 gap-3">
+          <p className="text-sm font-medium text-primary">Saved</p>
+          <h1 className="text-3xl font-semibold tracking-normal text-foreground md:text-4xl">
+            保存リスト
+          </h1>
+          <p className="max-w-2xl text-base leading-7 text-muted-foreground">
+            保存した法令、メモ付きの条文、学習用コレクションをまとめて管理します。
+          </p>
+        </div>
+        <Button
+          className="w-fit gap-2"
+          disabled={isExporting}
+          onClick={() => {
+            void handleExport();
+          }}
+          type="button"
+          variant="outline"
+        >
+          <Download className="size-4" aria-hidden="true" />
+          JSONをエクスポート
+        </Button>
       </div>
 
       {error === undefined ? null : <ErrorMessage>{error}</ErrorMessage>}
+      {exportMessage === undefined ? null : <StatusMessage>{exportMessage}</StatusMessage>}
+      {exportError === undefined ? null : <ErrorMessage>{exportError}</ErrorMessage>}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem] xl:items-start">
         <div className="grid gap-6">
@@ -653,7 +729,12 @@ const PanelMessage = ({ children, role }: { children: string; role?: "status" })
 const EmptyState = ({ children }: { children: string }) => <PanelMessage>{children}</PanelMessage>;
 
 const StatusMessage = ({ children }: { children: string }) => (
-  <PanelMessage role="status">{children}</PanelMessage>
+  <p
+    role="status"
+    className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm leading-6 text-primary"
+  >
+    {children}
+  </p>
 );
 
 const ErrorMessage = ({ children }: { children: string }) => (

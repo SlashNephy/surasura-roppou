@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import type { Law, LawNode, LawRevision } from "@/core/domain";
 import { Badge } from "@/shared/ui/badge";
 import { formatIsoDateLabel } from "@/shared/utils/dates";
@@ -13,11 +15,13 @@ interface LawDocumentViewProps {
   isSaved: boolean;
   activeArticleNumber?: string;
   displayMode?: LawTextDisplayMode;
+  renderArticleActions?: (article: LawNode) => ReactNode;
 }
 
 export const LawDocumentView = ({
   activeArticleNumber,
   displayMode = "readable",
+  renderArticleActions,
   law,
   revision,
   nodes,
@@ -60,6 +64,7 @@ export const LawDocumentView = ({
       activeArticleNumber={activeArticleNumber}
       displayMode={displayMode}
       nodes={nodes}
+      renderArticleActions={renderArticleActions}
     />
   </article>
 );

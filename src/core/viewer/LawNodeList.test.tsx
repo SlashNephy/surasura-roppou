@@ -149,6 +149,43 @@ describe("LawNodeList", () => {
     expect(screen.getByRole("heading", { name: "第1条" })).toBeInTheDocument();
   });
 
+  it("renders article actions only for URL-addressable article nodes", () => {
+    render(
+      <LawNodeList
+        nodes={[
+          node({
+            id: "article:1",
+            type: "Article",
+            path: "article:1",
+            number: "1",
+            title: "第一条",
+            plainText: "第一条 本文。",
+          }),
+          node({
+            id: "supplementary:1",
+            type: "SupplementaryProvision",
+            path: "supplementary-provision:1",
+            title: "附　則",
+            plainText: "附　則 第一条 附則の本文。",
+            children: ["supplementary:article:1"],
+          }),
+          node({
+            id: "supplementary:article:1",
+            type: "Article",
+            path: "supplementary-provision:1/article:1",
+            number: "1",
+            title: "第一条",
+            plainText: "第一条 附則の本文。",
+            parentId: "supplementary:1",
+          }),
+        ]}
+        renderArticleActions={(article) => <button type="button">copy {article.number}</button>}
+      />,
+    );
+
+    expect(screen.getAllByRole("button", { name: "copy 1" })).toHaveLength(1);
+  });
+
   it("renders original raw text when displayMode is original", () => {
     render(
       <LawNodeList

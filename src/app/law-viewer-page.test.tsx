@@ -9,7 +9,7 @@ import {
 } from "@tanstack/react-router";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createEgovLawRepository } from "@/core/egov";
 import type { LawDocument, LawListResult, LawMetadata, LawRepository } from "@/core/egov";
@@ -337,6 +337,73 @@ describe("LawViewerPageContent", () => {
     expect(within(article).getByRole("heading", { name: "第1条" })).toBeInTheDocument();
   });
 
+  it("copies an article in the unified format from the article hover action", async () => {
+    const clipboard = vi.fn<(text: string) => Promise<void>>(() => Promise.resolve());
+    const { user } = renderLawViewerContentRoute("/laws/129AC0000000089/articles/1", {
+      status: "ready",
+      ...sampleLawViewerDocument,
+    });
+
+    await withClipboard(clipboard, async () => {
+      const article = await screen.findByRole("article", { name: "第一条" });
+      const articleUrl = `${window.location.origin}/laws/129AC0000000089/articles/1`;
+
+      await user.click(within(article).getByRole("button", { name: "第一条をコピー" }));
+
+      expect(clipboard).toHaveBeenLastCalledWith(
+        [
+          "第一条",
+          "",
+          "私権は、公共の福祉（公共の利益を含む。）に適合しなければならない。",
+          "",
+          articleUrl,
+        ].join("\n"),
+      );
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    });
+  });
+
+  it("does not show success notifications after article or URL copy", async () => {
+    const clipboard = vi.fn<(text: string) => Promise<void>>(() => Promise.resolve());
+    const { user } = renderLawViewerContentRoute("/laws/129AC0000000089/articles/1", {
+      status: "ready",
+      ...sampleLawViewerDocument,
+    });
+
+    await withClipboard(clipboard, async () => {
+      const article = await screen.findByRole("article", { name: "第一条" });
+
+      await user.click(within(article).getByRole("button", { name: "第一条をコピー" }));
+
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+      await user.click(within(article).getByRole("button", { name: "第一条のURLコピー" }));
+
+      await waitFor(() => {
+        expect(screen.getByRole("article", { name: "第一条" })).toHaveAttribute(
+          "data-active",
+          "true",
+        );
+      });
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    });
+  });
+
+  it("shows a recoverable alert when clipboard is unavailable", async () => {
+    const { user } = renderLawViewerContentRoute("/laws/129AC0000000089/articles/1", {
+      status: "ready",
+      ...sampleLawViewerDocument,
+    });
+
+    await withClipboard(undefined, async () => {
+      const article = await screen.findByRole("article", { name: "第一条" });
+
+      await user.click(within(article).getByRole("button", { name: "第一条をコピー" }));
+
+      expect(screen.getByRole("alert")).toHaveTextContent("コピー機能を利用できません。");
+    });
+  });
+
   it("activates and scrolls to the article from the URL", async () => {
     renderLawViewerRoute("/laws/129AC0000000089/articles/1");
 
@@ -363,6 +430,30 @@ describe("LawViewerPageContent", () => {
 
     await waitFor(() => {
       expect(history.location.pathname).toBe("/laws/129AC0000000089/articles/2");
+    });
+  });
+
+  it("copies the article URL and selects the article from the inline URL action", async () => {
+    const clipboard = vi.fn<(text: string) => Promise<void>>(() => Promise.resolve());
+    const { history, user } = renderLawViewerRoute("/laws/129AC0000000089");
+
+    await withClipboard(clipboard, async () => {
+      await screen.findByRole("article", { name: "民法" });
+      const secondArticle = screen.getByRole("article", { name: "第二条" });
+
+      await user.click(within(secondArticle).getByRole("button", { name: "第二条のURLコピー" }));
+
+      await waitFor(() => {
+        expect(history.location.pathname).toBe("/laws/129AC0000000089/articles/2");
+        expect(screen.getByRole("article", { name: "第二条" })).toHaveAttribute(
+          "data-active",
+          "true",
+        );
+      });
+      expect(clipboard).toHaveBeenLastCalledWith(
+        `${window.location.origin}/laws/129AC0000000089/articles/2`,
+      );
+      expect(screen.queryByRole("status")).not.toBeInTheDocument();
     });
   });
 
@@ -523,3 +614,25 @@ describe("LawViewerPageContent", () => {
     expect(screen.getByText(/出典: e-Gov 法令検索/)).toBeInTheDocument();
   });
 });
+
+const withClipboard = async (
+  writeText: ((text: string) => Promise<void>) | undefined,
+  callback: () => Promise<void>,
+) => {
+  const originalDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: writeText === undefined ? undefined : { writeText },
+  });
+
+  try {
+    await callback();
+  } finally {
+    if (originalDescriptor === undefined) {
+      Reflect.deleteProperty(navigator, "clipboard");
+    } else {
+      Object.defineProperty(navigator, "clipboard", originalDescriptor);
+    }
+  }
+};

@@ -1,7 +1,9 @@
 import { type SyntheticEvent, useEffect, useId, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import { Download, ListTree, Trash2 } from "lucide-react";
+import { Clipboard, Download, LinkIcon, ListTree, Trash2 } from "lucide-react";
 
+import type { LawNode } from "@/core/domain";
+import { buildLawArticleUrl } from "@/core/domain";
 import type { LawRepository } from "@/core/egov";
 import { createSavedLawUseCase, createStorageRepository } from "@/core/storage";
 import type { StorageRepository } from "@/core/storage";
@@ -9,6 +11,7 @@ import {
   LawDocumentView,
   LawTableOfContents,
   articleAnchorId,
+  buildArticleCopyText,
   buildLawTableOfContents,
 } from "@/core/viewer";
 import type { LawTextDisplayMode, LawTocItem } from "@/core/viewer";
@@ -157,6 +160,7 @@ const LawViewerReadyState = ({
   const [savedState, setSavedState] = useSavedViewerState(state);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | undefined>();
+  const [copyError, setCopyError] = useState<string | undefined>();
   const [isMobileTocOpen, setIsMobileTocOpen] = useState(false);
   const [jumpArticleNumber, setJumpArticleNumber] = useState("");
   const [hasJumpError, setHasJumpError] = useState(false);
@@ -180,6 +184,71 @@ const LawViewerReadyState = ({
   const articleJumpErrorId = "article-jump-error";
   const saveErrorId = "offline-save-error";
   const hasArticleError = hasJumpError || !isRouteArticleKnown;
+
+  useEffect(() => {
+    if (copyError === undefined) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setCopyError(undefined);
+    }, 4000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [copyError]);
+
+  const handleArticleCopy = async (article: LawNode) => {
+    setCopyError(undefined);
+
+    const clipboard = getClipboard();
+
+    if (clipboard === undefined) {
+      setCopyError("コピー機能を利用できません。ブラウザの権限または接続方式を確認してください。");
+      return;
+    }
+
+    try {
+      await clipboard.writeText(
+        buildArticleCopyText({
+          article,
+          baseUrl: window.location.origin,
+          law: state.law,
+          nodes: state.nodes,
+        }),
+      );
+    } catch {
+      setCopyError("コピー機能を利用できません。ブラウザの権限または接続方式を確認してください。");
+    }
+  };
+
+  const handleArticleUrlCopy = async (article: LawNode) => {
+    setCopyError(undefined);
+
+    const clipboard = getClipboard();
+    const url = new URL(
+      buildLawArticleUrl({
+        lawId: state.law.lawId,
+        ...(article.number === undefined ? {} : { article: article.number }),
+      }),
+      window.location.origin,
+    ).toString();
+
+    try {
+      if (clipboard === undefined) {
+        throw new Error("Clipboard unavailable");
+      }
+
+      await clipboard.writeText(url);
+    } catch {
+      setCopyError("コピー機能を利用できません。ブラウザの権限または接続方式を確認してください。");
+    } finally {
+      if (article.number !== undefined) {
+        navigateToArticle(article.number);
+      }
+    }
+  };
 
   const scrollToArticle = (articleNumber: string) => {
     document
@@ -206,6 +275,7 @@ const LawViewerReadyState = ({
     void navigate({
       to: "/laws/$lawId/articles/$article",
       params: { lawId, article: articleNumber },
+      resetScroll: false,
     });
   };
 
@@ -406,6 +476,15 @@ const LawViewerReadyState = ({
             </p>
           ) : null}
 
+          {copyError !== undefined ? (
+            <p
+              role="alert"
+              className="mb-4 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-6 text-destructive"
+            >
+              {copyError}
+            </p>
+          ) : null}
+
           <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <span>{isOnline ? "オンライン" : "オフライン"}</span>
             {savedState.loadedFromStorage ? (
@@ -436,6 +515,17 @@ const LawViewerReadyState = ({
             isSaved={savedState.isSaved}
             law={state.law}
             nodes={state.nodes}
+            renderArticleActions={(article) => (
+              <ArticleQuickActions
+                article={article}
+                onCopy={(copyTarget) => {
+                  void handleArticleCopy(copyTarget);
+                }}
+                onUrlCopy={(copyTarget) => {
+                  void handleArticleUrlCopy(copyTarget);
+                }}
+              />
+            )}
             revision={state.revision}
           />
         </div>
@@ -482,6 +572,50 @@ const collectTocArticleNumbers = (items: LawTocItem[]): string[] =>
 
 const normalizeArticleNumberInput = (articleNumber: string): string =>
   articleNumber.normalize("NFKC").replace(/\s+/g, "");
+
+const getClipboard = (): Pick<Clipboard, "writeText"> | undefined =>
+  (navigator as Navigator & { clipboard?: Pick<Clipboard, "writeText"> }).clipboard;
+
+const ArticleQuickActions = ({
+  article,
+  onCopy,
+  onUrlCopy,
+}: {
+  article: LawNode;
+  onCopy: (article: LawNode) => void;
+  onUrlCopy: (article: LawNode) => void;
+}) => {
+  const articleLabel = article.title ?? article.number ?? "条文";
+
+  return (
+    <>
+      <Button
+        aria-label={`${articleLabel}をコピー`}
+        className="size-7 p-0 text-muted-foreground opacity-100 transition-opacity lg:opacity-0 lg:group-hover:opacity-100 lg:focus-visible:opacity-100"
+        onClick={() => {
+          onCopy(article);
+        }}
+        title="コピー"
+        type="button"
+        variant="ghost"
+      >
+        <Clipboard className="size-4" aria-hidden="true" />
+      </Button>
+      <Button
+        aria-label={`${articleLabel}のURLコピー`}
+        className="size-7 p-0 text-muted-foreground opacity-100 transition-opacity lg:opacity-0 lg:group-hover:opacity-100 lg:focus-visible:opacity-100"
+        onClick={() => {
+          onUrlCopy(article);
+        }}
+        title="URLコピー"
+        type="button"
+        variant="ghost"
+      >
+        <LinkIcon className="size-4" aria-hidden="true" />
+      </Button>
+    </>
+  );
+};
 
 const LawViewerLoadingState = () => (
   <section
