@@ -24,3 +24,4 @@ export {
   buildLawArticleUrl,
   parseArticleReferenceKey,
 } from "./references";
+export { computeArticleFingerprint } from "./article-fingerprint";
