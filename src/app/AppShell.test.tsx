@@ -81,7 +81,9 @@ describe("AppShell", () => {
       const sourceLink = screen.getByRole("link", { name: /e-Gov 法令検索/ });
       expect(sourceLink).toHaveAttribute("href", "https://laws.e-gov.go.jp");
       expect(
-        screen.getByText("本アプリは学習補助であり、法的助言を提供するものではありません"),
+        screen.getByText(
+          "本アプリは学習を目的としたもので、法的助言を提供するものではありません。",
+        ),
       ).toBeInTheDocument();
     });
   });

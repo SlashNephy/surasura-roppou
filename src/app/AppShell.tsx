@@ -90,17 +90,17 @@ const Footer = () => (
   <footer className="border-t bg-popover px-4 pt-4 pb-[calc(env(safe-area-inset-bottom)+5rem)] text-xs text-muted-foreground md:px-6 md:pb-4">
     <div className="mx-auto grid max-w-4xl gap-1">
       <p>
-        出典：
+        出典:{" "}
         <a
           href="https://laws.e-gov.go.jp"
           target="_blank"
           rel="noreferrer"
           className="rounded-sm underline underline-offset-4 outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
-          e-Gov 法令検索（https://laws.e-gov.go.jp）
+          e-Gov 法令検索 (https://laws.e-gov.go.jp)
         </a>
       </p>
-      <p>本アプリは学習補助であり、法的助言を提供するものではありません</p>
+      <p>本アプリは学習を目的としたもので、法的助言を提供するものではありません。</p>
     </div>
   </footer>
 );
