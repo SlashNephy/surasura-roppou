@@ -53,8 +53,8 @@ export const createCatalogSearchService = (
       if (options.online !== false) {
         try {
           const summaries = await fetchOnline(dependencies.lawRepository, trimmed, limit);
-          const entries = summaries.map((summary) => toCatalogEntry(summary, now));
-          await dependencies.indexRepository.upsertCatalogEntries(dedupeById(entries));
+          const entries = dedupeById(summaries.map((summary) => toCatalogEntry(summary, now)));
+          await dependencies.indexRepository.upsertCatalogEntries(entries);
           const hits = toHits(entries, trimmed);
 
           if (hits.length > 0) {
