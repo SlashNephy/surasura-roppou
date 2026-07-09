@@ -77,6 +77,15 @@ describe("createAliasResolver", () => {
     }
   });
 
+  it("組込辞書内では各表記が単一の lawId にのみ解決する（エントリ間のキー衝突が無い）", () => {
+    for (const entry of initialAliasDictionary) {
+      for (const surfaceForm of [entry.officialTitle, ...entry.aliases]) {
+        const lawIds = new Set(resolver.resolve(surfaceForm).map((candidate) => candidate.lawId));
+        expect(lawIds).toEqual(new Set([entry.lawId]));
+      }
+    }
+  });
+
   it("resolve の戻り値を変更しても内部インデックスに影響しない", () => {
     const first = resolver.resolve("国賠");
     first.pop();
