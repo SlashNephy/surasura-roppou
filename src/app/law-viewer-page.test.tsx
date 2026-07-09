@@ -598,7 +598,7 @@ describe("LawViewerPageContent", () => {
     expect(articleInput).not.toHaveAttribute("inputmode", "numeric");
   });
 
-  it("renders the study context panel and the source footer", async () => {
+  it("renders the study context panel", async () => {
     const history = createMemoryHistory({ initialEntries: ["/laws/129AC0000000089"] });
     const { fetcher } = createJsonFetchStub(lawDataFixture);
     const lawRepository = createEgovLawRepository({ fetcher, now });
@@ -611,7 +611,6 @@ describe("LawViewerPageContent", () => {
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "学習コンテキスト" })).toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "法令の目次" })).toBeInTheDocument();
-    expect(screen.getByText(/出典: e-Gov 法令検索/)).toBeInTheDocument();
   });
 });
 

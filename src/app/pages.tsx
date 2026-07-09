@@ -179,11 +179,6 @@ export const SettingsPage = () => (
         </div>
       </section>
     ))}
-    <p className="text-center text-xs text-muted-foreground">
-      すらすら六法 ・ 法令データ: e-Gov 法令検索
-      <br />
-      本アプリは学習補助であり、法的助言を提供するものではありません
-    </p>
   </section>
 );
 
