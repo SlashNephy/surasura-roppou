@@ -124,4 +124,42 @@ describe("FullTextSearchService", () => {
 
     await expect(service.search("秘")).resolves.toEqual([]);
   });
+
+  it("bigram 積集合では候補になっても、連続一致しない語は確定ステップで除外する（3 文字以上のクエリ）", async () => {
+    const service = await setup([
+      // L1 は "秘密" と "密法" の bigram をどちらも含むため、"秘密法"（bigram: 秘密, 密法）の
+      // 積集合には候補として残る。しかし本文中に "秘密法" は連続して現れないため、
+      // 確定ステップ（indexOf による連続一致の確認）で除外されるはずである。
+      buildDocument("L1", "テスト法", [article("L1", "L1-R", "1", "秘密。密法")]),
+      buildDocument("L2", "テスト法二", [article("L2", "L2-R", "1", "秘密法について")]),
+    ]);
+
+    const hits = await service.search("秘密法");
+
+    expect(hits.map((hit) => hit.lawId)).toEqual(["L2"]);
+  });
+
+  it("limit で結果件数を絞る", async () => {
+    const service = await setup([
+      buildDocument("L1", "法一", [article("L1", "L1-R", "1", "秘密を守る")]),
+      buildDocument("L2", "法二", [article("L2", "L2-R", "1", "秘密を守る")]),
+    ]);
+
+    const hits = await service.search("秘密", { limit: 1 });
+
+    expect(hits).toHaveLength(1);
+  });
+
+  it("スコアが同点のとき path 昇順で決定的に並べる", async () => {
+    const service = await setup([
+      buildDocument("L1", "法一", [
+        article("L1", "L1-R", "1", "秘密の条文一"),
+        article("L1", "L1-R", "2", "秘密の条文二"),
+      ]),
+    ]);
+
+    const hits = await service.search("秘密");
+
+    expect(hits.map((hit) => hit.path)).toEqual(["article:1", "article:2"]);
+  });
 });
