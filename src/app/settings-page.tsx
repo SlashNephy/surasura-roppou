@@ -55,9 +55,20 @@ export const SettingsPage = () => {
   const baseDateInputId = useId();
   const baseDateErrorId = useId();
   const [error, setError] = useState<string | undefined>();
+  // 入力欄はローカル状態でバッファする。範囲外など無効な値でもユーザーの入力を
+  // 保持し、有効な値のときだけグローバル state を更新する（値の巻き戻りを防ぐ）。
+  const [inputValue, setInputValue] = useState(baseDate ?? "");
+  // 別タブなど外部から基準日が変わったら入力欄を追従させる。effect での setState を
+  // 避けるため、前回同期した値と比較してレンダー中に同期する（React 公式の推奨形）。
+  const [syncedBaseDate, setSyncedBaseDate] = useState(baseDate);
+  if (baseDate !== syncedBaseDate) {
+    setSyncedBaseDate(baseDate);
+    setInputValue(baseDate ?? "");
+  }
 
   const handleBaseDateChange = (event: ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
+    setInputValue(value);
 
     if (value === "") {
       setBaseDate(undefined);
@@ -95,7 +106,7 @@ export const SettingsPage = () => {
               min={earliestBaseDate}
               onChange={handleBaseDateChange}
               type="date"
-              value={baseDate ?? ""}
+              value={inputValue}
             />
             <p className="text-xs text-muted-foreground">
               未設定のときは現行法（今日時点で施行）を表示します。

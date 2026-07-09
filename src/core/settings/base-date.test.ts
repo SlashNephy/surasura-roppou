@@ -42,6 +42,12 @@ describe("getBaseDate / setBaseDate", () => {
     expect(getBaseDate()).toBeUndefined();
   });
 
+  it("clears the base date when set to an empty string", () => {
+    setBaseDate("2020-06-01");
+    setBaseDate("");
+    expect(getBaseDate()).toBeUndefined();
+  });
+
   it("does not persist an invalid base date", () => {
     setBaseDate("2016-01-01");
     expect(getBaseDate()).toBeUndefined();
