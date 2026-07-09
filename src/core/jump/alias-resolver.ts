@@ -6,10 +6,12 @@ import { initialAliasDictionary, type AliasDictionaryEntry } from "./alias-dicti
 export type AliasMatchKind = "official" | "alias";
 
 export interface AliasCandidate {
-  lawId: string;
-  officialTitle: string;
-  matchedText: string; // 辞書に登録された、一致した表記（正規化前の原文）
-  matchKind: AliasMatchKind;
+  // resolve は配列を複製して返すが、要素オブジェクトは参照共有される。
+  // 各プロパティを readonly にして消費側の書き換えを型で封じ、不変性を確実にする。
+  readonly lawId: string;
+  readonly officialTitle: string;
+  readonly matchedText: string; // 辞書に登録された、一致した表記（正規化前の原文）
+  readonly matchKind: AliasMatchKind;
 }
 
 export interface AliasResolverOptions {
@@ -42,12 +44,12 @@ export const createAliasResolver = (options: AliasResolverOptions = {}): AliasRe
       return;
     }
 
-    // 同一 (lawId, matchKind, matchedText) の重複は無視する（ユーザー辞書が組込と被る場合）。
+    // 同一バケット（＝正規化キーが同一）内で lawId と matchKind が同じなら、
+    // 元表記（matchedText）が違っても消費側からは実質同じ候補なので重複とみなす。
+    // 例: 同一法令の別名「民訴」と「民 訴」は同じキー "民訴" に落ちるため 1 件に畳む。
     const duplicated = bucket.some(
       (existing) =>
-        existing.lawId === candidate.lawId &&
-        existing.matchKind === candidate.matchKind &&
-        existing.matchedText === candidate.matchedText,
+        existing.lawId === candidate.lawId && existing.matchKind === candidate.matchKind,
     );
 
     if (!duplicated) {

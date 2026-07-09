@@ -127,5 +127,24 @@ describe("createAliasResolver", () => {
         },
       ]);
     });
+
+    it("同一法令で正規化キーが同じ別名は 1 件に畳む", () => {
+      const variants: AliasDictionaryEntry = {
+        lawId: "USER0000000003",
+        officialTitle: "表記ゆれ法",
+        // 「架空略」と「架空 略」は空白除去で同じキー "架空略" に落ちる（組込辞書と非衝突）。
+        aliases: ["架空略", "架空 略"],
+      };
+      const withUser = createAliasResolver({ userEntries: [variants] });
+      // 先に登録した表記のみ残る（決定的）。
+      expect(withUser.resolve("架空 略")).toEqual([
+        {
+          lawId: "USER0000000003",
+          officialTitle: "表記ゆれ法",
+          matchedText: "架空略",
+          matchKind: "alias",
+        },
+      ]);
+    });
   });
 });
