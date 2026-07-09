@@ -1,11 +1,12 @@
 import "fake-indexeddb/auto";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Law, LawNode, LawRevision } from "@/core/domain";
 import { createMemoryStorageRepository } from "@/test/fixtures/storage";
 
 import { createStorageRepository, deleteSurasuraDatabase } from "./repository";
+import type { LawDocumentInput } from "./repository";
 import { createSavedLawUseCase } from "./saved-law-use-case";
 
 const openedDatabaseNames: string[] = [];
@@ -56,6 +57,29 @@ describe("createSavedLawUseCase", () => {
 
     await expect(useCase.save({ law, revision, nodes: [articleNode] })).rejects.toBe(error);
   });
+
+  it("save で保存後に indexer.indexLaw を呼ぶ", async () => {
+    const indexLaw = vi.fn<(document: LawDocumentInput) => Promise<void>>(() => Promise.resolve());
+    const removeLaw = vi.fn<(lawId: string) => Promise<void>>(() => Promise.resolve());
+    const { repository } = createMemoryStorageRepository();
+    const useCase = createSavedLawUseCase(repository, { indexer: { indexLaw, removeLaw } });
+    const document: LawDocumentInput = { law, revision, nodes };
+
+    await useCase.save(document);
+
+    expect(indexLaw).toHaveBeenCalledWith(document);
+  });
+
+  it("remove で削除後に indexer.removeLaw を呼ぶ", async () => {
+    const indexLaw = vi.fn<(document: LawDocumentInput) => Promise<void>>(() => Promise.resolve());
+    const removeLaw = vi.fn<(lawId: string) => Promise<void>>(() => Promise.resolve());
+    const { repository } = createMemoryStorageRepository();
+    const useCase = createSavedLawUseCase(repository, { indexer: { indexLaw, removeLaw } });
+
+    await useCase.remove("L1");
+
+    expect(removeLaw).toHaveBeenCalledWith("L1");
+  });
 });
 
 const createDatabaseName = (): string => {
@@ -92,3 +116,5 @@ const articleNode = {
   plainText: "第一条 私権は、公共の福祉に適合しなければならない。",
   children: [],
 } satisfies LawNode;
+
+const nodes = [articleNode];

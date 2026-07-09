@@ -8,9 +8,24 @@ export interface SavedLawUseCase {
   remove(lawId: string): Promise<void>;
 }
 
-export const createSavedLawUseCase = (repository: StorageRepository): SavedLawUseCase => ({
-  save(document) {
-    return repository.saveLawDocument(document);
+// 保存・削除後に検索索引を更新するための最小フック。
+// core/search の SearchIndexer が構造的にこれを満たす（storage は search を import しない）。
+export interface LawIndexHook {
+  indexLaw(document: LawDocumentInput): Promise<void>;
+  removeLaw(lawId: string): Promise<void>;
+}
+
+export interface SavedLawUseCaseOptions {
+  indexer?: LawIndexHook;
+}
+
+export const createSavedLawUseCase = (
+  repository: StorageRepository,
+  options: SavedLawUseCaseOptions = {},
+): SavedLawUseCase => ({
+  async save(document) {
+    await repository.saveLawDocument(document);
+    await options.indexer?.indexLaw(document);
   },
   get(lawId) {
     return repository.getLawDocument(lawId);
@@ -18,7 +33,8 @@ export const createSavedLawUseCase = (repository: StorageRepository): SavedLawUs
   list() {
     return repository.listSavedLaws();
   },
-  remove(lawId) {
-    return repository.deleteLawDocument(lawId);
+  async remove(lawId) {
+    await repository.deleteLawDocument(lawId);
+    await options.indexer?.removeLaw(lawId);
   },
 });
