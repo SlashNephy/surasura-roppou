@@ -22,23 +22,25 @@
 
 ## File Structure
 
-| ファイル                                     | 責務                                                          |
-| -------------------------------------------- | ------------------------------------------------------------- |
-| `src/core/jump/alias-dictionary.ts`          | `AliasDictionaryEntry` 型と静的 `initialAliasDictionary`      |
-| `src/core/jump/alias-dictionary.test.ts`     | 初期データの整合（lawId/officialTitle 一意・alias 健全性）    |
-| `src/core/jump/alias-resolver.ts`            | `createAliasResolver` / 候補型 / 逆引き照合ロジック           |
-| `src/core/jump/alias-resolver.test.ts`       | 照合・正規化・正式名称・未知語・ユーザー辞書・曖昧性の振る舞い |
-| `src/core/jump/index.ts`                      | 公開 API のバレル                                             |
+| ファイル                                 | 責務                                                           |
+| ---------------------------------------- | -------------------------------------------------------------- |
+| `src/core/jump/alias-dictionary.ts`      | `AliasDictionaryEntry` 型と静的 `initialAliasDictionary`       |
+| `src/core/jump/alias-dictionary.test.ts` | 初期データの整合（lawId/officialTitle 一意・alias 健全性）     |
+| `src/core/jump/alias-resolver.ts`        | `createAliasResolver` / 候補型 / 逆引き照合ロジック            |
+| `src/core/jump/alias-resolver.test.ts`   | 照合・正規化・正式名称・未知語・ユーザー辞書・曖昧性の振る舞い |
+| `src/core/jump/index.ts`                 | 公開 API のバレル                                              |
 
 ---
 
 ### Task 1: 辞書データと整合テスト（`alias-dictionary.ts`）
 
 **Files:**
+
 - Create: `src/core/jump/alias-dictionary.ts`
 - Test: `src/core/jump/alias-dictionary.test.ts`
 
 **Interfaces:**
+
 - Consumes: なし
 - Produces:
   - `interface AliasDictionaryEntry { lawId: string; officialTitle: string; aliases: string[] }`
@@ -152,11 +154,13 @@ EOF
 ### Task 2: Resolver とバレル（`alias-resolver.ts` / `index.ts`）
 
 **Files:**
+
 - Create: `src/core/jump/alias-resolver.ts`
 - Create: `src/core/jump/index.ts`
 - Test: `src/core/jump/alias-resolver.test.ts`
 
 **Interfaces:**
+
 - Consumes:
   - `initialAliasDictionary`, `AliasDictionaryEntry`（Task 1）
   - `normalizeForSearch(text: string): { normalized: string; sourceIndex: number[] }`（`@/core/search`）
@@ -182,10 +186,20 @@ describe("createAliasResolver", () => {
 
   it.each([
     { name: "略称 国賠", input: "国賠", lawId: "322AC0000000125", officialTitle: "国家賠償法" },
-    { name: "公式略称 行服法", input: "行服法", lawId: "426AC0000000068", officialTitle: "行政不服審査法" },
+    {
+      name: "公式略称 行服法",
+      input: "行服法",
+      lawId: "426AC0000000068",
+      officialTitle: "行政不服審査法",
+    },
     { name: "単字 民", input: "民", lawId: "129AC0000000089", officialTitle: "民法" },
     { name: "単字 憲", input: "憲", lawId: "321CONSTITUTION", officialTitle: "日本国憲法" },
-    { name: "個情法", input: "個情法", lawId: "415AC0000000057", officialTitle: "個人情報の保護に関する法律" },
+    {
+      name: "個情法",
+      input: "個情法",
+      lawId: "415AC0000000057",
+      officialTitle: "個人情報の保護に関する法律",
+    },
   ])("略称 $name を kind alias で解決する", ({ input, lawId, officialTitle }) => {
     expect(resolver.resolve(input)).toEqual([
       { lawId, officialTitle, matchedText: input, matchKind: "alias" },
@@ -428,6 +442,7 @@ EOF
 ## Self-Review
 
 **Spec coverage:**
+
 - 略称辞書 schema 定義 → Task 1（`AliasDictionaryEntry`）。
 - 初期対象決定・略称登録（国賠/国賠法、行手/行審/行訴法、地自法/民/憲 ほか）→ Task 1（`initialAliasDictionary`、spec 6 の表を網羅）。
 - official title と lawId の紐づけ → Task 1（各エントリが両者を保持）。
