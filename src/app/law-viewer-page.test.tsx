@@ -7,12 +7,13 @@ import {
   createRouter,
   useParams,
 } from "@tanstack/react-router";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createEgovLawRepository } from "@/core/egov";
 import type { LawDocument, LawListResult, LawMetadata, LawRepository } from "@/core/egov";
+import { setBaseDate } from "@/core/settings";
 import { createJsonFetchStub, fixedTestNow as now, lawDataFixture } from "@/test/fixtures/egov";
 import { createMemoryStorageRepository, createSavedLawDocument } from "@/test/fixtures/storage";
 import { setupScrollMocks } from "@/test/scrollMocks";
@@ -23,6 +24,10 @@ import { createAppRouter } from "./router";
 import type { LawViewerState } from "./law-viewer-page";
 
 const scrollMocks = setupScrollMocks();
+
+afterEach(() => {
+  localStorage.clear();
+});
 
 const createFixtureRepository = () => {
   const { calls, fetcher } = createJsonFetchStub(lawDataFixture);
@@ -611,6 +616,92 @@ describe("LawViewerPageContent", () => {
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "学習コンテキスト" })).toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "法令の目次" })).toBeInTheDocument();
+  });
+
+  it("shows the current-law base date label when no base date is set", async () => {
+    renderLawViewerContentRoute("/laws/129AC0000000089/articles/1", {
+      status: "ready",
+      ...sampleLawViewerDocument,
+    });
+
+    // ルーターの初回マッチ解決は非同期のため、本文が描画されるまで待ってから検証する。
+    expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+    expect(screen.getAllByText(/基準日 未設定（現行法）/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/施行日 2026-06-24/).length).toBeGreaterThan(0);
+  });
+
+  it("shows the resolved base date when one is requested", async () => {
+    renderLawViewerContentRoute("/laws/129AC0000000089/articles/1", {
+      status: "ready",
+      ...sampleLawViewerDocument,
+      requestedAsOf: "2020-06-01",
+    });
+
+    expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+    expect(screen.getAllByText(/基準日 2020-06-01/).length).toBeGreaterThan(0);
+  });
+
+  it("notes that the base date is not applied to an offline saved body", async () => {
+    renderLawViewerContentRoute("/laws/129AC0000000089/articles/1", {
+      status: "ready",
+      ...sampleLawViewerDocument,
+      loadedFromStorage: true,
+      requestedAsOf: "2020-06-01",
+    });
+
+    expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+    expect(screen.getByText(/保存版を表示中のため基準日は未反映/)).toBeInTheDocument();
+  });
+
+  it("shows the effective date label as unknown when effectiveDate is an empty string", async () => {
+    renderLawViewerContentRoute("/laws/129AC0000000089/articles/1", {
+      status: "ready",
+      ...sampleLawViewerDocument,
+      revision: { ...sampleLawViewerDocument.revision, effectiveDate: "" },
+    });
+
+    // ルーターの初回マッチ解決は非同期のため、本文が描画されるまで待ってから検証する。
+    expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+    expect(screen.getAllByText(/施行日 不明/).length).toBeGreaterThan(0);
+  });
+
+  it("re-resolves the displayed revision when the base date changes", async () => {
+    const currentDocument = {
+      law: sampleLawViewerDocument.law,
+      revision: { ...sampleLawViewerDocument.revision, effectiveDate: "2026-06-24" },
+      nodes: sampleLawViewerDocument.nodes,
+      raw: {},
+    } satisfies LawDocument;
+    const olderDocument = {
+      law: sampleLawViewerDocument.law,
+      revision: {
+        ...sampleLawViewerDocument.revision,
+        revisionId: "129AC0000000089_20200401_501AC0000000034",
+        effectiveDate: "2020-04-01",
+      },
+      nodes: sampleLawViewerDocument.nodes,
+      raw: {},
+    } satisfies LawDocument;
+    const repository = {
+      listLaws: (): Promise<LawListResult> => Promise.reject(new Error("Not used in this test")),
+      getLaw: (_lawId: string, query?: { asOf?: string }): Promise<LawDocument> =>
+        Promise.resolve(query?.asOf === "2020-06-01" ? olderDocument : currentDocument),
+      getLawMetadata: (): Promise<LawMetadata> =>
+        Promise.reject(new Error("Not used in this test")),
+    } satisfies LawRepository;
+
+    renderLawViewerRoute("/laws/129AC0000000089", repository);
+
+    expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+    expect(screen.getAllByText(/施行日 2026-06-24/).length).toBeGreaterThan(0);
+
+    act(() => {
+      setBaseDate("2020-06-01");
+    });
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/施行日 2020-04-01/).length).toBeGreaterThan(0);
+    });
   });
 });
 

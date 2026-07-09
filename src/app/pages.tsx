@@ -124,63 +124,6 @@ export const StudyPage = () => (
   </section>
 );
 
-interface SettingsRow {
-  label: string;
-  value: string;
-}
-
-interface SettingsGroup {
-  heading: string;
-  rows: SettingsRow[];
-}
-
-const settingsGroups: SettingsGroup[] = [
-  {
-    heading: "表示",
-    rows: [
-      { label: "文字サイズ", value: "標準" },
-      { label: "行間", value: "ゆったり" },
-      { label: "テーマ", value: "自動" },
-      { label: "既定の表示", value: "読みやすい表示" },
-    ],
-  },
-  {
-    heading: "学習",
-    rows: [
-      { label: "学習年度の基準日", value: "未設定" },
-      { label: "科目プリセット", value: "未設定" },
-    ],
-  },
-  {
-    heading: "データ",
-    rows: [
-      { label: "オフライン保存の管理", value: "準備中" },
-      { label: "エクスポート / インポート", value: "準備中" },
-      { label: "ときどき六法と連携", value: "未接続" },
-    ],
-  },
-];
-
-export const SettingsPage = () => (
-  <section className="mx-auto grid w-full max-w-2xl gap-6 px-5 py-10">
-    <h1 className="font-serif text-2xl font-semibold text-foreground">設定</h1>
-    {settingsGroups.map((group) => (
-      <section key={group.heading} className="grid gap-2">
-        <h2 className="text-xs font-medium tracking-widest text-muted-foreground">
-          {group.heading}
-        </h2>
-        <div className="divide-y rounded-md border bg-card">
-          {group.rows.map((row) => (
-            <div key={row.label} className="flex items-center justify-between px-4 py-3 text-sm">
-              <span className="text-foreground">{row.label}</span>
-              <span className="text-muted-foreground">{row.value}</span>
-            </div>
-          ))}
-        </div>
-      </section>
-    ))}
-  </section>
-);
-
 export { HomePage } from "./home-page";
 export { LawViewerPage } from "./law-viewer-page";
+export { SettingsPage } from "./settings-page";

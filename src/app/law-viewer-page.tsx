@@ -2,9 +2,10 @@ import { type SyntheticEvent, useEffect, useId, useMemo, useState } from "react"
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { Clipboard, Download, LinkIcon, ListTree, Trash2 } from "lucide-react";
 
-import type { LawNode } from "@/core/domain";
+import type { LawNode, LawRevision } from "@/core/domain";
 import { buildLawArticleUrl } from "@/core/domain";
 import type { LawRepository } from "@/core/egov";
+import { resolveAsOf } from "@/core/settings";
 import { createSavedLawUseCase, createStorageRepository } from "@/core/storage";
 import type { StorageRepository } from "@/core/storage";
 import {
@@ -19,10 +20,12 @@ import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Skeleton } from "@/shared/ui/skeleton";
+import { formatIsoDateLabel } from "@/shared/utils/dates";
 
 import { loadLawViewerDocument } from "./law-viewer-loader";
 import { useOnlineStatus, useSavedViewerState } from "./law-viewer-hooks";
 import type { LawViewerDocument } from "./law-viewer-sample";
+import { useBaseDate } from "./use-base-date";
 
 const defaultStorageRepository = createStorageRepository();
 
@@ -55,11 +58,14 @@ export const LawViewerPage = ({
   storageRepository = defaultStorageRepository,
 }: LawViewerPageProps = {}) => {
   const { article, lawId } = useLawViewerParams();
+  const { baseDate } = useBaseDate();
+  const asOf = resolveAsOf(baseDate);
 
   return (
     <LawViewerPageLoader
       key={lawId}
       activeArticleNumber={article}
+      asOf={asOf}
       lawId={lawId}
       repository={repository}
       storageRepository={storageRepository}
@@ -69,11 +75,13 @@ export const LawViewerPage = ({
 
 const LawViewerPageLoader = ({
   activeArticleNumber,
+  asOf,
   lawId,
   repository,
   storageRepository,
 }: {
   activeArticleNumber?: string;
+  asOf?: string;
   lawId: string;
   repository?: LawRepository;
   storageRepository: StorageRepository;
@@ -83,7 +91,7 @@ const LawViewerPageLoader = ({
   useEffect(() => {
     let isCurrent = true;
 
-    void loadLawViewerDocument(lawId, repository, storageRepository).then((nextState) => {
+    void loadLawViewerDocument(lawId, repository, storageRepository, asOf).then((nextState) => {
       if (isCurrent) {
         setState(nextState);
       }
@@ -92,7 +100,7 @@ const LawViewerPageLoader = ({
     return () => {
       isCurrent = false;
     };
-  }, [lawId, repository, storageRepository]);
+  }, [asOf, lawId, repository, storageRepository]);
 
   return (
     <LawViewerPageContent
@@ -462,6 +470,17 @@ const LawViewerReadyState = ({
               </Button>
             </div>
 
+            <div aria-label="基準日情報" className="grid min-w-0 gap-1 md:w-full" role="group">
+              <span className="text-sm font-medium text-foreground">基準日</span>
+              <p className="text-sm text-muted-foreground">
+                基準日 {formatBaseDateLabel(state)} ・ 施行日{" "}
+                {formatEffectiveDateLabel(state.revision)}{" "}
+                <Link className="text-primary underline-offset-4 hover:underline" to="/settings">
+                  設定で変更
+                </Link>
+              </p>
+            </div>
+
             {hasArticleError ? <div className="md:w-full">{notFoundAlert}</div> : null}
           </div>
 
@@ -527,6 +546,14 @@ const LawViewerReadyState = ({
             )}
             revision={state.revision}
           />
+
+          <p className="mt-6 border-t pt-4 text-xs leading-5 text-muted-foreground">
+            基準日 {formatBaseDateLabel(state)} ・ 施行日 {formatEffectiveDateLabel(state.revision)}{" "}
+            ・ 取得日時 {formatIsoDateLabel(state.revision.fetchedAt)}
+            {state.loadedFromStorage && state.requestedAsOf !== undefined
+              ? "（保存版を表示中のため基準日は未反映）"
+              : ""}
+          </p>
         </div>
 
         <aside aria-label="学習コンテキスト" className="hidden border-l bg-muted/40 lg:block">
@@ -563,6 +590,14 @@ const collectTocArticleNumbers = (items: LawTocItem[]): string[] =>
     ...(item.articleNumber === undefined ? [] : [item.articleNumber]),
     ...collectTocArticleNumbers(item.children),
   ]);
+
+// 表示に使った基準日のラベル。未設定なら現行法である旨を示す。
+const formatBaseDateLabel = (state: Extract<LawViewerState, { status: "ready" }>): string =>
+  state.requestedAsOf ?? "未設定（現行法）";
+
+// 解決版の施行日ラベル。未施行版など施行日が無い場合は「不明」にする。
+const formatEffectiveDateLabel = (revision: LawRevision): string =>
+  !revision.effectiveDate ? "不明" : `${revision.effectiveDate} 版`;
 
 const normalizeArticleNumberInput = (articleNumber: string): string =>
   articleNumber.normalize("NFKC").replace(/\s+/g, "");

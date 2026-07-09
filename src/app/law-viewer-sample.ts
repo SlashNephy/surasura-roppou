@@ -8,6 +8,7 @@ export interface LawViewerDocument {
   isSaved: boolean;
   loadedFromStorage: boolean;
   savedAt?: ISODateString;
+  requestedAsOf?: string;
 }
 
 export const sampleLawViewerLawId = "129AC0000000089";

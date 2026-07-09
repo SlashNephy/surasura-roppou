@@ -13,6 +13,7 @@ export const loadLawViewerDocument = async (
   lawId: string,
   repository: LawRepository = defaultLawViewerRepository,
   storageRepository: StorageRepository = defaultStorageRepository,
+  asOf?: string,
 ): Promise<LawViewerState> => {
   if (lawId.trim() === "") {
     return { status: "error", message: "法令が見つかりません。" };
@@ -25,7 +26,7 @@ export const loadLawViewerDocument = async (
   const savedDocument = await getSavedDocument(storageRepository, lawId);
 
   try {
-    const document = await repository.getLaw(lawId);
+    const document = await repository.getLaw(lawId, asOf === undefined ? {} : { asOf });
 
     return {
       status: "ready",
@@ -34,6 +35,7 @@ export const loadLawViewerDocument = async (
       nodes: document.nodes,
       isSaved: savedDocument !== undefined,
       loadedFromStorage: false,
+      requestedAsOf: asOf,
       savedAt: savedDocument?.savedAt,
     };
   } catch (error) {
@@ -46,7 +48,16 @@ export const loadLawViewerDocument = async (
           nodes: savedDocument.nodes,
           isSaved: true,
           loadedFromStorage: true,
+          requestedAsOf: asOf,
           savedAt: savedDocument.savedAt,
+        };
+      }
+
+      // 基準日を指定していて版が無い場合（e-Gov は 400 を返す）は、原因が分かる文言にする。
+      if (asOf !== undefined && error instanceof EgovApiError && error.status === 400) {
+        return {
+          status: "error",
+          message: "指定した基準日にはこの法令の版が見つかりません。基準日を変更してください。",
         };
       }
 
