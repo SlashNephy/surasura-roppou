@@ -95,7 +95,7 @@ const Footer = () => (
           href="https://laws.e-gov.go.jp"
           target="_blank"
           rel="noreferrer"
-          className="underline underline-offset-4 hover:text-foreground"
+          className="rounded-sm underline underline-offset-4 outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           e-Gov 法令検索（https://laws.e-gov.go.jp）
         </a>
