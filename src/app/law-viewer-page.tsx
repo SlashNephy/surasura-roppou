@@ -661,4 +661,3 @@ const LawViewerOfflineState = ({ lawTitle }: { lawTitle: string }) => (
     </Button>
   </section>
 );
-
