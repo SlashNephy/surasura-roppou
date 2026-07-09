@@ -19,7 +19,6 @@ import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Skeleton } from "@/shared/ui/skeleton";
-import { formatIsoDateLabel } from "@/shared/utils/dates";
 
 import { loadLawViewerDocument } from "./law-viewer-loader";
 import { useOnlineStatus, useSavedViewerState } from "./law-viewer-hooks";
@@ -555,11 +554,6 @@ const LawViewerReadyState = ({
           </div>
         </aside>
       </section>
-
-      <footer className="border-t bg-popover px-4 py-2 text-xs text-muted-foreground md:px-6">
-        出典: e-Gov 法令検索 ・ 取得 {getDisplaySourceDate(state.revision.fetchedAt)} ・
-        読みやすい表示は原文に表示上の加工を含みます（「原文表示」で確認できます）
-      </footer>
     </>
   );
 };
@@ -668,4 +662,3 @@ const LawViewerOfflineState = ({ lawTitle }: { lawTitle: string }) => (
   </section>
 );
 
-const getDisplaySourceDate = (fetchedAt: string): string => formatIsoDateLabel(fetchedAt);
