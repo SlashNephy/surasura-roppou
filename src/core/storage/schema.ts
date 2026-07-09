@@ -14,7 +14,7 @@ import type {
 } from "@/core/domain";
 
 export const surasuraDatabaseName = "surasura-roppou";
-export const surasuraDatabaseVersion = 1;
+export const surasuraDatabaseVersion = 2;
 
 export interface SavedLawRecord {
   lawId: string;
@@ -35,6 +35,23 @@ export interface StoredLawNode {
 export interface TargetIndexes {
   lawId: string;
   targetKey: string;
+}
+
+// version 2: オンライン取得した法令メタデータのキャッシュ（名前・番号・略称検索の対象）
+export interface LawCatalogEntry {
+  lawId: string;
+  title: string;
+  lawNumber?: string;
+  lawType?: string;
+  aliases: string[];
+  cachedAt: ISODateString;
+}
+
+// version 2: 保存済み本文の Bigram 転置インデックス。法令ごとに独立キーで持つ。
+export interface SearchPosting {
+  lawId: string;
+  bigram: string;
+  nodeIds: string[];
 }
 
 export interface SurasuraDatabase extends DBSchema {
@@ -117,6 +134,22 @@ export interface SurasuraDatabase extends DBSchema {
     indexes: {
       "by-created-at": string;
       "by-updated-at": string;
+    };
+  };
+  lawCatalog: {
+    key: string;
+    value: LawCatalogEntry;
+    indexes: {
+      "by-title": string;
+      "by-cached-at": string;
+    };
+  };
+  searchPostings: {
+    key: [string, string];
+    value: SearchPosting;
+    indexes: {
+      "by-bigram": string;
+      "by-law-id": string;
     };
   };
 }

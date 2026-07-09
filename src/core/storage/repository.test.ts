@@ -247,8 +247,8 @@ describe("StorageRepository", () => {
     }
   });
 
-  it("exposes schema version 1 for the first offline storage migration", () => {
-    expect(surasuraDatabaseVersion).toBe(1);
+  it("exposes schema version 2 for the search index migration", () => {
+    expect(surasuraDatabaseVersion).toBe(2);
   });
 
   it("closes the cached connection and can reopen on later operations", async () => {
