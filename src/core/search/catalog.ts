@@ -79,11 +79,14 @@ const fetchOnline = async (
   query: string,
   limit: number,
 ): Promise<LawSummary[]> => {
-  const results = [await lawRepository.listLaws({ title: query, limit })];
+  // 名前検索と番号検索は互いに独立なので、並列に投げてレイテンシを抑える。
+  const requests = [lawRepository.listLaws({ title: query, limit })];
 
   if (lawNumberPattern.test(query)) {
-    results.push(await lawRepository.listLaws({ lawNumber: query, limit }));
+    requests.push(lawRepository.listLaws({ lawNumber: query, limit }));
   }
+
+  const results = await Promise.all(requests);
 
   return results.flatMap((result) => result.laws);
 };
