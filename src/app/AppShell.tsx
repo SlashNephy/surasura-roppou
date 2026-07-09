@@ -84,12 +84,34 @@ const MobileNavigation = () => (
   </nav>
 );
 
+// 出典（e-Gov 法令検索）と免責を全画面で表示する共通フッター。
+// AppShell 直下に置くことで contentinfo ランドマークになる。
+const Footer = () => (
+  <footer className="border-t bg-popover px-4 pt-4 pb-[calc(env(safe-area-inset-bottom)+5rem)] text-xs text-muted-foreground md:px-6 md:pb-4">
+    <div className="mx-auto grid max-w-4xl gap-1">
+      <p>
+        出典：
+        <a
+          href="https://laws.e-gov.go.jp"
+          target="_blank"
+          rel="noreferrer"
+          className="underline underline-offset-4 hover:text-foreground"
+        >
+          e-Gov 法令検索（https://laws.e-gov.go.jp）
+        </a>
+      </p>
+      <p>本アプリは学習補助であり、法的助言を提供するものではありません</p>
+    </div>
+  </footer>
+);
+
 export const AppShell = () => (
-  <div className="min-h-dvh bg-background font-sans text-foreground">
+  <div className="flex min-h-dvh flex-col bg-background font-sans text-foreground">
     <Header />
-    <main aria-label="メインコンテンツ" className="min-w-0 pb-20 md:pb-0">
+    <main aria-label="メインコンテンツ" className="min-w-0 flex-1">
       <Outlet />
     </main>
+    <Footer />
     <MobileNavigation />
     <PwaUpdatePrompt />
   </div>

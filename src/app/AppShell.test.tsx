@@ -69,4 +69,20 @@ describe("AppShell", () => {
       }
     });
   });
+
+  it("renders the site footer with the e-Gov source attribution on every route", async () => {
+    const history = createMemoryHistory({ initialEntries: ["/laws"] });
+    const storageRepository = createMemoryStorageRepository().repository;
+
+    render(<RouterProvider router={createAppRouter({ history, storageRepository })} />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("contentinfo")).toBeInTheDocument();
+      const sourceLink = screen.getByRole("link", { name: /e-Gov 法令検索/ });
+      expect(sourceLink).toHaveAttribute("href", "https://laws.e-gov.go.jp");
+      expect(
+        screen.getByText("本アプリは学習補助であり、法的助言を提供するものではありません"),
+      ).toBeInTheDocument();
+    });
+  });
 });
