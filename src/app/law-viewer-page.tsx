@@ -597,7 +597,7 @@ const formatBaseDateLabel = (state: Extract<LawViewerState, { status: "ready" }>
 
 // 解決版の施行日ラベル。未施行版など施行日が無い場合は「不明」にする。
 const formatEffectiveDateLabel = (revision: LawRevision): string =>
-  revision.effectiveDate === undefined ? "不明" : `${revision.effectiveDate} 版`;
+  !revision.effectiveDate ? "不明" : `${revision.effectiveDate} 版`;
 
 const normalizeArticleNumberInput = (articleNumber: string): string =>
   articleNumber.normalize("NFKC").replace(/\s+/g, "");

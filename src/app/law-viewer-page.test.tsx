@@ -653,6 +653,18 @@ describe("LawViewerPageContent", () => {
     expect(screen.getByText(/保存版を表示中のため基準日は未反映/)).toBeInTheDocument();
   });
 
+  it("shows the effective date label as unknown when effectiveDate is an empty string", async () => {
+    renderLawViewerContentRoute("/laws/129AC0000000089/articles/1", {
+      status: "ready",
+      ...sampleLawViewerDocument,
+      revision: { ...sampleLawViewerDocument.revision, effectiveDate: "" },
+    });
+
+    // ルーターの初回マッチ解決は非同期のため、本文が描画されるまで待ってから検証する。
+    expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+    expect(screen.getAllByText(/施行日 不明/).length).toBeGreaterThan(0);
+  });
+
   it("re-resolves the displayed revision when the base date changes", async () => {
     const currentDocument = {
       law: sampleLawViewerDocument.law,
