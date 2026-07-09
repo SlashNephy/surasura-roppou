@@ -30,10 +30,14 @@ export const createFullTextSearchService = (
     }
 
     const bigrams = [...toBigrams(normalizedQuery)];
+    // 各 bigram のポスティング取得は互いに独立なので、並列に読み込む。
+    const postingsPerBigram = await Promise.all(
+      bigrams.map((bigram) => indexRepository.getPostingsByBigram(bigram, options.lawId)),
+    );
+
     let candidates: Set<string> | undefined;
 
-    for (const bigram of bigrams) {
-      const postings = await indexRepository.getPostingsByBigram(bigram, options.lawId);
+    for (const postings of postingsPerBigram) {
       const nodeIds = new Set<string>();
       for (const posting of postings) {
         for (const nodeId of posting.nodeIds) {
@@ -52,11 +56,14 @@ export const createFullTextSearchService = (
       return [];
     }
 
+    // 候補ノードの取得も互いに独立なので、並列に読み込む。
+    const nodes = await Promise.all(
+      [...candidates].map((nodeId) => indexRepository.getNodeById(nodeId)),
+    );
+
     const hits: SavedTextHit[] = [];
 
-    for (const nodeId of candidates) {
-      const node = await indexRepository.getNodeById(nodeId);
-
+    for (const node of nodes) {
       if (node === undefined) {
         continue;
       }
@@ -87,9 +94,11 @@ export const createFullTextSearchService = (
 });
 
 const intersect = (left: Set<string>, right: Set<string>): Set<string> => {
+  // 小さい方の集合を走査し、大きい方で存在確認してループ回数を抑える。
+  const [smaller, larger] = left.size < right.size ? [left, right] : [right, left];
   const result = new Set<string>();
-  for (const value of left) {
-    if (right.has(value)) {
+  for (const value of smaller) {
+    if (larger.has(value)) {
       result.add(value);
     }
   }
