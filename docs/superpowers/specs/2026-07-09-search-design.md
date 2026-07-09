@@ -21,15 +21,15 @@ Last updated: 2026-07-09
 
 design-doc 7.2 の項目のうち、本 Issue で作るものと担当外を次のとおり分ける。
 
-| 項目                            | 本 Issue #32          | 担当                     |
-| ------------------------------- | --------------------- | ------------------------ |
-| 法令名検索・略称検索・番号検索  | ○（`core/search`）    |                          |
-| 保存済み法令の横断本文検索      | ○（`core/search`）    |                          |
-| snippet 生成                    | ○（`core/search`）    |                          |
-| 検索バー UI・`/jump`・query 分類 |                       | #25                      |
-| 略称辞書（`国賠`→国家賠償法）   |                       | #22                      |
-| 条文参照パーサー・候補解決      |                       | #31 / #24                |
-| 全法令のローカル一括保存・BFF   | ×（YAGNI、12 章）     | 将来                     |
+| 項目                             | 本 Issue #32       | 担当      |
+| -------------------------------- | ------------------ | --------- |
+| 法令名検索・略称検索・番号検索   | ○（`core/search`） |           |
+| 保存済み法令の横断本文検索       | ○（`core/search`） |           |
+| snippet 生成                     | ○（`core/search`） |           |
+| 検索バー UI・`/jump`・query 分類 |                    | #25       |
+| 略称辞書（`国賠`→国家賠償法）    |                    | #22       |
+| 条文参照パーサー・候補解決       |                    | #31 / #24 |
+| 全法令のローカル一括保存・BFF    | ×（YAGNI、12 章）  | 将来      |
 
 `core/search` は検索エンジン層のみを提供し、UI との配線は #25 が行う。
 
@@ -53,16 +53,16 @@ IndexedDB スキーマは一元管理のため `core/storage` 側で定義し、
 
 モジュール構成:
 
-| ファイル                            | 役割                                                    |
-| ----------------------------------- | ------------------------------------------------------- |
-| `src/core/search/normalize.ts`      | 検索用テキスト正規化と元テキストへの逆引きマップ生成    |
-| `src/core/search/bigram.ts`         | Bigram トークナイズ（本文・クエリ両用）                 |
-| `src/core/search/snippet.ts`        | マッチ周辺の snippet 生成（ハイライト範囲付き）         |
-| `src/core/search/catalog.ts`        | カタログ検索（オンライン委譲 + ローカルキャッシュ照合） |
-| `src/core/search/full-text.ts`      | 保存済み本文検索（postings 交差 → 照合 → ランク → snippet） |
-| `src/core/search/indexer.ts`        | 保存時の index 生成 / 削除 / 再構築                     |
-| `src/core/search/index-repository.ts` | 新ストア（catalog / postings）への型付きアクセス       |
-| `src/core/search/index.ts`          | 公開 API のエクスポート                                 |
+| ファイル                              | 役割                                                        |
+| ------------------------------------- | ----------------------------------------------------------- |
+| `src/core/search/normalize.ts`        | 検索用テキスト正規化と元テキストへの逆引きマップ生成        |
+| `src/core/search/bigram.ts`           | Bigram トークナイズ（本文・クエリ両用）                     |
+| `src/core/search/snippet.ts`          | マッチ周辺の snippet 生成（ハイライト範囲付き）             |
+| `src/core/search/catalog.ts`          | カタログ検索（オンライン委譲 + ローカルキャッシュ照合）     |
+| `src/core/search/full-text.ts`        | 保存済み本文検索（postings 交差 → 照合 → ランク → snippet） |
+| `src/core/search/indexer.ts`          | 保存時の index 生成 / 削除 / 再構築                         |
+| `src/core/search/index-repository.ts` | 新ストア（catalog / postings）への型付きアクセス            |
+| `src/core/search/index.ts`            | 公開 API のエクスポート                                     |
 
 ## 4. データモデルと IndexedDB 変更
 
@@ -208,7 +208,10 @@ function buildSnippet(
 ```ts
 // ── カタログ検索
 interface CatalogSearchService {
-  search(query: string, options?: { online?: boolean; limit?: number }): Promise<CatalogSearchResult>;
+  search(
+    query: string,
+    options?: { online?: boolean; limit?: number },
+  ): Promise<CatalogSearchResult>;
 }
 interface CatalogSearchResult {
   hits: LawCatalogHit[];
