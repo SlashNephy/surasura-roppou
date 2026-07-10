@@ -118,16 +118,19 @@ const readArticle = (text: string): ParsePart | undefined => {
     return undefined;
   }
 
-  let rest = body.slice(head.len);
+  const rest = body.slice(head.len);
 
   if (!rest.startsWith("条")) {
     return undefined; // 条を伴わない数値は条省略形として別処理する
   }
 
-  rest = rest.slice(1);
-  let value = head.value;
-  let kanji = head.kanji;
+  return readBranches(head.value, head.kanji, rest.slice(1));
+};
 
+// 枝番（の<num>）を読み value にハイフン連結する。
+// ただし の<num> の直後が 項/号 のときは、その番号は枝番でなく項・号なので読まない
+// （例: 709条の2項 の 2 は 2項 で、709-2 の枝番ではない）。readArticle / readBareArticle で共有する。
+const readBranches = (value: string, kanji: boolean, rest: string): ParsePart => {
   while (rest.startsWith("の")) {
     const branch = readNumber(rest.slice(1));
 
@@ -135,9 +138,15 @@ const readArticle = (text: string): ParsePart | undefined => {
       break;
     }
 
+    const nextRest = rest.slice(1 + branch.len);
+
+    if (nextRest.startsWith("項") || nextRest.startsWith("号")) {
+      break;
+    }
+
     value += `-${branch.value}`;
     kanji ||= branch.kanji;
-    rest = rest.slice(1 + branch.len);
+    rest = nextRest;
   }
 
   return { value, kanji, rest };
@@ -153,28 +162,13 @@ const readBareArticle = (text: string): ParsePart | undefined => {
     return undefined;
   }
 
-  let rest = body.slice(head.len);
-  let value = head.value;
-  let kanji = head.kanji;
+  const branched = readBranches(head.value, head.kanji, body.slice(head.len));
 
-  // 枝番（の<num>）を読む。readArticle と同じロジック。
-  while (rest.startsWith("の")) {
-    const branch = readNumber(rest.slice(1));
-
-    if (branch === undefined) {
-      break;
-    }
-
-    value += `-${branch.value}`;
-    kanji ||= branch.kanji;
-    rest = rest.slice(1 + branch.len);
-  }
-
-  if (rest.startsWith("項") || rest.startsWith("号")) {
+  if (branched.rest.startsWith("項") || branched.rest.startsWith("号")) {
     return undefined;
   }
 
-  return { value, kanji, rest };
+  return branched;
 };
 
 // 第?<num>（項|号）を読む共通処理。
@@ -366,6 +360,12 @@ export const parseReference = (
       usedKanji ||= barePart.kanji;
       position = barePart.rest;
     }
+  }
+
+  // 枝番ループが 項/号 の直前で止まった残り（例: 条番号のあとの "の2項"）は、
+  // 連結の "の" を落として後続の項・号解析へ渡す。
+  if (position.startsWith("の")) {
+    position = position.slice(1);
   }
 
   const paragraphPart = readSuffixNumber(position, "項");

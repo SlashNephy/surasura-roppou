@@ -77,6 +77,28 @@ describe("parseReference", () => {
       input: "民709の2",
       expected: { kind: "absolute", lawAlias: "民", article: "709-2" },
     },
+    {
+      // の で連結された末尾の番号が 項 の直前にあるときは、枝番ではなく項として読む。
+      name: "条省略形の枝番 + の項",
+      input: "民709の2の3項",
+      expected: { kind: "absolute", lawAlias: "民", article: "709-2", paragraph: "3" },
+    },
+    {
+      name: "条省略形 + の + 項",
+      input: "民709の2項",
+      expected: { kind: "absolute", lawAlias: "民", article: "709", paragraph: "2" },
+    },
+    {
+      name: "条省略形 + の + 号",
+      input: "民709の2号",
+      expected: { kind: "absolute", lawAlias: "民", article: "709", item: "2" },
+    },
+    {
+      // 条ありでも同様。の2 の直後が 項 なら 2 は項番号。
+      name: "条ありの枝番 + の項",
+      input: "民法709条の2項",
+      expected: { kind: "absolute", lawNameCandidate: "民法", article: "709", paragraph: "2" },
+    },
   ])("$name を構造化する", ({ input, expected }) => {
     const result = parseReference(input);
 
