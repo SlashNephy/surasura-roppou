@@ -7,3 +7,10 @@ export type {
   AliasResolver,
   AliasResolverOptions,
 } from "./alias-resolver";
+export { parseReference } from "./reference-parser";
+export type {
+  ParsedReference,
+  ParseReferenceOptions,
+  ReferenceKind,
+  ReferenceSentence,
+} from "./reference-parser";

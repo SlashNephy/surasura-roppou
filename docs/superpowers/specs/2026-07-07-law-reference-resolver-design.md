@@ -1,7 +1,11 @@
 # 法令参照 Resolver 仕様
 
-Status: Approved (設計検討セッション 2026-07-07)
-Last updated: 2026-07-07
+Status: Superseded by [2026-07-10-law-reference-parser-design.md](2026-07-10-law-reference-parser-design.md) (2026-07-10)
+Last updated: 2026-07-10
+
+> **注記（2026-07-10）**: 本 spec の 3 決定（①対応範囲を MVP のみとする、②確信度を数値 score でなく離散 rank にする、③出力を lawId まで解決する）は、その後の実装・Issue 再編により置き換わった。
+> 現在は #22（略称辞書・resolver、official/alias 完全一致）、#31（条文参照パーサー、数値 score・漢数字/相対参照/ローマ数字まで対応）、#24（参照候補の lawId 解決）へ責務が分割されている。
+> 本 spec が計画した「先頭 3 候補 + rank」への fixture 置換は実施されず、現行 `src/test/fixtures/lawReferences.ts` は `confidenceFloor`（数値）を採用している。以降の実装は後継 spec を正典とする。
 
 関連ドキュメント:
 

@@ -8,6 +8,10 @@ export interface LawReferenceParseFixture {
     article?: string;
     paragraph?: string;
     item?: string;
+    // 本文 / ただし書 の位置指定。
+    sentence?: "main" | "proviso";
+    // 別表番号（別表第一 → "1"）。
+    appendix?: string;
     confidenceFloor: number;
   };
 }
@@ -128,6 +132,104 @@ export const lawReferenceParseFixtures = [
     kind: "relative",
     input: "同項第一号",
     expected: {
+      item: "1",
+      confidenceFloor: 0.4,
+    },
+  },
+  {
+    name: "same-law absolute-in-context article",
+    kind: "relative",
+    input: "同法1条",
+    expected: {
+      article: "1",
+      confidenceFloor: 0.4,
+    },
+  },
+  {
+    name: "relative previous article",
+    kind: "relative",
+    input: "前条",
+    expected: {
+      article: "previous",
+      confidenceFloor: 0.4,
+    },
+  },
+  {
+    name: "relative next article",
+    kind: "relative",
+    input: "次条",
+    expected: {
+      article: "next",
+      confidenceFloor: 0.4,
+    },
+  },
+  {
+    name: "main sentence marker",
+    kind: "relative",
+    input: "本文",
+    expected: {
+      sentence: "main",
+      confidenceFloor: 0.4,
+    },
+  },
+  {
+    name: "proviso sentence marker",
+    kind: "relative",
+    input: "ただし書",
+    expected: {
+      sentence: "proviso",
+      confidenceFloor: 0.4,
+    },
+  },
+  {
+    name: "appendix table kanji",
+    kind: "relative",
+    input: "別表第一",
+    expected: {
+      appendix: "1",
+      confidenceFloor: 0.4,
+    },
+  },
+  {
+    name: "alias arabic article roman paragraph",
+    kind: "absolute",
+    input: "憲21Ⅰ",
+    expected: {
+      lawAlias: "憲",
+      article: "21",
+      paragraph: "1",
+      confidenceFloor: 0.8,
+    },
+  },
+  {
+    name: "kanji article paragraph item no law",
+    kind: "relative",
+    input: "一条二項三号",
+    expected: {
+      article: "1",
+      paragraph: "2",
+      item: "3",
+      confidenceFloor: 0.4,
+    },
+  },
+  {
+    name: "arabic article paragraph item no law",
+    kind: "relative",
+    input: "1条1項1号",
+    expected: {
+      article: "1",
+      paragraph: "1",
+      item: "1",
+      confidenceFloor: 0.4,
+    },
+  },
+  {
+    name: "prefixed article paragraph item no law",
+    kind: "relative",
+    input: "第1条第1項第1号",
+    expected: {
+      article: "1",
+      paragraph: "1",
       item: "1",
       confidenceFloor: 0.4,
     },
