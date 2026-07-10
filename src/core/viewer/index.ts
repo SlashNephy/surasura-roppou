@@ -7,3 +7,4 @@ export type { LawTextDisplayMode } from "./displayMode";
 export type { LawTocItem } from "./lawToc";
 export { findArticleNode, verifyAnchor } from "./anchor-verification";
 export type { AnchorStatus } from "./anchor-verification";
+export { pinAnchor, repathAnchor } from "./anchor-repair";
