@@ -102,10 +102,13 @@ const createRouteTree = ({
     component: SettingsPage,
   });
 
+  // SearchPage に quickSearch を DI するため closure で包む。
+  const SearchRoute = () => <SearchPage quickSearch={quickSearch} />;
+
   const searchRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "search",
-    component: SearchPage,
+    component: SearchRoute,
     validateSearch: (search: Record<string, unknown>) => ({
       q: typeof search.q === "string" ? search.q : "",
     }),
