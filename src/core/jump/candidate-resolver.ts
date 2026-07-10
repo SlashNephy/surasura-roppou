@@ -4,8 +4,10 @@ import { createAliasResolver, type AliasCandidate, type AliasResolver } from "./
 import { parseReference, type ParsedReference } from "./reference-parser";
 
 // 解決結果。候補が得られたか、文脈不足・辞書外で未解決かを判別する。
+// 候補要素は Readonly にして消費側の書き換えを型で封じる（AliasCandidate と同方針）。
+// 配列自体はミュータブルのままにして、消費側の並べ替え・絞り込みは許す。
 export type ReferenceResolution =
-  | { status: "resolved"; candidates: LawReferenceCandidate[] }
+  | { status: "resolved"; candidates: Readonly<LawReferenceCandidate>[] }
   | { status: "unresolved"; reason: UnresolvedReason; parsed: ParsedReference };
 
 export type UnresolvedReason =
