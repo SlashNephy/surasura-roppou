@@ -1,11 +1,15 @@
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
 
 import { createMemoryStorageRepository, createSavedLawDocument } from "@/test/fixtures/storage";
+import { setupScrollMocks } from "@/test/scrollMocks";
 
 import { sampleLawViewerDocument } from "./law-viewer-sample";
 import { createAppRouter } from "./router";
+
+setupScrollMocks();
 
 const renderHome = (storageRepository = createMemoryStorageRepository().repository) => {
   const history = createMemoryHistory({ initialEntries: ["/"] });
@@ -66,4 +70,38 @@ describe("HomePage", () => {
     );
     expect(screen.queryByRole("link", { name: "日本国憲法" })).not.toBeInTheDocument();
   });
+});
+
+// cmdk の CommandList は ResizeObserver を利用するため最小限のスタブを用意する。
+vi.stubGlobal(
+  "ResizeObserver",
+  class {
+    observe() {
+      // 高さ計測は行わないため何もしない
+    }
+    unobserve() {
+      // 高さ計測は行わないため何もしない
+    }
+    disconnect() {
+      // 高さ計測は行わないため何もしない
+    }
+  },
+);
+
+it("検索バーをクリックするとパレットが開く", async () => {
+  const user = userEvent.setup();
+  const storageRepository = createMemoryStorageRepository().repository;
+  const history = createMemoryHistory({ initialEntries: ["/"] });
+
+  render(<RouterProvider router={createAppRouter({ history, storageRepository })} />);
+
+  // ホーム画面が描画されるまで待機する
+  await screen.findByRole("heading", { name: "撮って、開いて、すらすら読める。" });
+
+  // ホームの検索バーをクリックする（ヘッダーの検索ボタンと区別するため main ランドマーク内を絞り込む）
+  const main = screen.getByRole("main");
+  await user.click(within(main).getByRole("button", { name: /検索/ }));
+
+  // 検索パレットのダイアログが表示されることを確認する
+  expect(await screen.findByRole("dialog", { name: "検索" })).toBeInTheDocument();
 });
