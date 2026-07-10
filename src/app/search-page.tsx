@@ -19,6 +19,7 @@ const CandidateLink = ({ candidate }: { candidate: QuickSearchCandidate }) => {
     </>
   );
 
+  // 型ナローイングのため to リテラルで分岐する（search-navigation.ts と同様）。両辺の内容は同一で意図的。
   return target.to === "/laws/$lawId" ? (
     <Link className={candidateLinkClassName} to={target.to} params={target.params}>
       {content}
@@ -88,7 +89,8 @@ export const SearchPage = ({ quickSearch = defaultQuickSearch }: { quickSearch?:
         </p>
       ) : null}
 
-      {outcome.status === "unresolved" ? (
+      {/* 空クエリ時は effect が outcome を更新しないため、stale な outcome を表示しないようにガードする。 */}
+      {trimmedQ !== "" && outcome.status === "unresolved" ? (
         <p
           role="status"
           className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground"
@@ -99,7 +101,7 @@ export const SearchPage = ({ quickSearch = defaultQuickSearch }: { quickSearch?:
         </p>
       ) : null}
 
-      {outcome.status === "candidates" && outcome.candidates.length > 0 ? (
+      {trimmedQ !== "" && outcome.status === "candidates" && outcome.candidates.length > 0 ? (
         <ul className="grid gap-3">
           {outcome.candidates.map((candidate) => (
             <li key={`${candidate.kind}:${candidate.lawId}:${candidate.article ?? ""}`}>
@@ -109,7 +111,7 @@ export const SearchPage = ({ quickSearch = defaultQuickSearch }: { quickSearch?:
         </ul>
       ) : null}
 
-      {outcome.status === "candidates" && outcome.candidates.length === 0 ? (
+      {trimmedQ !== "" && outcome.status === "candidates" && outcome.candidates.length === 0 ? (
         <p className="text-sm text-muted-foreground">該当する候補がありません。</p>
       ) : null}
     </section>
