@@ -5,10 +5,20 @@ export interface LawReferenceTarget {
   paragraph?: string | null;
   item?: string | null;
   path?: string | null;
+  // 追加: 条文指紋（改変検知）。#20 由来の未アンカー参照は持たない。
+  fingerprint?: string | null;
+  // 追加: true なら基準日でなく revisionId で解決し、バッジを常設する。
+  pinned?: boolean | null;
 }
 
 export interface ArticleReference extends LawReferenceTarget {
   article: string;
+}
+
+// 保存物（ブックマーク等）のアンカーが満たす制約。revisionId と fingerprint を必須にする。
+export interface AnchoredArticleReference extends ArticleReference {
+  revisionId: string;
+  fingerprint: string;
 }
 
 const segmentKinds = ["law", "revision", "article", "paragraph", "item"] as const;

@@ -118,6 +118,17 @@ describe("article reference keys", () => {
   });
 });
 
+describe("fingerprint/pinned は参照キーに影響しない", () => {
+  it("fingerprint・pinned の有無で buildArticleReferenceKey は変わらない", () => {
+    // revisionId を揃えて、fingerprint/pinned だけが異なる 2 つの参照を比較する。
+    const base = { lawId: "322AC0000000125", revisionId: "r1", article: "1" };
+    const anchored = { ...base, fingerprint: "abc123", pinned: true };
+
+    // by-target-key 索引でアンカーを引くため、キーは指紋等に依存してはならない。
+    expect(buildArticleReferenceKey(anchored)).toBe(buildArticleReferenceKey(base));
+  });
+});
+
 describe("domain model contracts", () => {
   it("represents law text and user-owned study data with shared article references", () => {
     const law = {

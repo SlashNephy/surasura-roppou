@@ -1,12 +1,13 @@
-import { type SyntheticEvent, useEffect, useId, useMemo, useState } from "react";
+import { type SyntheticEvent, useCallback, useEffect, useId, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { Clipboard, Download, LinkIcon, ListTree, Trash2 } from "lucide-react";
 
 import type { LawNode, LawRevision } from "@/core/domain";
-import { buildLawArticleUrl } from "@/core/domain";
+import { buildLawArticleUrl, computeArticleFingerprint } from "@/core/domain";
+import { createEgovLawRepository } from "@/core/egov";
 import type { LawRepository } from "@/core/egov";
 import { resolveAsOf } from "@/core/settings";
-import { createSavedLawUseCase, createStorageRepository } from "@/core/storage";
+import { createSavedLawUseCase, createStorageRepository, generateStorageId } from "@/core/storage";
 import type { StorageRepository } from "@/core/storage";
 import {
   LawDocumentView,
@@ -14,6 +15,7 @@ import {
   articleAnchorId,
   buildArticleCopyText,
   buildLawTableOfContents,
+  findArticleNode,
 } from "@/core/viewer";
 import type { LawTextDisplayMode, LawTocItem } from "@/core/viewer";
 import { Badge } from "@/shared/ui/badge";
@@ -22,12 +24,16 @@ import { Input } from "@/shared/ui/input";
 import { Skeleton } from "@/shared/ui/skeleton";
 import { formatIsoDateLabel } from "@/shared/utils/dates";
 
+import { AnchorCompareDialog } from "./AnchorCompareDialog";
+import { AnchorDriftBadge } from "./AnchorDriftBadge";
 import { loadLawViewerDocument } from "./law-viewer-loader";
 import { useOnlineStatus, useSavedViewerState } from "./law-viewer-hooks";
 import type { LawViewerDocument } from "./law-viewer-sample";
+import { useAnchorVerification } from "./use-anchor-verification";
 import { useBaseDate } from "./use-base-date";
 
 const defaultStorageRepository = createStorageRepository();
+const defaultLawRepository = createEgovLawRepository();
 
 export type LawViewerState =
   | { status: "loading" }
@@ -106,6 +112,7 @@ const LawViewerPageLoader = ({
     <LawViewerPageContent
       activeArticleNumber={activeArticleNumber}
       lawId={lawId}
+      repository={repository}
       state={state}
       storageRepository={storageRepository}
     />
@@ -115,11 +122,13 @@ const LawViewerPageLoader = ({
 export const LawViewerPageContent = ({
   activeArticleNumber,
   lawId = "",
+  repository,
   state,
   storageRepository = defaultStorageRepository,
 }: {
   activeArticleNumber?: string;
   lawId?: string;
+  repository?: LawRepository;
   state: LawViewerState;
   storageRepository?: StorageRepository;
 }) => {
@@ -139,6 +148,7 @@ export const LawViewerPageContent = ({
           key={`${state.law.lawId}:${state.revision.revisionId}:${String(state.loadedFromStorage)}`}
           activeArticleNumber={activeArticleNumber}
           lawId={lawId}
+          repository={repository}
           state={state}
           storageRepository={storageRepository}
         />
@@ -149,11 +159,13 @@ export const LawViewerPageContent = ({
 const LawViewerReadyState = ({
   activeArticleNumber: routeArticleNumber,
   lawId,
-  state,
+  repository,
+  state: baseState,
   storageRepository,
 }: {
   activeArticleNumber?: string;
   lawId: string;
+  repository?: LawRepository;
   state: Extract<LawViewerState, { status: "ready" }>;
   storageRepository: StorageRepository;
 }) => {
@@ -164,13 +176,81 @@ const LawViewerReadyState = ({
   );
   const isOnline = useOnlineStatus();
   const [displayMode, setDisplayMode] = useState<LawTextDisplayMode>("readable");
-  const [savedState, setSavedState] = useSavedViewerState(state);
+  const [savedState, setSavedState] = useSavedViewerState(baseState);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | undefined>();
   const [copyError, setCopyError] = useState<string | undefined>();
   const [isMobileTocOpen, setIsMobileTocOpen] = useState(false);
   const [jumpArticleNumber, setJumpArticleNumber] = useState("");
   const [hasJumpError, setHasJumpError] = useState(false);
+  const [isCompareOpen, setIsCompareOpen] = useState(false);
+  // 修復（付け替え・固定）後に加算し、アンカー検証を同一セッション内で再実行させるトークン。
+  // putBookmark はフックの deps を変化させないため、このトークンで再読込を明示的に促す。
+  const [anchorRefreshToken, setAnchorRefreshToken] = useState(0);
+  const resolvedRepository = repository ?? defaultLawRepository;
+
+  // アクティブ条のアンカー（指紋付きブックマーク）を基準日解決の本文に対して検証する。
+  // pinned 判定はこの検証結果のブックマークから得るため、検証は基準日解決版に対して行う。
+  const verification = useAnchorVerification({
+    lawId,
+    article: routeArticleNumber,
+    nodes: baseState.nodes,
+    storageRepository,
+    refreshToken: anchorRefreshToken,
+  });
+
+  // pinned アンカーは基準日でなく revisionId で本文を固定解決する。
+  // 検証結果（=ブックマーク）が pinned のとき、当該 revisionId で本文を再取得して差し替える。
+  const pinnedRevisionId =
+    verification?.bookmark.target.pinned === true
+      ? (verification.bookmark.target.revisionId ?? undefined)
+      : undefined;
+  // 固定解決した本文を保持する。表示に使うのはこの結果が現在の pinnedRevisionId と
+  // 一致するときだけで、不一致（pinned 解除・別条へ移動など）なら基準日解決版に戻す。
+  const [pinnedState, setPinnedState] = useState<
+    Extract<LawViewerState, { status: "ready" }> | undefined
+  >(undefined);
+
+  useEffect(() => {
+    // 目的の固定版が無い、または基準日解決版が既に目的の版と一致するなら再取得しない
+    // （後者は無限ループ回避の要）。この分岐では setState を呼ばず、表示側の派生で吸収する。
+    if (pinnedRevisionId === undefined || baseState.revision.revisionId === pinnedRevisionId) {
+      return;
+    }
+
+    let isCurrent = true;
+    const run = async () => {
+      try {
+        const document = await resolvedRepository.getLaw(pinnedRevisionId);
+        if (isCurrent) {
+          setPinnedState({
+            status: "ready",
+            law: document.law,
+            revision: document.revision,
+            nodes: document.nodes,
+            isSaved: baseState.isSaved,
+            loadedFromStorage: false,
+          });
+        }
+      } catch {
+        // 固定解決に失敗した場合は基準日解決版のまま表示する。
+      }
+    };
+
+    void run();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [pinnedRevisionId, resolvedRepository, baseState.revision.revisionId, baseState.isSaved]);
+
+  // 実際に表示する状態。固定解決の結果が現在の目的版と一致するときだけ採用し、
+  // それ以外（未解決・pinned 解除・別条移動）は基準日解決版を表示する。
+  const state =
+    pinnedRevisionId !== undefined && pinnedState?.revision.revisionId === pinnedRevisionId
+      ? pinnedState
+      : baseState;
+
   const tocItems = useMemo(() => buildLawTableOfContents(state.nodes), [state.nodes]);
   const articleNumbers = useMemo(() => new Set(collectTocArticleNumbers(tocItems)), [tocItems]);
   const articleNumberByNormalizedInput = useMemo(
@@ -286,6 +366,35 @@ const LawViewerReadyState = ({
     });
   };
 
+  // アクティブ条の現在版に対して、指紋付きアンカー（ブックマーク）を作成して保存する。
+  const handleSaveAnchor = async (articleNumber: string) => {
+    const node = findArticleNode(state.nodes, articleNumber);
+    if (node === undefined) {
+      return;
+    }
+
+    setSaveError(undefined);
+    try {
+      const fingerprint = await computeArticleFingerprint(node.plainText);
+      const now = new Date().toISOString();
+      await storageRepository.putBookmark({
+        id: generateStorageId(),
+        target: {
+          lawId,
+          article: articleNumber,
+          revisionId: state.revision.revisionId,
+          fingerprint,
+        },
+        title: node.title ?? `第${articleNumber}条`,
+        tags: [],
+        createdAt: now,
+        updatedAt: now,
+      });
+    } catch {
+      setSaveError("この条文を保存できませんでした。端末の保存領域を確認してください。");
+    }
+  };
+
   const handleSaveToggle = async () => {
     setIsSaving(true);
     setSaveError(undefined);
@@ -333,6 +442,15 @@ const LawViewerReadyState = ({
 
     navigateToArticle(nextArticleNumber);
   };
+
+  // 見比べダイアログが作成時版の本文を取得するためのローダー。ダイアログの effect が
+  // これを deps に取るため、親の再描画で参照が変わると無駄な再取得を招く。useCallback で
+  // 安定化し、依存するリポジトリと作成時版の revisionId が変わったときだけ作り直す。
+  const compareRevisionId = verification?.bookmark.target.revisionId ?? "";
+  const loadCreatedNodes = useCallback(
+    async () => (await resolvedRepository.getLaw(compareRevisionId)).nodes,
+    [resolvedRepository, compareRevisionId],
+  );
 
   const notFoundAlert = (
     <p
@@ -470,6 +588,35 @@ const LawViewerReadyState = ({
               </Button>
             </div>
 
+            {activeArticleNumber !== undefined ? (
+              <div className="grid min-w-0 gap-2">
+                <span className="text-sm font-medium text-foreground">この条文</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    className="w-fit"
+                    onClick={() => {
+                      void handleSaveAnchor(activeArticleNumber);
+                    }}
+                    type="button"
+                    variant="ghost"
+                    aria-label="この条文を保存"
+                  >
+                    この条文を保存
+                  </Button>
+                  {verification !== undefined &&
+                  (verification.status !== "match" ||
+                    verification.bookmark.target.pinned === true) ? (
+                    <AnchorDriftBadge
+                      status={verification.status === "not_found" ? "not_found" : "drift"}
+                      onOpenCompare={() => {
+                        setIsCompareOpen(true);
+                      }}
+                    />
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
             <div aria-label="基準日情報" className="grid min-w-0 gap-1 md:w-full" role="group">
               <span className="text-sm font-medium text-foreground">基準日</span>
               <p className="text-sm text-muted-foreground">
@@ -581,6 +728,24 @@ const LawViewerReadyState = ({
           </div>
         </aside>
       </section>
+
+      {isCompareOpen && verification !== undefined ? (
+        <AnchorCompareDialog
+          bookmark={verification.bookmark}
+          status={verification.status}
+          currentNodes={state.nodes}
+          currentRevisionId={state.revision.revisionId}
+          loadCreatedNodes={loadCreatedNodes}
+          storageRepository={storageRepository}
+          onRepaired={() => {
+            setIsCompareOpen(false);
+            setAnchorRefreshToken((n) => n + 1);
+          }}
+          onClose={() => {
+            setIsCompareOpen(false);
+          }}
+        />
+      ) : null}
     </>
   );
 };

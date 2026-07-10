@@ -18,9 +18,10 @@ export type {
   StudyCardType,
   StudySession,
 } from "./models";
-export type { ArticleReference, LawReferenceTarget } from "./references";
+export type { ArticleReference, AnchoredArticleReference, LawReferenceTarget } from "./references";
 export {
   buildArticleReferenceKey,
   buildLawArticleUrl,
   parseArticleReferenceKey,
 } from "./references";
+export { computeArticleFingerprint } from "./article-fingerprint";

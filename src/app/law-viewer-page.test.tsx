@@ -11,10 +11,13 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { computeArticleFingerprint } from "@/core/domain";
+import type { Bookmark } from "@/core/domain";
 import { createEgovLawRepository } from "@/core/egov";
 import type { LawDocument, LawListResult, LawMetadata, LawRepository } from "@/core/egov";
 import { setBaseDate } from "@/core/settings";
 import { createJsonFetchStub, fixedTestNow as now, lawDataFixture } from "@/test/fixtures/egov";
+import type { StorageRepository } from "@/core/storage";
 import { createMemoryStorageRepository, createSavedLawDocument } from "@/test/fixtures/storage";
 import { setupScrollMocks } from "@/test/scrollMocks";
 
@@ -97,16 +100,39 @@ const renderLawViewerRoute = (
   };
 };
 
-const renderLawViewerContentRoute = (path: string, state: LawViewerState) => {
+const renderLawViewerContentRoute = (
+  path: string,
+  state: LawViewerState,
+  // 既定はメモリ実装。テスト環境に IndexedDB が無いため、アンカー検証フックが
+  // 既定の実ストレージへ問い合わせて未処理拒否を出すのを避ける。
+  storageRepository: StorageRepository = createMemoryStorageRepository().repository,
+  // 見比べダイアログの作成時版取得を含め、既定の実 e-Gov リポジトリへ通信させないための注入口。
+  repository?: LawRepository,
+) => {
   const BaseLawViewerRoute = () => {
     const { lawId } = useParams({ from: "/laws/$lawId" });
 
-    return <LawViewerPageContent lawId={lawId} state={state} />;
+    return (
+      <LawViewerPageContent
+        lawId={lawId}
+        repository={repository}
+        state={state}
+        storageRepository={storageRepository}
+      />
+    );
   };
   const ArticleLawViewerRoute = () => {
     const { article, lawId } = useParams({ from: "/laws/$lawId/articles/$article" });
 
-    return <LawViewerPageContent activeArticleNumber={article} lawId={lawId} state={state} />;
+    return (
+      <LawViewerPageContent
+        activeArticleNumber={article}
+        lawId={lawId}
+        repository={repository}
+        state={state}
+        storageRepository={storageRepository}
+      />
+    );
   };
   const rootRoute = createRootRoute({
     component: Outlet,
@@ -701,6 +727,117 @@ describe("LawViewerPageContent", () => {
 
     await waitFor(() => {
       expect(screen.getAllByText(/施行日 2020-04-01/).length).toBeGreaterThan(0);
+    });
+  });
+
+  it("アンカーが drift のとき改正の可能性バッジを表示する", async () => {
+    const anchoredBookmark: Bookmark = {
+      id: "bookmark-drift",
+      target: {
+        lawId: sampleLawViewerDocument.law.lawId,
+        article: "1",
+        revisionId: sampleLawViewerDocument.revision.revisionId,
+        // 現在の第一条の指紋とは一致しない値。drift として検知される。
+        fingerprint: "deadbeefdeadbeef",
+      },
+      title: "第一条",
+      tags: [],
+      createdAt: "2026-07-06T00:00:00.000Z",
+      updatedAt: "2026-07-06T00:00:00.000Z",
+    };
+    const { repository: storageRepository } = createMemoryStorageRepository({
+      bookmarks: [anchoredBookmark],
+    });
+
+    renderLawViewerContentRoute(
+      "/laws/129AC0000000089/articles/1",
+      { status: "ready", ...sampleLawViewerDocument },
+      storageRepository,
+    );
+
+    expect(await screen.findByText("改正の可能性")).toBeInTheDocument();
+  });
+
+  it("drift を「付け替える」で修復すると、再マウントなしに改正の可能性バッジが消える", async () => {
+    const anchoredBookmark: Bookmark = {
+      id: "bookmark-drift-repair",
+      target: {
+        lawId: sampleLawViewerDocument.law.lawId,
+        article: "1",
+        revisionId: sampleLawViewerDocument.revision.revisionId,
+        // 現在の第一条の指紋とは一致しない値。drift として検知される。
+        fingerprint: "deadbeefdeadbeef",
+      },
+      title: "第一条",
+      tags: [],
+      createdAt: "2026-07-06T00:00:00.000Z",
+      updatedAt: "2026-07-06T00:00:00.000Z",
+    };
+    const { repository: storageRepository } = createMemoryStorageRepository({
+      bookmarks: [anchoredBookmark],
+    });
+    // 見比べダイアログの作成時版取得を実 e-Gov ではなくスタブへ向ける。
+    const compareRepository = {
+      listLaws: (): Promise<LawListResult> => Promise.reject(new Error("Not used in this test")),
+      getLaw: (): Promise<LawDocument> =>
+        Promise.resolve({
+          law: sampleLawViewerDocument.law,
+          revision: sampleLawViewerDocument.revision,
+          nodes: sampleLawViewerDocument.nodes,
+          raw: {},
+        }),
+      getLawMetadata: (): Promise<LawMetadata> =>
+        Promise.reject(new Error("Not used in this test")),
+    } satisfies LawRepository;
+
+    const { user } = renderLawViewerContentRoute(
+      "/laws/129AC0000000089/articles/1",
+      { status: "ready", ...sampleLawViewerDocument },
+      storageRepository,
+      compareRepository,
+    );
+
+    await user.click(await screen.findByRole("button", { name: "改正の可能性を確認する" }));
+    await user.click(await screen.findByRole("button", { name: "新しい条文に付け替える" }));
+
+    // 修復後、再マウントやナビゲーションなしにバッジが消える（refreshToken による再検証）。
+    await waitFor(() => {
+      expect(screen.queryByText("改正の可能性")).not.toBeInTheDocument();
+    });
+  });
+
+  it("アンカーの指紋が一致するとき改正の可能性バッジを表示しない", async () => {
+    const currentArticle = sampleLawViewerDocument.nodes.find(
+      (node) => node.type === "Article" && node.number === "1",
+    );
+    const fingerprint = await computeArticleFingerprint(currentArticle?.plainText ?? "");
+    const anchoredBookmark: Bookmark = {
+      id: "bookmark-match",
+      target: {
+        lawId: sampleLawViewerDocument.law.lawId,
+        article: "1",
+        revisionId: sampleLawViewerDocument.revision.revisionId,
+        fingerprint,
+      },
+      title: "第一条",
+      tags: [],
+      createdAt: "2026-07-06T00:00:00.000Z",
+      updatedAt: "2026-07-06T00:00:00.000Z",
+    };
+    const { repository: storageRepository } = createMemoryStorageRepository({
+      bookmarks: [anchoredBookmark],
+    });
+
+    renderLawViewerContentRoute(
+      "/laws/129AC0000000089/articles/1",
+      { status: "ready", ...sampleLawViewerDocument },
+      storageRepository,
+    );
+
+    // 本文が描画されるまで待ってから、バッジが無いことを検証する。
+    expect(await screen.findByRole("article", { name: "第一条" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("改正の可能性")).not.toBeInTheDocument();
     });
   });
 });

@@ -7,6 +7,7 @@ import {
   createSavedDataExport,
   createSavedLawUseCase,
   createStorageRepository,
+  generateStorageId,
   type SavedLawSummary,
   type StorageRepository,
 } from "@/core/storage";
@@ -771,27 +772,3 @@ const BookmarkLink = ({ bookmark }: { bookmark: Bookmark }) => {
     </Link>
   );
 };
-
-const generateStorageId = (): string => {
-  const browserCrypto = (globalThis as { crypto?: Crypto }).crypto;
-
-  if (browserCrypto === undefined) {
-    return generateFallbackStorageId();
-  }
-
-  if (typeof browserCrypto.randomUUID === "function") {
-    return browserCrypto.randomUUID();
-  }
-
-  if (typeof browserCrypto.getRandomValues === "function") {
-    const values = new Uint32Array(2);
-    browserCrypto.getRandomValues(values);
-
-    return `${Date.now().toString(36)}-${values[0].toString(36)}${values[1].toString(36)}`;
-  }
-
-  return generateFallbackStorageId();
-};
-
-const generateFallbackStorageId = (): string =>
-  `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
