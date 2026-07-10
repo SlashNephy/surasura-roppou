@@ -41,6 +41,8 @@ export const useAnchorVerification = ({
     const targetKey = buildArticleReferenceKey({ lawId, article });
 
     const run = async () => {
+      // 条(article)が変わったら前の検証結果を即座に捨てる
+      setVerification(undefined);
       const bookmarks = await storageRepository.listBookmarks({ lawId });
       // by-target-key 相当の突き合わせ。revisionId を除いた key で比較し、
       // 指紋を持つ（アンカー付き）ものだけ検証する。
@@ -53,17 +55,23 @@ export const useAnchorVerification = ({
           }) === targetKey,
       );
 
-      if (anchored?.target.fingerprint === undefined || anchored.target.fingerprint === null) {
+      if (!anchored) {
         if (!cancelled) {
           setVerification(undefined);
         }
         return;
       }
 
-      const status = await verifyAnchor(
-        { article, fingerprint: anchored.target.fingerprint },
-        nodes,
-      );
+      // find の条件で `typeof bookmark.target.fingerprint === "string"` を満たす
+      // ものだけを選んでいるため、ここで fingerprint は非 null の string が保証される。
+      // TypeScript の find() 戻り値型は predicate の絞り込みを引き継がないため、
+      // typeof で再度絞り込んで string 型に確定させる。
+      const { fingerprint } = anchored.target;
+      if (typeof fingerprint !== "string") {
+        return;
+      }
+
+      const status = await verifyAnchor({ article, fingerprint }, nodes);
 
       if (!cancelled) {
         setVerification({ status, bookmark: anchored });

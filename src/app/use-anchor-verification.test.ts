@@ -82,4 +82,30 @@ describe("useAnchorVerification", () => {
     );
     expect(result.current).toBeUndefined();
   });
+
+  it("article が変わったとき、前の検証結果を即座に捨てて stale な値を返さない", async () => {
+    // article="1" のアンカー付きブックマーク（指紋不一致で drift になるもの）を用意する。
+    const storageRepository = storageWith([
+      bookmark({ lawId: "L", article: "1", revisionId: "R", fingerprint: "deadbeefdeadbeef" }),
+    ]);
+
+    const { result, rerender } = renderHook(
+      ({ article }: { article: string }) =>
+        useAnchorVerification({ lawId: "L", article, nodes, storageRepository }),
+      { initialProps: { article: "1" } },
+    );
+
+    // article="1" で drift が解決されることを確認する。
+    await waitFor(() => {
+      expect(result.current?.status).toBe("drift");
+    });
+
+    // article="2" に切り替える（対応するブックマークは存在しない）。
+    rerender({ article: "2" });
+
+    // article 変更直後、前の drift 結果は即座に捨てられ undefined になる。
+    await waitFor(() => {
+      expect(result.current).toBeUndefined();
+    });
+  });
 });
