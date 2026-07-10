@@ -14,3 +14,9 @@ export type {
   ReferenceKind,
   ReferenceSentence,
 } from "./reference-parser";
+export { resolveReferenceCandidates, resolveReferenceInput } from "./candidate-resolver";
+export type {
+  ReferenceResolution,
+  ResolveReferenceOptions,
+  UnresolvedReason,
+} from "./candidate-resolver";

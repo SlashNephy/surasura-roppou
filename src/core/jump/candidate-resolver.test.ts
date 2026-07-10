@@ -139,4 +139,12 @@ describe("resolveReferenceInput", () => {
   it("パース不能な入力は undefined", () => {
     expect(resolveReferenceInput("")).toBeUndefined();
   });
+
+  it("バレル @/core/jump からも解決関数を使える", async () => {
+    const barrel = await import("./index");
+
+    const result = barrel.resolveReferenceInput("国賠1");
+
+    expect(result?.status).toBe("resolved");
+  });
 });
