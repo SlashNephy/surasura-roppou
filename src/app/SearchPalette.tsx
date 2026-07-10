@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { BookOpen, Camera, GraduationCap, Search, Settings } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -14,6 +14,7 @@ import {
 } from "@/shared/ui/command";
 
 import type { PrimaryRoute } from "./routes";
+import { useSearchPalette } from "./search-palette-context";
 
 interface PaletteDestination {
   to: PrimaryRoute;
@@ -37,7 +38,7 @@ const isEditableTarget = (target: EventTarget | null): boolean =>
     target.tagName === "SELECT");
 
 export const SearchPalette = () => {
-  const [isOpen, setIsOpen] = useState(false);
+  const { isOpen, setOpen } = useSearchPalette();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -55,7 +56,7 @@ export const SearchPalette = () => {
       }
 
       event.preventDefault();
-      setIsOpen(true);
+      setOpen(true);
     };
 
     window.addEventListener("keydown", handleKeyDown);
@@ -63,10 +64,10 @@ export const SearchPalette = () => {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, []);
+  }, [setOpen]);
 
   const navigateTo = (to: PaletteDestination["to"]) => {
-    setIsOpen(false);
+    setOpen(false);
     void navigate({ to });
   };
 
@@ -77,7 +78,7 @@ export const SearchPalette = () => {
         variant="outline"
         className="h-9 min-w-0 gap-2 px-3 font-normal text-muted-foreground md:w-full md:max-w-sm md:justify-start"
         onClick={() => {
-          setIsOpen(true);
+          setOpen(true);
         }}
       >
         {/* 可視ラベル（例文）をアクセシブルネームに含めるため aria-label は使わない (WCAG 2.5.3) */}
@@ -93,7 +94,7 @@ export const SearchPalette = () => {
       </Button>
       <CommandDialog
         description="法令名や条文参照から目的の条文を開きます"
-        onOpenChange={setIsOpen}
+        onOpenChange={setOpen}
         open={isOpen}
         title="検索"
       >

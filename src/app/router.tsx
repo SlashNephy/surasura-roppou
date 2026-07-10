@@ -2,6 +2,7 @@ import { createRootRoute, createRoute, createRouter } from "@tanstack/react-rout
 import type { RouterHistory } from "@tanstack/react-router";
 
 import type { LawRepository } from "@/core/egov";
+import type { QuickSearch } from "@/core/jump";
 import type { StorageRepository } from "@/core/storage";
 
 import { AppShell } from "./AppShell";
@@ -12,14 +13,19 @@ interface CreateAppRouterOptions {
   history?: RouterHistory;
   lawRepository?: LawRepository;
   storageRepository?: StorageRepository;
+  quickSearch?: QuickSearch;
 }
 
 const createRouteTree = ({
   lawRepository,
   storageRepository,
-}: Pick<CreateAppRouterOptions, "lawRepository" | "storageRepository"> = {}) => {
+  quickSearch,
+}: Pick<CreateAppRouterOptions, "lawRepository" | "storageRepository" | "quickSearch"> = {}) => {
+  // AppShell に quickSearch を DI するため closure で包む。
+  const RootComponent = () => <AppShell quickSearch={quickSearch} />;
+
   const rootRoute = createRootRoute({
-    component: AppShell,
+    component: RootComponent,
   });
 
   const HomeRoute = () => <HomePage storageRepository={storageRepository} />;
@@ -104,8 +110,12 @@ export const createAppRouter = ({
   history,
   lawRepository,
   storageRepository,
+  quickSearch,
 }: CreateAppRouterOptions = {}) =>
-  createRouter({ routeTree: createRouteTree({ lawRepository, storageRepository }), history });
+  createRouter({
+    routeTree: createRouteTree({ lawRepository, storageRepository, quickSearch }),
+    history,
+  });
 
 export const router = createAppRouter();
 
