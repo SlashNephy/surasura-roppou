@@ -153,13 +153,28 @@ const readBareArticle = (text: string): ParsePart | undefined => {
     return undefined;
   }
 
-  const rest = body.slice(head.len);
+  let rest = body.slice(head.len);
+  let value = head.value;
+  let kanji = head.kanji;
+
+  // 枝番（の<num>）を読む。readArticle と同じロジック。
+  while (rest.startsWith("の")) {
+    const branch = readNumber(rest.slice(1));
+
+    if (branch === undefined) {
+      break;
+    }
+
+    value += `-${branch.value}`;
+    kanji ||= branch.kanji;
+    rest = rest.slice(1 + branch.len);
+  }
 
   if (rest.startsWith("項") || rest.startsWith("号")) {
     return undefined;
   }
 
-  return { value: head.value, kanji: head.kanji, rest };
+  return { value, kanji, rest };
 };
 
 // 第?<num>（項|号）を読む共通処理。

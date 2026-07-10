@@ -70,6 +70,11 @@ describe("parseReference", () => {
       input: "別表第一",
       expected: { kind: "relative", appendix: "1" },
     },
+    {
+      name: "条省略形の枝番",
+      input: "民709の2",
+      expected: { kind: "absolute", lawAlias: "民", article: "709-2" },
+    },
   ])("$name を構造化する", ({ input, expected }) => {
     const result = parseReference(input);
 
