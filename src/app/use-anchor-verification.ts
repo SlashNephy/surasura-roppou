@@ -16,6 +16,10 @@ interface UseAnchorVerificationArgs {
   article: string | undefined;
   nodes: LawNode[];
   storageRepository: StorageRepository;
+  // 値が変わるたびに検証を再実行するためのトークン。修復（付け替え・固定）の直後に
+  // 呼び出し側が加算し、storage から最新のブックマークを読み直して同一セッション内で
+  // 検証状態を更新する。deps が変わらないと putBookmark 後も stale なまま残るため必要。
+  refreshToken?: number;
 }
 
 // アクティブな条について、指紋付きアンカー（ブックマーク）を storage から引き、
@@ -25,6 +29,7 @@ export const useAnchorVerification = ({
   article,
   nodes,
   storageRepository,
+  refreshToken,
 }: UseAnchorVerificationArgs): AnchorVerification | undefined => {
   const [verification, setVerification] = useState<AnchorVerification | undefined>(undefined);
 
@@ -83,7 +88,7 @@ export const useAnchorVerification = ({
     return () => {
       cancelled = true;
     };
-  }, [lawId, article, nodes, storageRepository]);
+  }, [lawId, article, nodes, storageRepository, refreshToken]);
 
   // article が未指定のときは state を無視して undefined を返す。
   if (article === undefined || article === "") {

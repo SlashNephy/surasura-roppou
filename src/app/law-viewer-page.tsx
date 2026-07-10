@@ -1,4 +1,4 @@
-import { type SyntheticEvent, useEffect, useId, useMemo, useState } from "react";
+import { type SyntheticEvent, useCallback, useEffect, useId, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { Clipboard, Download, LinkIcon, ListTree, Trash2 } from "lucide-react";
 
@@ -184,6 +184,9 @@ const LawViewerReadyState = ({
   const [jumpArticleNumber, setJumpArticleNumber] = useState("");
   const [hasJumpError, setHasJumpError] = useState(false);
   const [isCompareOpen, setIsCompareOpen] = useState(false);
+  // 修復（付け替え・固定）後に加算し、アンカー検証を同一セッション内で再実行させるトークン。
+  // putBookmark はフックの deps を変化させないため、このトークンで再読込を明示的に促す。
+  const [anchorRefreshToken, setAnchorRefreshToken] = useState(0);
   const resolvedRepository = repository ?? defaultLawRepository;
 
   // アクティブ条のアンカー（指紋付きブックマーク）を基準日解決の本文に対して検証する。
@@ -193,6 +196,7 @@ const LawViewerReadyState = ({
     article: routeArticleNumber,
     nodes: baseState.nodes,
     storageRepository,
+    refreshToken: anchorRefreshToken,
   });
 
   // pinned アンカーは基準日でなく revisionId で本文を固定解決する。
@@ -433,6 +437,15 @@ const LawViewerReadyState = ({
 
     navigateToArticle(nextArticleNumber);
   };
+
+  // 見比べダイアログが作成時版の本文を取得するためのローダー。ダイアログの effect が
+  // これを deps に取るため、親の再描画で参照が変わると無駄な再取得を招く。useCallback で
+  // 安定化し、依存するリポジトリと作成時版の revisionId が変わったときだけ作り直す。
+  const compareRevisionId = verification?.bookmark.target.revisionId ?? "";
+  const loadCreatedNodes = useCallback(
+    async () => (await resolvedRepository.getLaw(compareRevisionId)).nodes,
+    [resolvedRepository, compareRevisionId],
+  );
 
   const notFoundAlert = (
     <p
@@ -717,12 +730,11 @@ const LawViewerReadyState = ({
           status={verification.status}
           currentNodes={state.nodes}
           currentRevisionId={state.revision.revisionId}
-          loadCreatedNodes={async () =>
-            (await resolvedRepository.getLaw(verification.bookmark.target.revisionId ?? "")).nodes
-          }
+          loadCreatedNodes={loadCreatedNodes}
           storageRepository={storageRepository}
           onRepaired={() => {
             setIsCompareOpen(false);
+            setAnchorRefreshToken((n) => n + 1);
           }}
           onClose={() => {
             setIsCompareOpen(false);

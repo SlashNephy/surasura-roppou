@@ -91,6 +91,24 @@ describe("AnchorCompareDialog", () => {
     });
   });
 
+  it("作成時版の取得に失敗したとき、読み込み中のままにせずエラー文言を表示する", async () => {
+    render(
+      <AnchorCompareDialog
+        {...baseProps}
+        loadCreatedNodes={() => Promise.reject(new Error("network down"))}
+        storageRepository={
+          {
+            putBookmark: vi.fn<(bookmark: Bookmark) => Promise<void>>(() => Promise.resolve()),
+          } as never
+        }
+        onRepaired={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText("作成時の条文を読み込めませんでした。")).toBeInTheDocument();
+    expect(screen.queryByText("読み込み中…")).not.toBeInTheDocument();
+  });
+
   it("not_found のとき「付け替える」は無効", () => {
     render(
       <AnchorCompareDialog

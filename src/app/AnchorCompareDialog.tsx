@@ -43,11 +43,18 @@ export const AnchorCompareDialog = ({
 
   useEffect(() => {
     let cancelled = false;
-    void loadCreatedNodes().then((nodes) => {
-      if (!cancelled) {
-        setCreatedText(findArticleNode(nodes, article)?.plainText ?? "");
-      }
-    });
+    void loadCreatedNodes()
+      .then((nodes) => {
+        if (!cancelled) {
+          setCreatedText(findArticleNode(nodes, article)?.plainText ?? "");
+        }
+      })
+      .catch(() => {
+        // 取得失敗時は「読み込み中…」のまま固まらないよう、エラー文言を表示に切り替える。
+        if (!cancelled) {
+          setCreatedText("作成時の条文を読み込めませんでした。");
+        }
+      });
     return () => {
       cancelled = true;
     };

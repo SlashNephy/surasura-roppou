@@ -83,6 +83,44 @@ describe("useAnchorVerification", () => {
     expect(result.current).toBeUndefined();
   });
 
+  it("refreshToken が変わると storage を読み直し drift → match に更新する", async () => {
+    // 初回は指紋不一致（drift）のブックマークを返し、修復後に指紋一致のものへ差し替える。
+    // refreshToken の変更で検証が再実行され、同一セッション内で status が更新されることを検証する。
+    const matchingFingerprint = await computeArticleFingerprint("第一条 この法律は…");
+    let current = bookmark({
+      lawId: "L",
+      article: "1",
+      revisionId: "R",
+      fingerprint: "deadbeefdeadbeef",
+    });
+    const storageRepository = {
+      listBookmarks: () => Promise.resolve([current]),
+    } as unknown as Parameters<typeof useAnchorVerification>[0]["storageRepository"];
+
+    const { result, rerender } = renderHook(
+      ({ refreshToken }: { refreshToken: number }) =>
+        useAnchorVerification({ lawId: "L", article: "1", nodes, storageRepository, refreshToken }),
+      { initialProps: { refreshToken: 0 } },
+    );
+
+    await waitFor(() => {
+      expect(result.current?.status).toBe("drift");
+    });
+
+    // 修復に相当する差し替え。トークンを変えるまでは stale な drift のままであること。
+    current = bookmark({
+      lawId: "L",
+      article: "1",
+      revisionId: "R",
+      fingerprint: matchingFingerprint,
+    });
+    rerender({ refreshToken: 1 });
+
+    await waitFor(() => {
+      expect(result.current?.status).toBe("match");
+    });
+  });
+
   it("article が変わったとき、前の検証結果を即座に捨てて stale な値を返さない", async () => {
     // article="1" のアンカー付きブックマーク（指紋不一致で drift になるもの）を用意する。
     const storageRepository = storageWith([
