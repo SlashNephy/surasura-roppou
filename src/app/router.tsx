@@ -6,7 +6,15 @@ import type { QuickSearch } from "@/core/jump";
 import type { StorageRepository } from "@/core/storage";
 
 import { AppShell } from "./AppShell";
-import { HomePage, LawsPage, LawViewerPage, ScannerPage, SettingsPage, StudyPage } from "./pages";
+import {
+  HomePage,
+  LawsPage,
+  LawViewerPage,
+  ScannerPage,
+  SearchPage,
+  SettingsPage,
+  StudyPage,
+} from "./pages";
 import { SavedCollectionPage, SavedPage } from "./saved-page";
 
 interface CreateAppRouterOptions {
@@ -94,6 +102,15 @@ const createRouteTree = ({
     component: SettingsPage,
   });
 
+  const searchRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "search",
+    component: SearchPage,
+    validateSearch: (search: Record<string, unknown>) => ({
+      q: typeof search.q === "string" ? search.q : "",
+    }),
+  });
+
   return rootRoute.addChildren([
     indexRoute,
     lawsRoute,
@@ -103,6 +120,7 @@ const createRouteTree = ({
     scannerRoute,
     studyRoute,
     settingsRoute,
+    searchRoute,
   ]);
 };
 

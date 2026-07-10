@@ -126,4 +126,5 @@ export const StudyPage = () => (
 
 export { HomePage } from "./home-page";
 export { LawViewerPage } from "./law-viewer-page";
+export { SearchPage } from "./search-page";
 export { SettingsPage } from "./settings-page";
