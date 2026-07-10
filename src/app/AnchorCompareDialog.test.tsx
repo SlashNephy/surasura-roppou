@@ -1,7 +1,7 @@
 import type { Bookmark, LawNode } from "@/core/domain";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AnchorCompareDialog } from "./AnchorCompareDialog";
 
@@ -36,6 +36,10 @@ const baseProps = {
 };
 
 describe("AnchorCompareDialog", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("「付け替える」で target の指紋と revisionId を現在版へ更新して保存する", async () => {
     const putBookmark = vi.fn<(bookmark: Bookmark) => Promise<void>>(() => Promise.resolve());
     const onRepaired = vi.fn();
@@ -64,12 +68,13 @@ describe("AnchorCompareDialog", () => {
 
   it("「この版のまま固定する」で pinned=true にして保存する", async () => {
     const putBookmark = vi.fn<(bookmark: Bookmark) => Promise<void>>(() => Promise.resolve());
+    const onRepaired = vi.fn();
 
     render(
       <AnchorCompareDialog
         {...baseProps}
         storageRepository={{ putBookmark } as never}
-        onRepaired={vi.fn()}
+        onRepaired={onRepaired}
       />,
     );
 
@@ -81,6 +86,9 @@ describe("AnchorCompareDialog", () => {
     const saved = putBookmark.mock.calls[0][0];
     expect(saved.target.pinned).toBe(true);
     expect(saved.target.revisionId).toBe("old");
+    await waitFor(() => {
+      expect(onRepaired).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("not_found のとき「付け替える」は無効", () => {
