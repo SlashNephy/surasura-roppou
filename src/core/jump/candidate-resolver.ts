@@ -20,6 +20,10 @@ export interface ResolveReferenceOptions {
 // 組込辞書だけの resolver を一度だけ構築して共有する。
 const defaultResolver = createAliasResolver();
 
+// 相対シフト（前条/次条/前項/次項）の符号値かどうか。
+const isRelativeShift = (value: string | undefined): boolean =>
+  value === "previous" || value === "next";
+
 // 一致種別と条番号から確認 UI 向けの根拠文字列を組み立てる。
 const buildReason = (candidate: AliasCandidate, parsed: ParsedReference): string[] => {
   const reason =
@@ -54,6 +58,12 @@ export const resolveReferenceCandidates = (
 ): ReferenceResolution => {
   // 相対参照（法令名を持たない）は文脈がないと解決できない。
   if (parsed.kind === "relative") {
+    return { status: "unresolved", reason: "needs-context", parsed };
+  }
+
+  // 法令名があっても、条/項が相対シフト（前条/次条/前項/次項）なら
+  // 基準となる現在位置がないと解決できないため未解決とする。
+  if (isRelativeShift(parsed.article) || isRelativeShift(parsed.paragraph)) {
     return { status: "unresolved", reason: "needs-context", parsed };
   }
 

@@ -99,6 +99,14 @@ describe("resolveReferenceCandidates", () => {
     );
   });
 
+  it.each(["民法前条", "民法次条第2項"])("法令名つきの相対シフト %s は needs-context", (input) => {
+    const result = resolveText(input);
+
+    expect(result).toEqual(
+      expect.objectContaining({ status: "unresolved", reason: "needs-context" }),
+    );
+  });
+
   it("曖昧な略称は複数候補を登録順で返す", () => {
     // 同一略称 "民" を 2 法令へ張ったユーザー辞書を注入する。
     const resolver = createAliasResolver({
