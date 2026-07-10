@@ -337,6 +337,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Produces:
   - `SearchNavigationTarget = { to: "/laws/$lawId"; params: { lawId: string } } | { to: "/laws/$lawId/articles/$article"; params: { lawId: string; article: string } }`
   - `toNavigationTarget(candidate: Pick<QuickSearchCandidate, "lawId" | "article">): SearchNavigationTarget`
+  - `navigateToCandidate(navigate, candidate, options?): void` — 候補への命令的遷移を 1 箇所に集約（TanStack の union 型ナローイングをここだけに閉じ込め、Task 4/5 の重複を避ける）。
 
 - [ ] **Step 1: 失敗するテストを書く**
 
@@ -361,8 +362,21 @@ describe("toNavigationTarget", () => {
       params: { lawId: "129AC0000000089" },
     });
   });
+
+  it("navigateToCandidate は条文候補を条文ルートへ navigate する", () => {
+    const navigate = vi.fn();
+    navigateToCandidate(navigate, { lawId: "129AC0000000089", article: "709" }, { replace: true });
+
+    expect(navigate).toHaveBeenCalledWith({
+      to: "/laws/$lawId/articles/$article",
+      params: { lawId: "129AC0000000089", article: "709" },
+      replace: true,
+    });
+  });
 });
 ```
+
+> `vi` を `vitest` から import する（`import { describe, expect, it, vi } from "vitest";`）。`navigate` は最小の `vi.fn()` スタブで、`navigateToCandidate` が正しい引数で呼ぶことだけを見る。
 
 - [ ] **Step 2: テストが失敗することを確認**
 
@@ -374,6 +388,8 @@ Expected: FAIL（`toNavigationTarget` が未定義）
 `src/app/search-navigation.ts`:
 
 ```ts
+import type { useNavigate } from "@tanstack/react-router";
+
 import type { QuickSearchCandidate } from "@/core/jump";
 
 // core を route 非依存に保つため、候補 → ルート遷移の写像は app 層に置く。
@@ -390,6 +406,22 @@ export const toNavigationTarget = (
         to: "/laws/$lawId/articles/$article",
         params: { lawId: candidate.lawId, article: candidate.article },
       };
+
+// 候補への命令的遷移。TanStack の Link/navigate は union の `to` を素直に受けないため、
+// リテラルで分岐して params 型を一致させる。この型ナローイングをここ 1 箇所に閉じ込める。
+export const navigateToCandidate = (
+  navigate: ReturnType<typeof useNavigate>,
+  candidate: Pick<QuickSearchCandidate, "lawId" | "article">,
+  options: { replace?: boolean } = {},
+): void => {
+  const target = toNavigationTarget(candidate);
+
+  if (target.to === "/laws/$lawId") {
+    void navigate({ to: target.to, params: target.params, replace: options.replace });
+  } else {
+    void navigate({ to: target.to, params: target.params, replace: options.replace });
+  }
+};
 ```
 
 - [ ] **Step 4: テストが通ることを確認**
@@ -719,7 +751,7 @@ import { useDeferredValue, useEffect, useState } from "react";
 
 import type { QuickSearch, QuickSearchCandidate, QuickSearchOutcome } from "@/core/jump";
 
-import { toNavigationTarget } from "./search-navigation";
+import { navigateToCandidate } from "./search-navigation";
 ```
 
 コンポーネント内:
@@ -757,15 +789,9 @@ const handleOpenChange = (open: boolean) => {
 };
 
 const goToCandidate = (candidate: QuickSearchCandidate) => {
-  const target = toNavigationTarget(candidate);
   setOpen(false);
   setQuery("");
-  // union の to リテラルで分岐して params 型を一致させる。
-  if (target.to === "/laws/$lawId") {
-    void navigate({ to: target.to, params: target.params });
-  } else {
-    void navigate({ to: target.to, params: target.params });
-  }
+  navigateToCandidate(navigate, candidate);
 };
 
 const goToSearchPage = () => {
@@ -1011,26 +1037,28 @@ import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import type { QuickSearch, QuickSearchCandidate, QuickSearchOutcome } from "@/core/jump";
 
 import { defaultQuickSearch } from "./quick-search";
-import { toNavigationTarget } from "./search-navigation";
+import { navigateToCandidate, toNavigationTarget } from "./search-navigation";
+
+const candidateLinkClassName = "grid gap-1 rounded-md border p-4 hover:bg-accent";
 
 const CandidateLink = ({ candidate }: { candidate: QuickSearchCandidate }) => {
   const target = toNavigationTarget(candidate);
   const label = `${candidate.lawTitle}${candidate.article !== undefined ? ` 第${candidate.article}条` : ""}`;
-
-  // union の to リテラルで分岐し、params 型を一致させる。
-  if (target.to === "/laws/$lawId") {
-    return (
-      <Link className="grid gap-1 rounded-md border p-4 hover:bg-accent" to={target.to} params={target.params}>
-        <span className="font-serif font-semibold">{label}</span>
-        <span className="text-xs text-muted-foreground">{candidate.reason.join(" / ")}</span>
-      </Link>
-    );
-  }
-
-  return (
-    <Link className="grid gap-1 rounded-md border p-4 hover:bg-accent" to={target.to} params={target.params}>
+  // className と内容は 1 度だけ組み立て、Link ラッパーだけリテラル to で分岐する。
+  const content = (
+    <>
       <span className="font-serif font-semibold">{label}</span>
       <span className="text-xs text-muted-foreground">{candidate.reason.join(" / ")}</span>
+    </>
+  );
+
+  return target.to === "/laws/$lawId" ? (
+    <Link className={candidateLinkClassName} to={target.to} params={target.params}>
+      {content}
+    </Link>
+  ) : (
+    <Link className={candidateLinkClassName} to={target.to} params={target.params}>
+      {content}
     </Link>
   );
 };
@@ -1069,12 +1097,7 @@ export const SearchPage = ({
       return;
     }
 
-    const target = toNavigationTarget(outcome.candidates[0]);
-    if (target.to === "/laws/$lawId") {
-      void navigate({ to: target.to, params: target.params, replace: true });
-    } else {
-      void navigate({ to: target.to, params: target.params, replace: true });
-    }
+    navigateToCandidate(navigate, outcome.candidates[0], { replace: true });
   }, [outcome, navigate]);
 
   return (
