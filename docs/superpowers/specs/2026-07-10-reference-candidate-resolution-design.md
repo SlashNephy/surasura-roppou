@@ -97,19 +97,22 @@ interface LawReferenceCandidate extends Partial<ArticleReference> {
 }
 ```
 
-- 候補には具体的な条・項・号のみ載る。相対シフト値 `"previous"` / `"next"` は relative 参照でしか出ず、本関数は absolute のみ候補化するため混入しない。
+- 候補には具体的な条・項・号のみ載る。相対シフト値 `"previous"` / `"next"` を持つ候補は作らない。パーサーは `kind` を法令名の有無だけで決めるため、`民法前条` のように法令名 + 相対シフトの入力は `kind: "absolute"` かつ `article: "previous"` になりうる。この場合は基準となる現在位置がないと条を確定できないため、候補化せず `unresolved: needs-context` を返す（§5 参照）。
 - `article` の枝番ハイフン表現（`242-2`）は parse の値をそのまま使い、変換を挟まない（既存 `buildLawArticleUrl` の `:article` と同一表現）。
 
 ## 5. 解決ロジック
 
 `parsed` の状態で分岐する（`resolver.resolve()` は正規化後の完全一致で候補配列を返す）。
 
-| `parsed` の状態                    | 解決                        | 結果                                   |
-| ---------------------------------- | --------------------------- | -------------------------------------- |
-| `lawAlias` あり                    | `resolve(lawAlias)`         | `resolved`（alias 候補、曖昧なら複数） |
-| `lawNameCandidate` あり & 辞書一致 | `resolve(lawNameCandidate)` | `resolved`（official 候補）            |
-| `lawNameCandidate` あり & 辞書外   | `resolve()` → `[]`          | `unresolved: law-not-found`            |
-| 法令なし（`kind === "relative"`）  | —                           | `unresolved: needs-context`            |
+| `parsed` の状態                              | 解決                        | 結果                                   |
+| -------------------------------------------- | --------------------------- | -------------------------------------- |
+| 法令なし（`kind === "relative"`）            | —                           | `unresolved: needs-context`            |
+| 条/項が相対シフト（`"previous"` / `"next"`） | —                           | `unresolved: needs-context`            |
+| `lawAlias` あり                              | `resolve(lawAlias)`         | `resolved`（alias 候補、曖昧なら複数） |
+| `lawNameCandidate` あり & 辞書一致           | `resolve(lawNameCandidate)` | `resolved`（official 候補）            |
+| `lawNameCandidate` あり & 辞書外             | `resolve()` → `[]`          | `unresolved: law-not-found`            |
+
+判定は上から順に行う（相対参照・相対シフトを先に弾いてから法令名を解決する）。
 
 - **候補の構築**: 各 `AliasCandidate` から `{ lawId, lawTitle: officialTitle, article: parsed.article, paragraph: parsed.paragraph, item: parsed.item, score: parsed.score, reason }` を作る。`article` 等は値があるときのみ載せる（`Partial<ArticleReference>`）。
 - **ランキング**: `score` 降順に整列。同点（同一 alias が複数法令に解決するケース等）は `resolver.resolve()` の返却順（辞書登録順）で決定的に保つ。将来の外部信号は「基底 score を保ったまま加点する」フックとして関数を分けておく。
