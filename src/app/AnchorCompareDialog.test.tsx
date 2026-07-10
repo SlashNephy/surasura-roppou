@@ -109,6 +109,30 @@ describe("AnchorCompareDialog", () => {
     expect(screen.queryByText("読み込み中…")).not.toBeInTheDocument();
   });
 
+  it("putBookmark が失敗したとき、エラーメッセージを表示し onRepaired を呼ばない", async () => {
+    const putBookmark = vi
+      .fn<(bookmark: Bookmark) => Promise<void>>()
+      .mockRejectedValueOnce(new Error("storage full"));
+    const onRepaired = vi.fn();
+
+    render(
+      <AnchorCompareDialog
+        {...baseProps}
+        storageRepository={{ putBookmark } as never}
+        onRepaired={onRepaired}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "この版のまま固定する" }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText("修復を保存できませんでした。もう一度お試しください。"),
+      ).toBeInTheDocument();
+    });
+    expect(onRepaired).not.toHaveBeenCalled();
+  });
+
   it("not_found のとき「付け替える」は無効", () => {
     render(
       <AnchorCompareDialog

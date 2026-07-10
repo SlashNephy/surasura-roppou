@@ -40,6 +40,7 @@ export const AnchorCompareDialog = ({
   const article = bookmark.target.article ?? "";
   const [createdText, setCreatedText] = useState<string | undefined>(undefined);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,10 +65,14 @@ export const AnchorCompareDialog = ({
   const canRepath = status !== "not_found" && currentNode !== undefined;
 
   const persist = async (updated: Bookmark) => {
+    setSaveError(undefined);
     setIsSaving(true);
     try {
       await storageRepository.putBookmark(updated);
       onRepaired(updated);
+    } catch {
+      // putBookmark 失敗時はサイレントにせずエラーをユーザーに提示する。
+      setSaveError("修復を保存できませんでした。もう一度お試しください。");
     } finally {
       setIsSaving(false);
     }
@@ -124,6 +129,8 @@ export const AnchorCompareDialog = ({
             </p>
           </section>
         </div>
+
+        {saveError !== undefined ? <p className="text-sm text-destructive">{saveError}</p> : null}
 
         <DialogFooter>
           <Button

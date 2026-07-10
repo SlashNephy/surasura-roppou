@@ -1,3 +1,4 @@
+export { generateStorageId } from "./id";
 export { createSavedLawUseCase } from "./saved-law-use-case";
 export { createSavedDataExport } from "./export-data";
 export {

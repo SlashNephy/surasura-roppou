@@ -7,7 +7,7 @@ import { buildLawArticleUrl, computeArticleFingerprint } from "@/core/domain";
 import { createEgovLawRepository } from "@/core/egov";
 import type { LawRepository } from "@/core/egov";
 import { resolveAsOf } from "@/core/settings";
-import { createSavedLawUseCase, createStorageRepository } from "@/core/storage";
+import { createSavedLawUseCase, createStorageRepository, generateStorageId } from "@/core/storage";
 import type { StorageRepository } from "@/core/storage";
 import {
   LawDocumentView,
@@ -373,21 +373,26 @@ const LawViewerReadyState = ({
       return;
     }
 
-    const fingerprint = await computeArticleFingerprint(node.plainText);
-    const now = new Date().toISOString();
-    await storageRepository.putBookmark({
-      id: generateAnchorBookmarkId(),
-      target: {
-        lawId,
-        article: articleNumber,
-        revisionId: state.revision.revisionId,
-        fingerprint,
-      },
-      title: node.title ?? `第${articleNumber}条`,
-      tags: [],
-      createdAt: now,
-      updatedAt: now,
-    });
+    setSaveError(undefined);
+    try {
+      const fingerprint = await computeArticleFingerprint(node.plainText);
+      const now = new Date().toISOString();
+      await storageRepository.putBookmark({
+        id: generateStorageId(),
+        target: {
+          lawId,
+          article: articleNumber,
+          revisionId: state.revision.revisionId,
+          fingerprint,
+        },
+        title: node.title ?? `第${articleNumber}条`,
+        tags: [],
+        createdAt: now,
+        updatedAt: now,
+      });
+    } catch {
+      setSaveError("この条文を保存できませんでした。端末の保存領域を確認してください。");
+    }
   };
 
   const handleSaveToggle = async () => {
@@ -764,17 +769,6 @@ const normalizeArticleNumberInput = (articleNumber: string): string =>
 
 const getClipboard = (): Pick<Clipboard, "writeText"> | undefined =>
   (navigator as Navigator & { clipboard?: Pick<Clipboard, "writeText"> }).clipboard;
-
-// ブックマーク保存用の一意 ID を生成する。crypto.randomUUID が使えない環境向けに簡易フォールバックを持つ。
-const generateAnchorBookmarkId = (): string => {
-  const browserCrypto = (globalThis as { crypto?: Crypto }).crypto;
-
-  if (browserCrypto !== undefined && typeof browserCrypto.randomUUID === "function") {
-    return browserCrypto.randomUUID();
-  }
-
-  return `bookmark-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-};
 
 const ArticleQuickActions = ({
   article,
