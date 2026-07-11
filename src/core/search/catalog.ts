@@ -21,7 +21,7 @@ export interface CatalogSearchResult {
 export interface CatalogSearchService {
   search(
     query: string,
-    options?: { online?: boolean; limit?: number },
+    options?: { online?: boolean; limit?: number; signal?: AbortSignal },
   ): Promise<CatalogSearchResult>;
 }
 
@@ -52,7 +52,12 @@ export const createCatalogSearchService = (
 
       if (options.online !== false) {
         try {
-          const summaries = await fetchOnline(dependencies.lawRepository, trimmed, limit);
+          const summaries = await fetchOnline(
+            dependencies.lawRepository,
+            trimmed,
+            limit,
+            options.signal,
+          );
           const entries = dedupeById(summaries.map((summary) => toCatalogEntry(summary, now)));
           await dependencies.indexRepository.upsertCatalogEntries(entries);
           const hits = toHits(entries, trimmed);
@@ -61,6 +66,10 @@ export const createCatalogSearchService = (
             return { hits: hits.slice(0, limit), source: "online" };
           }
         } catch (error) {
+          // 中断は正常系。キャッシュフォールバックへ進まず呼び出し側へ伝播させる。
+          if (options.signal?.aborted === true || isAbortError(error)) {
+            throw error;
+          }
           // ネットワーク不通などはキャッシュへフォールバックする。想定外の失敗も観測できるよう英語でログする。
           console.warn("[search] online catalog search failed, falling back to cache", error);
         }
@@ -74,16 +83,21 @@ export const createCatalogSearchService = (
   };
 };
 
+// fetch の中断は DOMException("AbortError")。名前で判定する。
+const isAbortError = (error: unknown): boolean =>
+  error instanceof DOMException && error.name === "AbortError";
+
 const fetchOnline = async (
   lawRepository: LawRepository,
   query: string,
   limit: number,
+  signal?: AbortSignal,
 ): Promise<LawSummary[]> => {
   // 名前検索と番号検索は互いに独立なので、並列に投げてレイテンシを抑える。
-  const requests = [lawRepository.listLaws({ title: query, limit })];
+  const requests = [lawRepository.listLaws({ title: query, limit }, { signal })];
 
   if (lawNumberPattern.test(query)) {
-    requests.push(lawRepository.listLaws({ lawNumber: query, limit }));
+    requests.push(lawRepository.listLaws({ lawNumber: query, limit }, { signal }));
   }
 
   const results = await Promise.all(requests);

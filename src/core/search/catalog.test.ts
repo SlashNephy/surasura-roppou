@@ -128,6 +128,8 @@ describe("CatalogSearchService", () => {
 
     expect(listLaws).toHaveBeenCalledWith(
       expect.objectContaining({ lawNumber: "明治二十九年法律第八十九号" }),
+      // signal を転送するようになったため、第 2 引数が存在する。
+      expect.anything(),
     );
   });
 
@@ -150,6 +152,46 @@ describe("CatalogSearchService", () => {
     expect(result.source).toBe("online");
     expect(result.hits).toHaveLength(1);
     expect(result.hits.map((hit) => hit.lawId)).toEqual(["129AC0000000089"]);
+  });
+
+  it("search は signal を listLaws へ渡す", async () => {
+    const databaseName = createDatabaseName();
+    const indexRepository = createSearchIndexRepository({ databaseName });
+    openedSearch.push(indexRepository);
+    const controller = new AbortController();
+    let received: AbortSignal | undefined;
+    const lawRepository = {
+      listLaws: vi.fn((_query: unknown, options?: { signal?: AbortSignal }) => {
+        received = options?.signal;
+        return Promise.resolve({ totalCount: 0, count: 0, laws: [] });
+      }),
+    } as unknown as LawRepository;
+    const service = createCatalogSearchService({ lawRepository, indexRepository });
+
+    await service.search("民法", { signal: controller.signal });
+
+    expect(received).toBe(controller.signal);
+  });
+
+  it("中断された signal では AbortError を投げ、キャッシュを引かない", async () => {
+    const databaseName = createDatabaseName();
+    const indexRepository = createSearchIndexRepository({ databaseName });
+    openedSearch.push(indexRepository);
+    const controller = new AbortController();
+    controller.abort();
+    const abortError = new DOMException("aborted", "AbortError");
+    const lawRepository = {
+      listLaws: vi.fn(() => Promise.reject(abortError)),
+    } as unknown as LawRepository;
+    const listCatalog = vi.fn(() => Promise.resolve([]));
+    const indexRepositoryLocal = { ...indexRepository, listCatalog };
+    const service = createCatalogSearchService({
+      lawRepository,
+      indexRepository: indexRepositoryLocal,
+    });
+
+    await expect(service.search("民法", { signal: controller.signal })).rejects.toBe(abortError);
+    expect(listCatalog).not.toHaveBeenCalled();
   });
 
   // オンライン呼び出し自体は成功したがヒットが 0 件だった場合、

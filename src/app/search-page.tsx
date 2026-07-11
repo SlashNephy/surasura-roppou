@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 
 import type { QuickSearch, QuickSearchCandidate, QuickSearchOutcome } from "@/core/jump";
+import { Skeleton } from "@/shared/ui/skeleton";
 
 import { defaultQuickSearch } from "./quick-search";
 import { navigateToCandidate, toNavigationTarget } from "./search-navigation";
@@ -36,6 +37,8 @@ export const SearchPage = ({ quickSearch = defaultQuickSearch }: { quickSearch?:
   const navigate = useNavigate();
   // クエリが空のときは "empty" を初期値とする。
   const [outcome, setOutcome] = useState<QuickSearchOutcome>({ status: "empty" });
+  // 検索が解決した時点のクエリ。現在の q との差分で「検索中」を判定する。
+  const [settledQuery, setSettledQuery] = useState("");
 
   useEffect(() => {
     const trimmed = q.trim();
@@ -45,23 +48,31 @@ export const SearchPage = ({ quickSearch = defaultQuickSearch }: { quickSearch?:
     }
 
     let cancelled = false;
+    const controller = new AbortController();
     void quickSearch
-      .search(trimmed)
+      .search(trimmed, { signal: controller.signal })
       .then((next) => {
         if (!cancelled) {
           setOutcome(next);
+          setSettledQuery(q);
         }
       })
       .catch((error: unknown) => {
+        // 中断（クエリ変更・アンマウント）は正常系なので無視する。
+        if (controller.signal.aborted) {
+          return;
+        }
         console.error("search page query failed", error);
         if (!cancelled) {
           // 検索失敗時は空の候補リストにフォールバックして「該当なし」状態を表示する。
           setOutcome({ status: "candidates", candidates: [], autoJump: false });
+          setSettledQuery(q);
         }
       });
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [q, quickSearch]);
 
@@ -75,6 +86,8 @@ export const SearchPage = ({ quickSearch = defaultQuickSearch }: { quickSearch?:
   }, [outcome, navigate]);
 
   const trimmedQ = q.trim();
+  // settledQuery が現在の q に追いつくまでは検索中（通信待ち）とみなす。
+  const isSearching = trimmedQ !== "" && settledQuery !== q;
 
   return (
     <section className="mx-auto grid w-full max-w-3xl gap-6 px-5 py-10">
@@ -89,8 +102,16 @@ export const SearchPage = ({ quickSearch = defaultQuickSearch }: { quickSearch?:
         </p>
       ) : null}
 
+      {trimmedQ !== "" && isSearching ? (
+        <div role="status" aria-label="検索中" className="grid gap-3">
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+        </div>
+      ) : null}
+
       {/* 空クエリ時は effect が outcome を更新しないため、stale な outcome を表示しないようにガードする。 */}
-      {trimmedQ !== "" && outcome.status === "unresolved" ? (
+      {!isSearching && trimmedQ !== "" && outcome.status === "unresolved" ? (
         <p
           role="status"
           className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground"
@@ -101,7 +122,10 @@ export const SearchPage = ({ quickSearch = defaultQuickSearch }: { quickSearch?:
         </p>
       ) : null}
 
-      {trimmedQ !== "" && outcome.status === "candidates" && outcome.candidates.length > 0 ? (
+      {!isSearching &&
+      trimmedQ !== "" &&
+      outcome.status === "candidates" &&
+      outcome.candidates.length > 0 ? (
         <ul className="grid gap-3">
           {outcome.candidates.map((candidate) => (
             <li key={`${candidate.kind}:${candidate.lawId}:${candidate.article ?? ""}`}>
@@ -111,7 +135,10 @@ export const SearchPage = ({ quickSearch = defaultQuickSearch }: { quickSearch?:
         </ul>
       ) : null}
 
-      {trimmedQ !== "" && outcome.status === "candidates" && outcome.candidates.length === 0 ? (
+      {!isSearching &&
+      trimmedQ !== "" &&
+      outcome.status === "candidates" &&
+      outcome.candidates.length === 0 ? (
         <p className="text-sm text-muted-foreground">該当する候補がありません。</p>
       ) : null}
     </section>

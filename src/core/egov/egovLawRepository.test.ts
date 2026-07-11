@@ -241,4 +241,24 @@ describe("EgovLawRepository", () => {
       url: "https://laws.e-gov.go.jp/api/2/law_data/129AC0000000089?law_full_text_format=json&response_format=json",
     });
   });
+
+  it("listLaws は options.signal を fetcher へ転送する", async () => {
+    const controller = new AbortController();
+    let receivedSignal: AbortSignal | undefined;
+    const fetcher: typeof fetch = (_url, init) => {
+      receivedSignal = init?.signal ?? undefined;
+
+      return Promise.resolve(
+        new Response(JSON.stringify({ laws: [], total_count: 0, count: 0 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    };
+    const repository = createEgovLawRepository({ fetcher });
+
+    await repository.listLaws({ title: "民法" }, { signal: controller.signal });
+
+    expect(receivedSignal).toBe(controller.signal);
+  });
 });

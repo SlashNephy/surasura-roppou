@@ -59,7 +59,7 @@ export interface LawMetadata {
 }
 
 export interface LawRepository {
-  listLaws(query?: LawListQuery): Promise<LawListResult>;
+  listLaws(query?: LawListQuery, options?: { signal?: AbortSignal }): Promise<LawListResult>;
   getLaw(lawIdOrNumOrRevisionId: string, query?: LawDataQuery): Promise<LawDocument>;
   getLawMetadata(lawIdOrNum: string, query?: LawMetadataQuery): Promise<LawMetadata>;
 }
@@ -112,9 +112,16 @@ export const createEgovLawRepository = (options: EgovLawRepositoryOptions = {}):
   const fetcher = options.fetcher ?? ((...args) => globalThis.fetch(...args));
   const now = options.now ?? (() => new Date());
 
-  const requestJson = async (path: string, query: Record<string, QueryValue>): Promise<unknown> => {
+  const requestJson = async (
+    path: string,
+    query: Record<string, QueryValue>,
+    signal?: AbortSignal,
+  ): Promise<unknown> => {
     const url = buildUrl(baseUrl, path, { ...query, response_format: "json" });
-    const response = await fetcher(url, { headers: { accept: "application/json" } });
+    const response = await fetcher(url, {
+      headers: { accept: "application/json" },
+      ...(signal !== undefined ? { signal } : {}),
+    });
     const payload = await parseJsonResponse(response, url);
 
     if (!response.ok) {
@@ -125,16 +132,20 @@ export const createEgovLawRepository = (options: EgovLawRepositoryOptions = {}):
   };
 
   return {
-    async listLaws(query = {}) {
-      const payload = await requestJson("/laws", {
-        law_id: query.lawId,
-        law_num: query.lawNumber,
-        law_title: query.title,
-        law_type: query.lawTypes,
-        asof: query.asOf,
-        offset: query.offset,
-        limit: query.limit,
-      });
+    async listLaws(query = {}, options = {}) {
+      const payload = await requestJson(
+        "/laws",
+        {
+          law_id: query.lawId,
+          law_num: query.lawNumber,
+          law_title: query.title,
+          law_type: query.lawTypes,
+          asof: query.asOf,
+          offset: query.offset,
+          limit: query.limit,
+        },
+        options.signal,
+      );
       const response = parseLawsResponse(payload);
 
       return {

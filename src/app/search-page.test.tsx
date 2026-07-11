@@ -6,7 +6,7 @@ import {
   createRouter,
 } from "@tanstack/react-router";
 import { act, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createQuickSearch } from "@/core/jump";
 import type { QuickSearch, QuickSearchOutcome } from "@/core/jump";
@@ -108,5 +108,36 @@ describe("SearchPage", () => {
 
     // stale な候補（商法）は DOM に存在しない。
     expect(screen.queryByText("商法")).not.toBeInTheDocument();
+  });
+
+  it("検索中はスケルトンを表示し、解決後に候補を表示する", async () => {
+    let resolveFn: ((outcome: QuickSearchOutcome) => void) | undefined;
+    const quickSearch = {
+      search: vi.fn(
+        () =>
+          new Promise<QuickSearchOutcome>((resolve) => {
+            resolveFn = resolve;
+          }),
+      ),
+    } as unknown as QuickSearch;
+
+    // 既存の renderSearch は quickSearch を第2引数で受け取れる。
+    renderSearch("民法", quickSearch);
+
+    expect(await screen.findByRole("status", { name: "検索中" })).toBeInTheDocument();
+
+    await act(async () => {
+      await Promise.resolve();
+      resolveFn?.({
+        status: "candidates",
+        candidates: [
+          { kind: "catalog", lawId: "129AC0000000089", lawTitle: "民法", reason: [], score: 0.3 },
+        ],
+        autoJump: false,
+      });
+    });
+
+    expect(await screen.findByText("民法")).toBeInTheDocument();
+    expect(screen.queryByRole("status", { name: "検索中" })).not.toBeInTheDocument();
   });
 });
