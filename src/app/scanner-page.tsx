@@ -4,6 +4,7 @@ import { Camera, ImageUp, RotateCcw, X } from "lucide-react";
 import {
   createCameraStreamProvider,
   createCapturedImageFromFile,
+  isCameraSupported,
   releaseCapturedImage,
 } from "@/core/ocr";
 import type { CameraErrorKind, CameraStreamProvider, CapturedImage } from "@/core/ocr";
@@ -53,6 +54,9 @@ export const ScannerPage = ({
   } = useCamera(cameraStreamProvider);
   const fileInputId = useId();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // OS カメラ起動用の入力を独立した ref で管理する。
+  const cameraInputId = useId();
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
   // アンマウント時に未解放の object URL を確実に revoke する。
   // imageRef は render 外（effect）でのみ更新し、react-hooks/refs の制約を満たす。
@@ -107,14 +111,30 @@ export const ScannerPage = ({
 
   // 共通の非表示ファイル入力。idle・error のどちらからも使う。
   const fileInput = (
-    <input
-      accept="image/*"
-      className="sr-only"
-      id={fileInputId}
-      onChange={handleFileChange}
-      ref={fileInputRef}
-      type="file"
-    />
+    <>
+      <input
+        accept="image/*"
+        className="sr-only"
+        id={fileInputId}
+        onChange={handleFileChange}
+        ref={fileInputRef}
+        type="file"
+      />
+      {/* OS カメラ起動用の入力。getUserMedia 非対応環境や権限拒否時のフォールバック。
+          capture="environment" で背面カメラを優先する。 */}
+      <label className="sr-only" htmlFor={cameraInputId}>
+        端末のカメラで撮影
+      </label>
+      <input
+        accept="image/*"
+        capture="environment"
+        className="sr-only"
+        id={cameraInputId}
+        onChange={handleFileChange}
+        ref={cameraInputRef}
+        type="file"
+      />
+    </>
   );
 
   if (image !== undefined) {
@@ -181,12 +201,26 @@ export const ScannerPage = ({
       </h1>
       <PrivacyNote />
       {cameraStatus === "error" && cameraError !== undefined ? (
-        <p
-          role="alert"
-          className="rounded-md border border-destructive/50 px-4 py-3 text-sm leading-6 text-destructive"
-        >
-          {cameraErrorMessage(cameraError)}
-        </p>
+        <>
+          <p
+            role="alert"
+            className="rounded-md border border-destructive/50 px-4 py-3 text-sm leading-6 text-destructive"
+          >
+            {cameraErrorMessage(cameraError)}
+          </p>
+          {/* 権限拒否時に OS ネイティブカメラで再試行できるフォールバック。 */}
+          <Button
+            className="w-full"
+            onClick={() => {
+              cameraInputRef.current?.click();
+            }}
+            type="button"
+            variant="outline"
+          >
+            <Camera className="size-4" aria-hidden="true" />
+            端末のカメラで撮影
+          </Button>
+        </>
       ) : null}
       <label htmlFor={fileInputId} className="sr-only">
         画像を選ぶ
@@ -195,7 +229,13 @@ export const ScannerPage = ({
       <Button
         className="h-auto w-full flex-col gap-1 py-8"
         onClick={() => {
-          void startCamera();
+          // getUserMedia が使えない環境（非セキュアコンテキスト・古いブラウザ等）では
+          // OS カメラ入力にフォールバックし、ネイティブカメラアプリを起動する。
+          if (isCameraSupported()) {
+            void startCamera();
+          } else {
+            cameraInputRef.current?.click();
+          }
         }}
         type="button"
       >

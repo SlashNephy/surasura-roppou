@@ -1,10 +1,21 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CameraError } from "@/core/ocr";
+import { CameraError, isCameraSupported } from "@/core/ocr";
 import type { CameraStreamProvider } from "@/core/ocr";
 
 import { ScannerPage } from "./scanner-page";
+
+// jsdom は navigator.mediaDevices を持たないため、テストごとに制御できるよう
+// isCameraSupported をモックに差し替える。デフォルトは true にして
+// 既存カメラテストが getUserMedia 経路を通るようにする。
+vi.mock("@/core/ocr", async (importActual) => {
+  const actual = await importActual<typeof import("@/core/ocr")>();
+  return {
+    ...actual,
+    isCameraSupported: vi.fn(() => true),
+  };
+});
 
 beforeEach(() => {
   vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:mock");
@@ -67,6 +78,12 @@ const providerRejecting = (error: CameraError): CameraStreamProvider => ({
 });
 
 describe("ScannerPage カメラ", () => {
+  beforeEach(() => {
+    // restoreAllMocks() が vi.fn() の実装を消すことがあるため、
+    // カメラテストごとにデフォルト値（true）を明示的に復元する。
+    vi.mocked(isCameraSupported).mockReturnValue(true);
+  });
+
   it("shows a permission error and fallback when the stream is denied", async () => {
     render(
       <ScannerPage
@@ -101,5 +118,32 @@ describe("ScannerPage カメラ", () => {
 
     const preview = await screen.findByRole("img", { name: /プレビュー/ });
     expect(preview).toHaveAttribute("src", "blob:mock");
+  });
+
+  it("routes to OS-camera input instead of getUserMedia when camera is unsupported", () => {
+    const requestStream = vi.fn();
+    vi.mocked(isCameraSupported).mockReturnValue(false);
+
+    render(<ScannerPage cameraStreamProvider={{ requestStream }} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /撮る/ }));
+
+    // getUserMedia 非対応時は requestStream を呼ばずに OS カメラ入力を起動する。
+    expect(requestStream).not.toHaveBeenCalled();
+  });
+
+  it("shows OS-camera fallback button in the permission-error state", async () => {
+    render(
+      <ScannerPage
+        cameraStreamProvider={providerRejecting(new CameraError("permission-denied"))}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /撮る/ }));
+
+    await screen.findByRole("alert");
+    // 権限拒否時は OS カメラボタンとライブラリ選択の両方が提示される。
+    expect(screen.getByLabelText("端末のカメラで撮影")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /画像を選ぶ/ })).toBeInTheDocument();
   });
 });
