@@ -17,9 +17,10 @@ export default defineConfig({
     viteStaticCopy({
       targets: [
         // tesseract.js-core の wasm 一式を自オリジンへ配置し corePath="/tesseract" から解決させる。
+        // LICENSE/README/index.js/package.json 等の不要ファイルを除外し wasm と wasm.js のみを配信する。
         // pnpm のシムリンク構造をストリップして dest 直下にフラット展開するため stripBase を使う。
         {
-          src: "node_modules/tesseract.js-core/*",
+          src: "node_modules/tesseract.js-core/*.wasm*",
           dest: "tesseract",
           rename: { stripBase: true },
         },
