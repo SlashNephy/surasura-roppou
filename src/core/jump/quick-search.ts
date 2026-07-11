@@ -28,6 +28,7 @@ export type QuickSearchOutcome =
 export interface QuickSearchOptions {
   limit?: number;
   online?: boolean;
+  signal?: AbortSignal;
 }
 
 export interface QuickSearch {
@@ -106,6 +107,7 @@ export const createQuickSearch = (dependencies: QuickSearchDependencies): QuickS
       const catalogResult = await catalog.search(trimmed, {
         online: options.online,
         limit: options.limit,
+        signal: options.signal,
       });
 
       // 参照候補と同一 lawId のカタログ重複は落とす（同じ法令を二重表示しない）。

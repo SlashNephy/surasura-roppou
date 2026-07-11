@@ -81,4 +81,26 @@ describe("createQuickSearch", () => {
     if (outcome.status !== "candidates") return;
     expect(outcome.candidates[0]).toMatchObject({ kind: "catalog", lawId: "347AC0000000057" });
   });
+
+  it("search は signal をカタログ検索へ渡す", async () => {
+    const controller = new AbortController();
+    let received: AbortSignal | undefined;
+    const catalog: CatalogSearchService = {
+      search: vi.fn(
+        (
+          _query: string,
+          options?: { online?: boolean; limit?: number; signal?: AbortSignal },
+        ): Promise<CatalogSearchResult> => {
+          received = options?.signal;
+          return Promise.resolve({ hits: [], source: "cache" });
+        },
+      ),
+    };
+    const quickSearch = createQuickSearch({ catalog });
+
+    // 法令名のみ（autoJump しない）→ カタログ検索が走る
+    await quickSearch.search("民法", { signal: controller.signal });
+
+    expect(received).toBe(controller.signal);
+  });
 });
