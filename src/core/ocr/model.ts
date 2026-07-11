@@ -2,7 +2,7 @@
 export const MODEL_LANG = "jpn";
 
 // tessdata_fast/jpn.traineddata の実測サイズ（bytes）。同意文言「約N MB」の単一の出所。
-export const MODEL_SIZE_BYTES = 2_464_154;
+export const MODEL_SIZE_BYTES = 2_471_260;
 
 // 自オリジン配信パス。第三者オリジンへリクエストを出さないため相対（同一オリジン）にする。
 // 末尾スラッシュを付けない（tesseract.js の langPath 仕様）。
