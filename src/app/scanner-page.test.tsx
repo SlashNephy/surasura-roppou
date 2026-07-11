@@ -1,6 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { CameraError } from "@/core/ocr";
+import type { CameraStreamProvider } from "@/core/ocr";
+
 import { ScannerPage } from "./scanner-page";
 
 beforeEach(() => {
@@ -8,6 +11,14 @@ beforeEach(() => {
   vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {
     // mock implementation
   });
+  // jsdom は canvas 2d と再生を実装しないため撮影経路をモックする。
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+    drawImage: vi.fn(),
+  } as unknown as CanvasRenderingContext2D);
+  vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation((callback) => {
+    callback(new Blob(["x"], { type: "image/jpeg" }));
+  });
+  vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -42,5 +53,53 @@ describe("ScannerPage アップロード", () => {
 
     expect(screen.queryByRole("img", { name: /プレビュー/ })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /画像を選ぶ/ })).toBeInTheDocument();
+  });
+});
+
+const fakeStream = (): MediaStream => ({ getTracks: () => [] }) as unknown as MediaStream;
+
+const providerReturning = (stream: MediaStream): CameraStreamProvider => ({
+  requestStream: () => Promise.resolve(stream),
+});
+
+const providerRejecting = (error: CameraError): CameraStreamProvider => ({
+  requestStream: () => Promise.reject(error),
+});
+
+describe("ScannerPage カメラ", () => {
+  it("shows a permission error and fallback when the stream is denied", async () => {
+    render(
+      <ScannerPage
+        cameraStreamProvider={providerRejecting(new CameraError("permission-denied"))}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /撮る/ }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/カメラ/);
+    // フォールバックとして画像選択が残る。
+    expect(screen.getByRole("button", { name: /画像を選ぶ/ })).toBeInTheDocument();
+  });
+
+  it("shows the live camera and returns to idle on cancel", async () => {
+    render(<ScannerPage cameraStreamProvider={providerReturning(fakeStream())} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /撮る/ }));
+
+    const cancel = await screen.findByRole("button", { name: "キャンセル" });
+    fireEvent.click(cancel);
+
+    expect(screen.getByRole("button", { name: /撮る/ })).toBeInTheDocument();
+  });
+
+  it("captures a frame into a preview", async () => {
+    render(<ScannerPage cameraStreamProvider={providerReturning(fakeStream())} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /撮る/ }));
+    const shutter = await screen.findByRole("button", { name: "シャッター" });
+    fireEvent.click(shutter);
+
+    const preview = await screen.findByRole("img", { name: /プレビュー/ });
+    expect(preview).toHaveAttribute("src", "blob:mock");
   });
 });
