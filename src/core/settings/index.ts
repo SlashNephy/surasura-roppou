@@ -6,3 +6,4 @@ export {
   setBaseDate,
   subscribe,
 } from "./base-date";
+export { getOcrModelConsent, setOcrModelConsent } from "./ocr-consent";
