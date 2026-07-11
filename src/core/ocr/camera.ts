@@ -43,8 +43,10 @@ export const isCameraSupported = (): boolean => {
   if (typeof navigator === "undefined") {
     return false;
   }
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-  return typeof navigator.mediaDevices?.getUserMedia === "function";
+  // navigator.mediaDevices は型上は常に存在するが、非セキュアコンテキストや
+  // 古い環境では実行時に undefined になりうる。undefined 込みで扱う。
+  const mediaDevices = navigator.mediaDevices as MediaDevices | undefined;
+  return typeof mediaDevices?.getUserMedia === "function";
 };
 
 export const createCameraStreamProvider = (): CameraStreamProvider => ({
