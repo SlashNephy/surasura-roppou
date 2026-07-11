@@ -28,7 +28,7 @@
 **変更**
 
 - `src/core/egov/repository.ts` — `requestJson` と `listLaws` に `signal` を通す。
-- `src/core/egov/repository.test.ts`（無ければ既存の egov テストファイル）— `listLaws(query, { signal })` が fetcher へ signal を転送する検証。
+- `src/core/egov/egovLawRepository.test.ts`（無ければ既存の egov テストファイル）— `listLaws(query, { signal })` が fetcher へ signal を転送する検証。
 - `src/core/search/catalog.ts` — `search` に `signal`、`fetchOnline` へ伝播、`AbortError` を rethrow。
 - `src/core/search/catalog.test.ts` — signal 伝播・abort 時のキャッシュ非呼び出し。
 - `src/core/jump/quick-search.ts` — `search` に `signal`、`catalog.search` へ伝播。
@@ -45,7 +45,7 @@
 **Files:**
 
 - Modify: `src/core/egov/repository.ts`
-- Test: `src/core/egov/repository.test.ts`（既存のリポジトリテストファイル。無ければ新規作成）
+- Test: `src/core/egov/egovLawRepository.test.ts`（既存のリポジトリテストファイル。無ければ新規作成）
 
 **Interfaces:**
 
@@ -53,7 +53,7 @@
 
 - [ ] **Step 1: 失敗するテストを追加**
 
-既存の egov テスト（`src/core/egov/repository.test.ts`）に追記。既存の `createEgovLawRepository({ fetcher })` パターンに合わせる:
+既存の egov テスト（`src/core/egov/egovLawRepository.test.ts`）に追記。既存の `createEgovLawRepository({ fetcher })` パターンに合わせる:
 
 ```ts
 it("listLaws は options.signal を fetcher へ転送する", async () => {
@@ -78,7 +78,7 @@ it("listLaws は options.signal を fetcher へ転送する", async () => {
 
 - [ ] **Step 2: 失敗を確認**
 
-Run: `pnpm exec vitest run src/core/egov/repository.test.ts -t "signal"`
+Run: `pnpm exec vitest run src/core/egov/egovLawRepository.test.ts -t "signal"`
 Expected: FAIL（`receivedSignal` が `undefined`。第2引数未対応）
 
 - [ ] **Step 3: 実装**
@@ -135,7 +135,7 @@ const requestJson = async (
 
 - [ ] **Step 4: 通過を確認**
 
-Run: `pnpm exec vitest run src/core/egov/repository.test.ts`
+Run: `pnpm exec vitest run src/core/egov/egovLawRepository.test.ts`
 Expected: PASS（新規 + 既存すべて）
 
 - [ ] **Step 5: 検証ゲート**
@@ -146,7 +146,7 @@ Expected: PASS
 - [ ] **Step 6: コミット**
 
 ```bash
-git add src/core/egov/repository.ts src/core/egov/repository.test.ts
+git add src/core/egov/repository.ts src/core/egov/egovLawRepository.test.ts
 git commit -m "feat(egov): listLaws に AbortSignal を通す
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
