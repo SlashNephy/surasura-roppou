@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { CameraError } from "@/core/ocr";
 import type { CameraErrorKind, CameraStreamProvider, CapturedImage } from "@/core/ocr";
@@ -18,10 +18,24 @@ export interface UseCameraResult {
 export const useCamera = (provider: CameraStreamProvider): UseCameraResult => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  // start() ごとに増える世代番号。await 完了時に自分が最新かを判定し、
+  // 追い越された（stop / 別の start / アンマウントが起きた）リクエストの
+  // ストリームを破棄してカメラ点灯の残留を防ぐ。
+  const requestGenerationRef = useRef(0);
+  const mountedRef = useRef(true);
   const [status, setStatus] = useState<CameraStatus>("idle");
   const [error, setError] = useState<CameraErrorKind | undefined>();
 
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+    },
+    [],
+  );
+
   const stop = useCallback(() => {
+    // 進行中の start() を無効化し、await 完了後のストリームを破棄させる。
+    requestGenerationRef.current += 1;
     // 全トラックを停止しないとカメラの点灯が残る。
     streamRef.current?.getTracks().forEach((track) => {
       track.stop();
@@ -47,8 +61,21 @@ export const useCamera = (provider: CameraStreamProvider): UseCameraResult => {
   }, []);
 
   const start = useCallback(async () => {
+    const generation = (requestGenerationRef.current += 1);
     try {
       const stream = await provider.requestStream();
+      // await 中に stop() / 別の start() / アンマウントが起きていたら、
+      // 取得したストリームは即座に停止して破棄する。
+      if (!mountedRef.current || generation !== requestGenerationRef.current) {
+        stream.getTracks().forEach((track) => {
+          track.stop();
+        });
+        return;
+      }
+      // 既存ストリームが残っていれば停止してから差し替える（多重起動時のリーク防止）。
+      streamRef.current?.getTracks().forEach((track) => {
+        track.stop();
+      });
       streamRef.current = stream;
       const node = videoRef.current;
       if (node !== null) {
@@ -61,6 +88,10 @@ export const useCamera = (provider: CameraStreamProvider): UseCameraResult => {
       setError(undefined);
       setStatus("active");
     } catch (cause) {
+      // 追い越された・アンマウント済みのリクエストは state を触らない。
+      if (!mountedRef.current || generation !== requestGenerationRef.current) {
+        return;
+      }
       setError(cause instanceof CameraError ? cause.kind : "unknown");
       setStatus("error");
     }

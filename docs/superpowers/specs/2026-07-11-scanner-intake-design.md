@@ -36,7 +36,7 @@ Last updated: 2026-07-11
 
 ## 3. アーキテクチャ
 
-```
+```text
 ┌─ core/ocr（新規・DOM/React 非依存の取り込みドメイン） ───────────┐
 │  types.ts   CaptureSource / CapturedImage / CameraErrorKind      │
 │  capture.ts createCapturedImageFromFile / releaseCapturedImage   │
@@ -94,9 +94,9 @@ export interface CameraStreamProvider {
   requestStream(): Promise<MediaStream>;
 }
 
-export interface CameraError {
-  kind: CameraErrorKind;
-  cause?: unknown;
+// 実装は Error を継承したクラス。cause は Error 標準の cause プロパティ経由で設定する。
+export class CameraError extends Error {
+  readonly kind: CameraErrorKind;
 }
 
 export function createCameraStreamProvider(): CameraStreamProvider;
@@ -137,7 +137,7 @@ export const ScannerPage = ({
 
 ### 6.2 状態遷移
 
-```
+```text
 idle ──「撮る」──▶ cameraActive ──シャッター──▶ captured
   │                    │
   │                    └─ 取得失敗 ─▶ permissionError ─(フォールバック)─▶ captured

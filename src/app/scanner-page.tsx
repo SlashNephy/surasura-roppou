@@ -58,33 +58,23 @@ export const ScannerPage = ({
   const cameraInputId = useId();
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
-  // アンマウント時に未解放の object URL を確実に revoke する。
-  // imageRef は render 外（effect）でのみ更新し、react-hooks/refs の制約を満たす。
-  const imageRef = useRef(image);
-  useEffect(() => {
-    imageRef.current = image;
-  });
-  // アンマウント時に object URL の解放とカメラ停止を確実に行う。
-  // stopCamera は useCallback([], []) で安定しているため deps に含めても
-  // cleanup は mount/unmount 時にしか走らず、capture 後の余分な cleanup を防ぐ。
+  // image が差し替わったとき・アンマウント時に、古い object URL を解放する。
+  // 解放を cleanup に一元化することで状態更新関数を純粋に保ち、concurrent /
+  // Strict Mode で updater が複数回呼ばれても二重解放や誤解放を起こさない。
   useEffect(
     () => () => {
-      if (imageRef.current !== undefined) {
-        releaseCapturedImage(imageRef.current);
+      if (image !== undefined) {
+        releaseCapturedImage(image);
       }
-      stopCamera();
     },
-    [stopCamera],
+    [image],
   );
+  // アンマウント時にカメラを停止する。stopCamera は useCallback([], []) で安定。
+  useEffect(() => stopCamera, [stopCamera]);
 
-  // 新しい画像へ差し替える。直前の object URL は revoke してリークを防ぐ。
+  // 新しい画像へ差し替える。古い URL の解放は上の effect が担う。
   const replaceImage = (next: CapturedImage | undefined) => {
-    setImage((previous) => {
-      if (previous !== undefined) {
-        releaseCapturedImage(previous);
-      }
-      return next;
-    });
+    setImage(next);
   };
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
