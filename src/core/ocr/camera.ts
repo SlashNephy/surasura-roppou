@@ -17,25 +17,28 @@ export interface CameraStreamProvider {
   requestStream(): Promise<MediaStream>;
 }
 
-// DOMException.name を CameraErrorKind へ写像する純粋関数。
+// エラーの name を CameraErrorKind へ写像する純粋関数。
+// getUserMedia は基本 DOMException で reject するが、OverconstrainedError は
+// 一部ブラウザ（Chrome 等）で DOMException ではなく独自型のため、
+// instanceof に頼らず name を持つオブジェクトを一律に受ける。
 export const classifyCameraError = (error: unknown): CameraErrorKind => {
-  if (error instanceof DOMException) {
-    switch (error.name) {
-      // ユーザーが許可しなかった / 非セキュアコンテキストで拒否。
-      case "NotAllowedError":
-      case "SecurityError":
-        return "permission-denied";
-      // デバイスが無い / 制約を満たすカメラが無い。
-      case "NotFoundError":
-      case "OverconstrainedError":
-        return "not-found";
-      case "NotSupportedError":
-        return "not-supported";
-      default:
-        return "unknown";
-    }
+  const name =
+    typeof error === "object" && error !== null && "name" in error ? String(error.name) : undefined;
+
+  switch (name) {
+    // ユーザーが許可しなかった / 非セキュアコンテキストで拒否。
+    case "NotAllowedError":
+    case "SecurityError":
+      return "permission-denied";
+    // デバイスが無い / 制約を満たすカメラが無い。
+    case "NotFoundError":
+    case "OverconstrainedError":
+      return "not-found";
+    case "NotSupportedError":
+      return "not-supported";
+    default:
+      return "unknown";
   }
-  return "unknown";
 };
 
 // getUserMedia が利用可能か。SSR や非セキュアコンテキストでは false。
