@@ -25,20 +25,20 @@
 
 ## ファイル構成
 
-| ファイル                             | 区分 | 責務                                                                |
-| ------------------------------------ | ---- | ------------------------------------------------------------------- |
-| `src/core/ocr/types.ts`              | 変更 | `OcrWord` / `OcrResult` / `OcrProgress` / `OcrErrorKind` を追記     |
-| `src/core/ocr/model.ts`              | 新規 | モデル言語・サイズ定数・self-host パス・`formatModelSizeLabel`      |
-| `src/core/ocr/preprocess.ts`         | 新規 | `computeResizeDimensions`（純関数）/ `prepareImageForOcr`（canvas） |
-| `src/core/ocr/recognizer.ts`         | 新規 | `OcrWorkerFactory` / `createOcrRecognizer`                          |
-| `src/core/ocr/index.ts`              | 変更 | 追加分の re-export                                                  |
-| `src/core/settings/ocr-consent.ts`   | 新規 | モデル DL 同意フラグ（localStorage）                                |
-| `src/core/settings/index.ts`         | 変更 | 同意フラグの re-export                                              |
-| `public/tessdata/jpn.traineddata.gz` | 新規 | 日本語モデル本体（コミット）                                        |
-| `public/tessdata/README.md`          | 新規 | モデルの由来・バージョン・更新手順                                  |
-| `vite.config.ts`                     | 変更 | tesseract core/worker を自オリジンへコピー                          |
-| `src/app/use-ocr.ts`                 | 新規 | OCR 状態遷移フック                                                  |
-| `src/app/scanner-page.tsx`           | 変更 | プレビューの「準備中」を実 OCR 導線へ置換                           |
+| ファイル                           | 区分 | 責務                                                                |
+| ---------------------------------- | ---- | ------------------------------------------------------------------- |
+| `src/core/ocr/types.ts`            | 変更 | `OcrWord` / `OcrResult` / `OcrProgress` / `OcrErrorKind` を追記     |
+| `src/core/ocr/model.ts`            | 新規 | モデル言語・サイズ定数・self-host パス・`formatModelSizeLabel`      |
+| `src/core/ocr/preprocess.ts`       | 新規 | `computeResizeDimensions`（純関数）/ `prepareImageForOcr`（canvas） |
+| `src/core/ocr/recognizer.ts`       | 新規 | `OcrWorkerFactory` / `createOcrRecognizer`                          |
+| `src/core/ocr/index.ts`            | 変更 | 追加分の re-export                                                  |
+| `src/core/settings/ocr-consent.ts` | 新規 | モデル DL 同意フラグ（localStorage）                                |
+| `src/core/settings/index.ts`       | 変更 | 同意フラグの re-export                                              |
+| `public/tessdata/jpn.traineddata`  | 新規 | 日本語モデル本体（非圧縮・コミット）                                |
+| `public/tessdata/README.md`        | 新規 | モデルの由来・バージョン・更新手順                                  |
+| `vite.config.ts`                   | 変更 | tesseract core/worker を自オリジンへコピー                          |
+| `src/app/use-ocr.ts`               | 新規 | OCR 状態遷移フック                                                  |
+| `src/app/scanner-page.tsx`         | 変更 | プレビューの「準備中」を実 OCR 導線へ置換                           |
 
 ---
 
@@ -459,6 +459,9 @@ export const createOcrWorkerFactory = (): OcrWorkerFactory => ({
       langPath: OCR_LANG_PATH,
       corePath: OCR_CORE_PATH,
       workerPath: OCR_WORKER_PATH,
+      // 配信する traineddata は非圧縮（Task 5 参照）。既定 gzip:true だと
+      // 非圧縮ファイルを pako 解凍しようとして失敗するため false を明示する。
+      gzip: false,
       logger: (message: { status: string; progress: number }) => {
         onProgress({ status: mapLoggerStatus(message.status), progress: message.progress });
       },
@@ -684,15 +687,17 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 **Files:**
 
 - Modify: `package.json`（`tesseract.js`, `tesseract.js-core`, `vite-plugin-static-copy`）
-- Create: `public/tessdata/jpn.traineddata.gz`
+- Create: `public/tessdata/jpn.traineddata`（非圧縮）
 - Create: `public/tessdata/README.md`
 - Modify: `vite.config.ts`
 
 **Interfaces:**
 
-- Produces: 実行時に `/tessdata/jpn.traineddata.gz`, `/tesseract/worker.min.js`, `/tesseract/*`（core wasm）が自オリジンから配信される状態。
+- Produces: 実行時に `/tessdata/jpn.traineddata`（非圧縮）, `/tesseract/worker.min.js`, `/tesseract/*`（core wasm）が自オリジンから配信される状態。
 
 **Note:** WASM/worker/モデルは jsdom で実行できないため、本 Task の検証は「`pnpm build` 成功」と「dist にアセットが出力される」ことまで。実 OCR の疎通は Task 8 の実ブラウザ検証で行う。
+
+**gzip 方針（重要・落とし穴回避）:** tessdata_fast の GitHub には `.gz` は無く（非圧縮 `jpn.traineddata` のみ）、`.gz` は projectnaptha CDN 側にしかない。さらに `.gz` を静的配信すると Cloudflare Pages 等が `Content-Encoding: gzip` を付与し、ブラウザが自動解凍→tesseract.js(pako) が二重解凍で失敗する既知の罠がある。よって**非圧縮 `jpn.traineddata` をコミットし、`createWorker` に `gzip: false` を渡して配信する**（Task 3 の createWorker で `gzip: false` を指定済みにする）。転送効率は HTTP 層の圧縮が自動で効くため実害はない。この方針により `MODEL_SIZE_BYTES=2_471_260` が配信ファイル実サイズと一致する。
 
 - [ ] **Step 1: 依存を追加する**
 
@@ -707,13 +712,14 @@ pnpm add -D vite-plugin-static-copy
 
 ```bash
 mkdir -p public/tessdata
-# tessdata_fast の jpn.traineddata（gzip 圧縮済みで配信するため .gz を取得）
-curl -fsSL -o public/tessdata/jpn.traineddata.gz \
-  https://github.com/tesseract-ocr/tessdata_fast/raw/main/jpn.traineddata.gz
-ls -l public/tessdata/jpn.traineddata.gz
+# tessdata_fast の非圧縮 jpn.traineddata を取得する（gzip:false で配信するため .gz にはしない）
+curl -fsSL -o public/tessdata/jpn.traineddata \
+  https://github.com/tesseract-ocr/tessdata_fast/raw/main/jpn.traineddata
+ls -l public/tessdata/jpn.traineddata
+wc -c public/tessdata/jpn.traineddata
 ```
 
-Expected: 約1.5MB 前後の `.gz` が生成される。取得できない場合は `https://tessdata.projectnaptha.com/4.0.0_fast/jpn.traineddata.gz` を代替に用いる。
+Expected: `2471260` bytes（約2.4MB）の非圧縮ファイル。実測が `MODEL_SIZE_BYTES` と大きくずれる場合は `src/core/ocr/model.ts` の定数を実測へ更新する。
 
 - [ ] **Step 3: モデルの由来を文書化する**
 
@@ -722,17 +728,19 @@ Expected: 約1.5MB 前後の `.gz` が生成される。取得できない場合
 ```markdown
 # tessdata（OCR 日本語モデル）
 
-- ファイル: `jpn.traineddata.gz`
+- ファイル: `jpn.traineddata`（非圧縮）
 - 由来: https://github.com/tesseract-ocr/tessdata_fast （fast モデル）
 - 対象言語: 日本語（横書き `jpn`）
-- 取得元パス: `jpn.traineddata.gz`
-- 取得日: 2026-07-11
+- 取得元パス: `jpn.traineddata`
+- 取得日: 2026-07-12
+- サイズ: 2,471,260 bytes（`src/core/ocr/model.ts` の `MODEL_SIZE_BYTES` と一致させる）
 - 用途: Tesseract.js の `langPath` として自オリジン配信する（第三者オリジンへリクエストを出さないため）。
+- gzip: 配信は非圧縮（`createWorker` で `gzip: false`）。`.gz` を静的配信すると Content-Encoding による二重解凍で失敗し得るため避ける。
 
 ## 更新手順
 
-1. 上流 `tessdata_fast` から `jpn.traineddata.gz` を再取得する。
-2. サイズが大きく変わる場合は `src/core/ocr/model.ts` の `MODEL_SIZE_BYTES` を実測値に更新する。
+1. 上流 `tessdata_fast` から非圧縮 `jpn.traineddata` を再取得する。
+2. `wc -c` の実測値で `src/core/ocr/model.ts` の `MODEL_SIZE_BYTES` を更新する。
 3. 実ブラウザで OCR 疎通を確認する。
 ```
 
@@ -761,7 +769,7 @@ import { viteStaticCopy } from "vite-plugin-static-copy";
 
 ```bash
 pnpm run build
-ls dist/tessdata/jpn.traineddata.gz
+ls dist/tessdata/jpn.traineddata
 ls dist/tesseract/worker.min.js
 ls dist/tesseract/ | grep -i wasm
 ```
@@ -772,7 +780,7 @@ Expected: 3 つとも存在する（モデル・worker・core wasm）。
 
 ```bash
 pnpm run typecheck && pnpm run lint && pnpm run format:check && pnpm test
-git add package.json pnpm-lock.yaml vite.config.ts public/tessdata/jpn.traineddata.gz public/tessdata/README.md
+git add package.json pnpm-lock.yaml vite.config.ts public/tessdata/jpn.traineddata public/tessdata/README.md
 git commit -m "feat(core/ocr): 日本語モデルとtesseractアセットを自オリジン配信する
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
