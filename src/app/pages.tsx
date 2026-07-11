@@ -1,10 +1,9 @@
 import { Link } from "@tanstack/react-router";
-import { BookOpenCheck, Camera } from "lucide-react";
+import { BookOpenCheck } from "lucide-react";
 
 import { createStorageRepository } from "@/core/storage";
 import type { SavedLawSummary, StorageRepository } from "@/core/storage";
 import { Badge } from "@/shared/ui/badge";
-import { Button } from "@/shared/ui/button";
 import { formatIsoDateLabel } from "@/shared/utils/dates";
 
 import { useSavedLaws } from "./use-saved-laws";
@@ -87,25 +86,6 @@ export const LawsPage = ({
 const formatSavedLawFetchedDate = (savedLaw: SavedLawSummary): string =>
   formatIsoDateLabel(savedLaw.revision.fetchedAt);
 
-export const ScannerPage = () => (
-  <section className="mx-auto grid w-full max-w-md gap-4 px-5 py-12 text-center">
-    <h1 className="font-serif text-2xl font-semibold text-foreground">
-      問題集や資料から条文を開く
-    </h1>
-    <p className="text-xs text-muted-foreground">
-      <span aria-hidden="true">🔒 </span>画像は端末内で処理され、保存・送信されません
-    </p>
-    <Button disabled type="button" className="h-auto w-full flex-col gap-1 py-8">
-      <Camera className="size-6" aria-hidden="true" />
-      <span className="font-semibold">撮る・画像を選ぶ（準備中）</span>
-      <span className="text-xs opacity-75">カメラかライブラリを選択できます</span>
-    </Button>
-    <Button disabled type="button" variant="outline" className="w-full">
-      クリップボードから貼り付け（準備中）
-    </Button>
-  </section>
-);
-
 export const StudyPage = () => (
   <section className="mx-auto grid w-full max-w-2xl gap-4 px-5 py-10">
     <h1 className="font-serif text-2xl font-semibold text-foreground">復習</h1>
@@ -126,5 +106,6 @@ export const StudyPage = () => (
 
 export { HomePage } from "./home-page";
 export { LawViewerPage } from "./law-viewer-page";
+export { ScannerPage } from "./scanner-page";
 export { SearchPage } from "./search-page";
 export { SettingsPage } from "./settings-page";
