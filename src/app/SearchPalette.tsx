@@ -1,13 +1,13 @@
-import { useEffect, useDeferredValue, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { BookOpen, Camera, GraduationCap, Search, Settings } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import type { QuickSearchCandidate, QuickSearchOutcome } from "@/core/jump";
 import { Button } from "@/shared/ui/button";
+import { Skeleton } from "@/shared/ui/skeleton";
 import {
   CommandDialog,
-  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
@@ -23,6 +23,9 @@ interface PaletteDestination {
   label: string;
   icon: LucideIcon;
 }
+
+// 入力が止まってから検索する遅延。キーストロークごとの e-Gov 通信を抑える。
+const SEARCH_DEBOUNCE_MS = 200;
 
 const destinations: PaletteDestination[] = [
   { to: "/laws", label: "法令を探す", icon: BookOpen },
@@ -44,36 +47,57 @@ export const SearchPalette = () => {
   const navigate = useNavigate();
 
   const [query, setQuery] = useState("");
-  const deferredQuery = useDeferredValue(query);
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [outcome, setOutcome] = useState<QuickSearchOutcome>({ status: "empty" });
+  // 検索が解決した時点のクエリ。これと現在の query の差分で「検索中」を判定する。
+  const [settledQuery, setSettledQuery] = useState("");
+
+  // 入力を 200ms デバウンスしてから検索対象に反映する。
+  useEffect(() => {
+    const id = setTimeout(() => {
+      setDebouncedQuery(query);
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      clearTimeout(id);
+    };
+  }, [query]);
 
   useEffect(() => {
-    const trimmed = deferredQuery.trim();
+    const trimmed = debouncedQuery.trim();
     if (trimmed === "") {
       // 空クエリのときは「移動」グループを表示するため outcome の更新は不要
       return;
     }
 
     let cancelled = false;
+    const controller = new AbortController();
     void quickSearch
-      .search(trimmed)
+      .search(trimmed, { signal: controller.signal })
       .then((next) => {
         if (!cancelled) {
           setOutcome(next);
+          setSettledQuery(debouncedQuery);
         }
       })
       .catch((error: unknown) => {
+        // 中断（新しい検索・パレットを閉じた等）は正常系なので無視する。
+        if (controller.signal.aborted) {
+          return;
+        }
         console.error("quick search failed", error);
         if (!cancelled) {
           // 検索失敗時は空の候補リストにフォールバックして「該当なし」状態を表示する
           setOutcome({ status: "candidates", candidates: [], autoJump: false });
+          setSettledQuery(debouncedQuery);
         }
       });
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [deferredQuery, quickSearch]);
+  }, [debouncedQuery, quickSearch]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -105,24 +129,35 @@ export const SearchPalette = () => {
     void navigate({ to });
   };
 
+  const trimmedQuery = query.trim();
+  // settledQuery が現在の入力に追いつくまでは検索中とみなす（デバウンス中・通信中を含む）。
+  const isSearching = trimmedQuery !== "" && settledQuery !== query;
+
+  const resetSearchState = () => {
+    setQuery("");
+    setDebouncedQuery("");
+    setSettledQuery("");
+    setOutcome({ status: "empty" });
+  };
+
   // パレットを閉じるときは入力を空へ戻す。
   const handleOpenChange = (open: boolean) => {
     setOpen(open);
     if (!open) {
-      setQuery("");
+      resetSearchState();
     }
   };
 
   const goToCandidate = (candidate: QuickSearchCandidate) => {
     setOpen(false);
-    setQuery("");
+    resetSearchState();
     navigateToCandidate(navigate, candidate);
   };
 
   const goToSearchPage = () => {
     const trimmed = query.trim();
     setOpen(false);
-    setQuery("");
+    resetSearchState();
     void navigate({ to: "/search", search: { q: trimmed } });
   };
 
@@ -176,41 +211,52 @@ export const SearchPalette = () => {
             </CommandGroup>
           ) : (
             <>
-              {outcome.status === "candidates" && outcome.candidates.length > 0 ? (
-                <CommandGroup heading="候補">
-                  {outcome.candidates.map((candidate) => (
-                    <CommandItem
-                      key={`${candidate.kind}:${candidate.lawId}:${candidate.article ?? ""}`}
-                      value={`${candidate.lawTitle} ${candidate.article ?? ""} ${candidate.lawId}`}
-                      onSelect={() => {
-                        goToCandidate(candidate);
-                      }}
-                    >
-                      <span className="grid min-w-0">
-                        <span className="truncate">
-                          {candidate.lawTitle}
-                          {candidate.article !== undefined ? ` 第${candidate.article}条` : ""}
-                        </span>
-                        {candidate.reason.length > 0 ? (
-                          <span className="truncate text-xs text-muted-foreground">
-                            {candidate.reason.join(" / ")}
+              {isSearching ? (
+                <div role="status" aria-label="検索中" className="grid gap-2 px-2 py-3">
+                  <Skeleton className="h-5 w-2/3" />
+                  <Skeleton className="h-5 w-1/2" />
+                  <Skeleton className="h-5 w-3/5" />
+                </div>
+              ) : (
+                <>
+                  {outcome.status === "candidates" && outcome.candidates.length > 0 ? (
+                    <CommandGroup heading="候補">
+                      {outcome.candidates.map((candidate) => (
+                        <CommandItem
+                          key={`${candidate.kind}:${candidate.lawId}:${candidate.article ?? ""}`}
+                          value={`${candidate.lawTitle} ${candidate.article ?? ""} ${candidate.lawId}`}
+                          onSelect={() => {
+                            goToCandidate(candidate);
+                          }}
+                        >
+                          <span className="grid min-w-0">
+                            <span className="truncate">
+                              {candidate.lawTitle}
+                              {candidate.article !== undefined ? ` 第${candidate.article}条` : ""}
+                            </span>
+                            {candidate.reason.length > 0 ? (
+                              <span className="truncate text-xs text-muted-foreground">
+                                {candidate.reason.join(" / ")}
+                              </span>
+                            ) : null}
                           </span>
-                        ) : null}
-                      </span>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              ) : null}
-              {outcome.status === "unresolved" ? (
-                <CommandEmpty>
-                  {outcome.reason === "needs-context"
-                    ? "相対参照は前後の文脈が必要です。法令名を含めて入力してください。"
-                    : "該当する法令が見つかりませんでした。"}
-                </CommandEmpty>
-              ) : null}
-              {outcome.status === "candidates" && outcome.candidates.length === 0 ? (
-                <CommandEmpty>該当する候補がありません。</CommandEmpty>
-              ) : null}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  ) : null}
+                  {outcome.status === "unresolved" ? (
+                    <p className="py-6 text-center text-sm">
+                      {outcome.reason === "needs-context"
+                        ? "相対参照は前後の文脈が必要です。法令名を含めて入力してください。"
+                        : "該当する法令が見つかりませんでした。"}
+                    </p>
+                  ) : null}
+                  {outcome.status === "candidates" && outcome.candidates.length === 0 ? (
+                    <p className="py-6 text-center text-sm">該当する候補がありません。</p>
+                  ) : null}
+                </>
+              )}
+              {/* 「検索」項目は検索中でも常に表示する */}
               <CommandGroup>
                 <CommandItem
                   value="__full_search__"
