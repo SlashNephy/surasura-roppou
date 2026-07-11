@@ -6,13 +6,13 @@
 
 **Architecture:** OCR ドメイン（前処理・認識・型・モデル定数）を `src/core/ocr` に追加し、tesseract.js への依存は `recognizer.ts` 内部と `OcrWorkerFactory` インターフェースの背後に隠す。React/DOM 依存の状態遷移は `src/app/use-ocr.ts` と `scanner-page.tsx` に閉じる。日本語モデルは `tessdata_fast/jpn`（横書き）を自オリジンから配り、opt-in + lazy load、IndexedDB 自動キャッシュでオフライン化する。
 
-**Tech Stack:** React 19 / Vite 8 / TypeScript 6 / tesseract.js v6 / tesseract.js-core / vite-plugin-static-copy / Vitest + Testing Library。
+**Tech Stack:** React 19 / Vite 8 / TypeScript 6 / tesseract.js v7 / tesseract.js-core / vite-plugin-static-copy / Vitest + Testing Library。
 
 ## Global Constraints
 
 - 設計元: [docs/superpowers/specs/2026-07-11-ocr-recognition-design.md](../specs/2026-07-11-ocr-recognition-design.md)。対応 Issue: #36。
 - 画像は端末内メモリでのみ処理し、保存・送信しない。モデル取得も含め第三者オリジンへのリクエストを作らない（自オリジン配信）。
-- OCR エンジンは **Tesseract.js v6**。手書き Web Worker は作らない（tesseract.js が内部生成）。
+- OCR エンジンは **Tesseract.js v7**。手書き Web Worker は作らない（tesseract.js が内部生成）。
 - 日本語モデルは **`tessdata_fast/jpn`（2.4MB, 横書きのみ）**。縦書き `jpn_vert`・fast/best 切替設定は本 Issue のスコープ外。
 - 依存注入の流儀に合わせる: 本番実装をデフォルト引数で注入し、テストで fake に差し替える（既存 `CameraStreamProvider` / `storageRepository` に倣う）。
 - コミットは Conventional Commits（日本語）。Co-Authored-By: `Claude Fable 5 <noreply@anthropic.com>`。
