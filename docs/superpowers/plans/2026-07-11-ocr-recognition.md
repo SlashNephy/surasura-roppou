@@ -25,32 +25,34 @@
 
 ## ファイル構成
 
-| ファイル | 区分 | 責務 |
-| --- | --- | --- |
-| `src/core/ocr/types.ts` | 変更 | `OcrWord` / `OcrResult` / `OcrProgress` / `OcrErrorKind` を追記 |
-| `src/core/ocr/model.ts` | 新規 | モデル言語・サイズ定数・self-host パス・`formatModelSizeLabel` |
-| `src/core/ocr/preprocess.ts` | 新規 | `computeResizeDimensions`（純関数）/ `prepareImageForOcr`（canvas） |
-| `src/core/ocr/recognizer.ts` | 新規 | `OcrWorkerFactory` / `createOcrRecognizer` |
-| `src/core/ocr/index.ts` | 変更 | 追加分の re-export |
-| `src/core/settings/ocr-consent.ts` | 新規 | モデル DL 同意フラグ（localStorage） |
-| `src/core/settings/index.ts` | 変更 | 同意フラグの re-export |
-| `public/tessdata/jpn.traineddata.gz` | 新規 | 日本語モデル本体（コミット） |
-| `public/tessdata/README.md` | 新規 | モデルの由来・バージョン・更新手順 |
-| `vite.config.ts` | 変更 | tesseract core/worker を自オリジンへコピー |
-| `src/app/use-ocr.ts` | 新規 | OCR 状態遷移フック |
-| `src/app/scanner-page.tsx` | 変更 | プレビューの「準備中」を実 OCR 導線へ置換 |
+| ファイル                             | 区分 | 責務                                                                |
+| ------------------------------------ | ---- | ------------------------------------------------------------------- |
+| `src/core/ocr/types.ts`              | 変更 | `OcrWord` / `OcrResult` / `OcrProgress` / `OcrErrorKind` を追記     |
+| `src/core/ocr/model.ts`              | 新規 | モデル言語・サイズ定数・self-host パス・`formatModelSizeLabel`      |
+| `src/core/ocr/preprocess.ts`         | 新規 | `computeResizeDimensions`（純関数）/ `prepareImageForOcr`（canvas） |
+| `src/core/ocr/recognizer.ts`         | 新規 | `OcrWorkerFactory` / `createOcrRecognizer`                          |
+| `src/core/ocr/index.ts`              | 変更 | 追加分の re-export                                                  |
+| `src/core/settings/ocr-consent.ts`   | 新規 | モデル DL 同意フラグ（localStorage）                                |
+| `src/core/settings/index.ts`         | 変更 | 同意フラグの re-export                                              |
+| `public/tessdata/jpn.traineddata.gz` | 新規 | 日本語モデル本体（コミット）                                        |
+| `public/tessdata/README.md`          | 新規 | モデルの由来・バージョン・更新手順                                  |
+| `vite.config.ts`                     | 変更 | tesseract core/worker を自オリジンへコピー                          |
+| `src/app/use-ocr.ts`                 | 新規 | OCR 状態遷移フック                                                  |
+| `src/app/scanner-page.tsx`           | 変更 | プレビューの「準備中」を実 OCR 導線へ置換                           |
 
 ---
 
 ## Task 1: OCR 型とモデル定数
 
 **Files:**
+
 - Modify: `src/core/ocr/types.ts`
 - Create: `src/core/ocr/model.ts`
 - Modify: `src/core/ocr/index.ts`
 - Test: `src/core/ocr/model.test.ts`
 
 **Interfaces:**
+
 - Consumes: `BoundingBox` from `@/core/domain`。
 - Produces:
   - `OcrWord { text: string; confidence: number; bbox: BoundingBox }`
@@ -116,10 +118,7 @@ export interface OcrProgress {
 
 // 失敗の UI 文言への写像。手入力 fallback へ必ず逃がすため種別化する。
 export type OcrErrorKind =
-  | "model-download-failed"
-  | "engine-load-failed"
-  | "recognize-failed"
-  | "unknown";
+  "model-download-failed" | "engine-load-failed" | "recognize-failed" | "unknown";
 ```
 
 - [ ] **Step 4: `model.ts` を実装する**
@@ -176,11 +175,13 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ## Task 2: 画像前処理（リサイズ）
 
 **Files:**
+
 - Create: `src/core/ocr/preprocess.ts`
 - Modify: `src/core/ocr/index.ts`
 - Test: `src/core/ocr/preprocess.test.ts`
 
 **Interfaces:**
+
 - Produces:
   - `computeResizeDimensions(width: number, height: number, maxEdge?: number): { width: number; height: number }`（既定 `maxEdge = 2000`。長辺が上限以下なら原寸、超えたら縦横比を保った整数寸法）
   - `prepareImageForOcr(blob: Blob, options?: { maxEdge?: number }): Promise<Blob>`（canvas 縮小して PNG Blob）
@@ -312,11 +313,13 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ## Task 3: OCR 認識器（recognizer）
 
 **Files:**
+
 - Create: `src/core/ocr/recognizer.ts`
 - Modify: `src/core/ocr/index.ts`
 - Test: `src/core/ocr/recognizer.test.ts`
 
 **Interfaces:**
+
 - Consumes: `OcrResult` / `OcrProgress` / `OcrWord`（Task 1）、`prepareImageForOcr`（Task 2）、`BoundingBox`（domain）。
 - Produces:
   - `interface OcrWorkerHandle { recognize(blob: Blob): Promise<OcrResult>; terminate(): Promise<void> }`
@@ -346,7 +349,11 @@ const sampleResult: OcrResult = {
 // 制御可能な fake worker/factory。recognize は解決を外部から操作できる。
 const createFakeFactory = (
   recognizeImpl: (blob: Blob) => Promise<OcrResult>,
-): { factory: OcrWorkerFactory; terminate: ReturnType<typeof vi.fn>; progresses: OcrProgress[] } => {
+): {
+  factory: OcrWorkerFactory;
+  terminate: ReturnType<typeof vi.fn>;
+  progresses: OcrProgress[];
+} => {
   const terminate = vi.fn(async () => {});
   const progresses: OcrProgress[] = [];
   const factory: OcrWorkerFactory = {
@@ -570,11 +577,13 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ## Task 4: モデル DL 同意フラグ（localStorage）
 
 **Files:**
+
 - Create: `src/core/settings/ocr-consent.ts`
 - Modify: `src/core/settings/index.ts`
 - Test: `src/core/settings/ocr-consent.test.ts`
 
 **Interfaces:**
+
 - Produces:
   - `getOcrModelConsent(): boolean`（未同意なら false）
   - `setOcrModelConsent(granted: boolean): void`
@@ -673,12 +682,14 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ## Task 5: 依存とモデル・アセットの自オリジン配信
 
 **Files:**
+
 - Modify: `package.json`（`tesseract.js`, `tesseract.js-core`, `vite-plugin-static-copy`）
 - Create: `public/tessdata/jpn.traineddata.gz`
 - Create: `public/tessdata/README.md`
 - Modify: `vite.config.ts`
 
 **Interfaces:**
+
 - Produces: 実行時に `/tessdata/jpn.traineddata.gz`, `/tesseract/worker.min.js`, `/tesseract/*`（core wasm）が自オリジンから配信される状態。
 
 **Note:** WASM/worker/モデルは jsdom で実行できないため、本 Task の検証は「`pnpm build` 成功」と「dist にアセットが出力される」ことまで。実 OCR の疎通は Task 8 の実ブラウザ検証で行う。
@@ -772,10 +783,12 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ## Task 6: OCR 状態遷移フック（use-ocr）
 
 **Files:**
+
 - Create: `src/app/use-ocr.ts`
 - Test: `src/app/use-ocr.test.ts`
 
 **Interfaces:**
+
 - Consumes: `createOcrRecognizer` / `OcrRecognizer` / `OcrResult` / `OcrProgress` / `OcrErrorKind`（core/ocr）、`prepareImageForOcr`（core/ocr）、`getOcrModelConsent` / `setOcrModelConsent`（core/settings）。
 - Produces:
   - `type OcrPhase = "idle" | "consent" | "loading-model" | "recognizing" | "done" | "error"`
@@ -798,7 +811,10 @@ import { useOcr } from "./use-ocr";
 const result: OcrResult = { text: "第一条", confidence: 88, words: [] };
 
 const fakeRecognizer = (
-  impl: (blob: Blob, opts: { signal?: AbortSignal; onProgress?: (p: never) => void }) => Promise<OcrResult>,
+  impl: (
+    blob: Blob,
+    opts: { signal?: AbortSignal; onProgress?: (p: never) => void },
+  ) => Promise<OcrResult>,
 ): OcrRecognizer => ({
   recognize: impl as OcrRecognizer["recognize"],
   terminate: async () => {},
@@ -837,9 +853,11 @@ describe("useOcr", () => {
 
   it("認識失敗で error フェーズになる", async () => {
     const { result: hook } = renderHook(() =>
-      useOcr(fakeRecognizer(async () => {
-        throw new Error("boom");
-      })),
+      useOcr(
+        fakeRecognizer(async () => {
+          throw new Error("boom");
+        }),
+      ),
     );
     await act(async () => {
       await hook.current.grantConsentAndRecognize(new Blob(["x"]));
@@ -1001,10 +1019,12 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ## Task 7: scanner 画面への配線
 
 **Files:**
+
 - Modify: `src/app/scanner-page.tsx`
 - Modify: `src/app/scanner-page.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `useOcr`（Task 6）、`formatModelSizeLabel` / `MODEL_SIZE_BYTES`（core/ocr）。
 - Produces: プレビュー画面の「条文の読み取りは準備中です。」を、読み取り導線（読み取る → 同意 → 進捗＋キャンセル → 生テキスト表示 / エラー時 fallback）へ置換する。
 
@@ -1124,6 +1144,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 ## Task 8: 実ブラウザ検証・レビュー・PR
 
 **Files:**
+
 - Create: 合成 fixture 画像（実装完了後に用意。`docs/` 用アセットまたは検証時オンザフライ生成）
 
 **Note:** fixture 画像は実装完了後に用意する（ユーザー方針）。この Task は実装コードが揃ってから実施する。
