@@ -136,10 +136,10 @@ export const SearchPalette = () => {
           setOpen(true);
         }}
       >
-        {/* 可視ラベル（例文）をアクセシブルネームに含めるため aria-label は使わない (WCAG 2.5.3) */}
+        {/* 可視ラベルをアクセシブルネームに含めるため aria-label は使わない (WCAG 2.5.3) */}
         <span className="sr-only">検索</span>
         <Search className="size-4" aria-hidden="true" />
-        <span className="hidden truncate md:inline">国賠法1条、民709、行政手続法14条…</span>
+        <span className="hidden truncate md:inline">法律や条文で検索できます</span>
         <kbd
           aria-hidden="true"
           className="ml-auto hidden rounded border px-1.5 text-[10px] md:inline"
@@ -155,7 +155,7 @@ export const SearchPalette = () => {
         shouldFilter={false}
       >
         <CommandInput
-          placeholder="国賠法1条、民709、行政手続法14条…"
+          placeholder="法律や条文で検索できます"
           value={query}
           onValueChange={setQuery}
         />

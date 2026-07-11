@@ -42,7 +42,7 @@ export const HomePage = ({
         >
           <span className="sr-only">検索</span>
           <Search className="size-4 text-muted-foreground" aria-hidden="true" />
-          <span className="truncate text-muted-foreground">国賠法1条、民709、行政手続法14条…</span>
+          <span className="truncate text-muted-foreground">法律や条文で検索できます</span>
         </Button>
         <div className="flex flex-wrap justify-center gap-2">
           <Button asChild variant="outline" className="gap-2">

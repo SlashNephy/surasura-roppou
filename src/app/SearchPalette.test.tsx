@@ -77,7 +77,7 @@ describe("SearchPalette", () => {
     const { history } = await renderShell();
 
     await user.keyboard("/");
-    await user.type(screen.getByPlaceholderText("国賠法1条、民709、行政手続法14条…"), "国賠1");
+    await user.type(screen.getByPlaceholderText("法律や条文で検索できます"), "国賠1");
 
     const option = await screen.findByRole("option", { name: /国家賠償法/ });
     await user.click(option);
@@ -93,7 +93,7 @@ describe("SearchPalette", () => {
     const { history } = await renderShell();
 
     await user.keyboard("/");
-    await user.type(screen.getByPlaceholderText("国賠法1条、民709、行政手続法14条…"), "民法");
+    await user.type(screen.getByPlaceholderText("法律や条文で検索できます"), "民法");
 
     await user.click(await screen.findByRole("option", { name: /「民法」で検索/ }));
 
