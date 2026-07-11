@@ -20,3 +20,12 @@ export type {
   ResolveReferenceOptions,
   UnresolvedReason,
 } from "./candidate-resolver";
+export { createQuickSearch } from "./quick-search";
+export type {
+  QuickSearch,
+  QuickSearchCandidate,
+  QuickSearchCandidateKind,
+  QuickSearchDependencies,
+  QuickSearchOptions,
+  QuickSearchOutcome,
+} from "./quick-search";

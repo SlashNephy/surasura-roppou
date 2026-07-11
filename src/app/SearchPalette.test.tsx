@@ -3,6 +3,8 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+import { createQuickSearch } from "@/core/jump";
+import type { CatalogSearchResult, CatalogSearchService } from "@/core/search";
 import { createMemoryStorageRepository } from "@/test/fixtures/storage";
 import { setupScrollMocks } from "@/test/scrollMocks";
 
@@ -29,11 +31,16 @@ vi.stubGlobal(
   },
 );
 
+const emptyCatalog: CatalogSearchService = {
+  search: (): Promise<CatalogSearchResult> => Promise.resolve({ hits: [], source: "cache" }),
+};
+
 const renderShell = async (initialEntry = "/laws") => {
   const history = createMemoryHistory({ initialEntries: [initialEntry] });
   const storageRepository = createMemoryStorageRepository().repository;
+  const quickSearch = createQuickSearch({ catalog: emptyCatalog });
 
-  render(<RouterProvider router={createAppRouter({ history, storageRepository })} />);
+  render(<RouterProvider router={createAppRouter({ history, storageRepository, quickSearch })} />);
   await screen.findByRole("banner");
 
   return { history };
@@ -65,15 +72,34 @@ describe("SearchPalette", () => {
     expect(await screen.findByRole("dialog", { name: "検索" })).toBeInTheDocument();
   });
 
-  it("shows a placeholder message for unresolved reference queries", async () => {
+  it("resolves a concrete reference query into a jump candidate", async () => {
     const user = userEvent.setup();
-    await renderShell();
+    const { history } = await renderShell();
 
     await user.keyboard("/");
-    await user.type(screen.getByPlaceholderText("国賠法1条、民709、行政手続法14条…"), "国賠1");
+    await user.type(screen.getByPlaceholderText("法律や条文で検索できます"), "国賠1");
 
-    expect(
-      await screen.findByText("条文参照ジャンプ（国賠1、民709 など）は今後対応予定です。"),
-    ).toBeInTheDocument();
+    const option = await screen.findByRole("option", { name: /国家賠償法/ });
+    await user.click(option);
+
+    await waitFor(() => {
+      // 国家賠償法 lawId は src/core/jump/alias-dictionary.ts で確認済み。
+      expect(history.location.pathname).toBe("/laws/322AC0000000125/articles/1");
+    });
+  });
+
+  it("offers a full search entry that navigates to /search", async () => {
+    const user = userEvent.setup();
+    const { history } = await renderShell();
+
+    await user.keyboard("/");
+    await user.type(screen.getByPlaceholderText("法律や条文で検索できます"), "民法");
+
+    await user.click(await screen.findByRole("option", { name: /「民法」で検索/ }));
+
+    await waitFor(() => {
+      expect(history.location.pathname).toBe("/search");
+      expect(history.location.search).toContain("q=");
+    });
   });
 });

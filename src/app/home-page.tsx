@@ -6,6 +6,7 @@ import type { StorageRepository } from "@/core/storage";
 import { Button } from "@/shared/ui/button";
 
 import { useSavedLaws } from "./use-saved-laws";
+import { useSearchPalette } from "./search-palette-context";
 
 const defaultStorageRepository = createStorageRepository();
 
@@ -23,6 +24,7 @@ export const HomePage = ({
 }) => {
   const { savedLaws, savedLawsError } = useSavedLaws(storageRepository);
   const hasSavedLaws = savedLaws.length > 0;
+  const { open } = useSearchPalette();
 
   return (
     <section className="mx-auto grid w-full max-w-4xl gap-10 px-5 py-12 md:py-16">
@@ -31,13 +33,16 @@ export const HomePage = ({
           撮って、開いて、すらすら読める。
         </h1>
         <p className="text-sm text-muted-foreground">e-Gov 法令データに基づく法令ビューワー</p>
-        <Button asChild variant="outline" className="h-11 w-full max-w-md justify-start gap-2">
-          <Link to="/laws">
-            <Search className="size-4 text-muted-foreground" aria-hidden="true" />
-            <span className="truncate text-muted-foreground">
-              国賠法1条、民709、行政手続法14条…
-            </span>
-          </Link>
+        {/* クリックで検索パレットを開く。/laws へのナビゲーションは廃止した。 */}
+        <Button
+          type="button"
+          variant="outline"
+          className="h-11 w-full max-w-md justify-start gap-2"
+          onClick={open}
+        >
+          <span className="sr-only">検索</span>
+          <Search className="size-4 text-muted-foreground" aria-hidden="true" />
+          <span className="truncate text-muted-foreground">法律や条文で検索できます</span>
         </Button>
         <div className="flex flex-wrap justify-center gap-2">
           <Button asChild variant="outline" className="gap-2">

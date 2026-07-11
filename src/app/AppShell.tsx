@@ -2,10 +2,13 @@ import { Link, Outlet } from "@tanstack/react-router";
 import { BookOpen, Camera, GraduationCap, Settings } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
+import type { QuickSearch } from "@/core/jump";
 import { cn } from "@/shared/utils/cn";
 
 import { PwaUpdatePrompt } from "./PwaUpdatePrompt";
+import { defaultQuickSearch } from "./quick-search";
 import type { PrimaryRoute } from "./routes";
+import { SearchPaletteProvider } from "./search-palette-context";
 import { SearchPalette } from "./SearchPalette";
 
 interface NavItem {
@@ -105,14 +108,16 @@ const Footer = () => (
   </footer>
 );
 
-export const AppShell = () => (
-  <div className="flex min-h-dvh flex-col bg-background font-sans text-foreground">
-    <Header />
-    <main aria-label="メインコンテンツ" className="min-w-0 flex-1">
-      <Outlet />
-    </main>
-    <Footer />
-    <MobileNavigation />
-    <PwaUpdatePrompt />
-  </div>
+export const AppShell = ({ quickSearch = defaultQuickSearch }: { quickSearch?: QuickSearch }) => (
+  <SearchPaletteProvider quickSearch={quickSearch}>
+    <div className="flex min-h-dvh flex-col bg-background font-sans text-foreground">
+      <Header />
+      <main aria-label="メインコンテンツ" className="min-w-0 flex-1">
+        <Outlet />
+      </main>
+      <Footer />
+      <MobileNavigation />
+      <PwaUpdatePrompt />
+    </div>
+  </SearchPaletteProvider>
 );
