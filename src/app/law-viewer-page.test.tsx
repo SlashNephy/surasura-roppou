@@ -840,6 +840,16 @@ describe("LawViewerPageContent", () => {
       expect(screen.queryByText("改正の可能性")).not.toBeInTheDocument();
     });
   });
+
+  it("opens the study card dialog from the active article actions", async () => {
+    const user = userEvent.setup();
+    renderLawViewerRoute("/laws/129AC0000000089/articles/1");
+
+    const createButton = await screen.findByRole("button", { name: "カードを作る" });
+    await user.click(createButton);
+
+    expect(await screen.findByRole("heading", { name: "学習カードを作る" })).toBeInTheDocument();
+  });
 });
 
 const withClipboard = async (

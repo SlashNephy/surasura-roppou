@@ -25,6 +25,7 @@ import { Skeleton } from "@/shared/ui/skeleton";
 import { formatIsoDateLabel } from "@/shared/utils/dates";
 
 import { AnchorCompareDialog } from "./AnchorCompareDialog";
+import { StudyCardCreateDialog } from "./StudyCardCreateDialog";
 import { AnchorDriftBadge } from "./AnchorDriftBadge";
 import { loadLawViewerDocument } from "./law-viewer-loader";
 import { useOnlineStatus, useSavedViewerState } from "./law-viewer-hooks";
@@ -184,6 +185,7 @@ const LawViewerReadyState = ({
   const [jumpArticleNumber, setJumpArticleNumber] = useState("");
   const [hasJumpError, setHasJumpError] = useState(false);
   const [isCompareOpen, setIsCompareOpen] = useState(false);
+  const [isCardDialogOpen, setIsCardDialogOpen] = useState(false);
   // 修復（付け替え・固定）後に加算し、アンカー検証を同一セッション内で再実行させるトークン。
   // putBookmark はフックの deps を変化させないため、このトークンで再読込を明示的に促す。
   const [anchorRefreshToken, setAnchorRefreshToken] = useState(0);
@@ -452,6 +454,12 @@ const LawViewerReadyState = ({
     [resolvedRepository, compareRevisionId],
   );
 
+  // カード作成ダイアログのアンカー対象ノード。アクティブ条が定まるときのみ描画する。
+  const activeNode =
+    activeArticleNumber !== undefined
+      ? findArticleNode(state.nodes, activeArticleNumber)
+      : undefined;
+
   const notFoundAlert = (
     <p
       id={articleJumpErrorId}
@@ -603,6 +611,16 @@ const LawViewerReadyState = ({
                   >
                     この条文を保存
                   </Button>
+                  <Button
+                    className="w-fit"
+                    onClick={() => {
+                      setIsCardDialogOpen(true);
+                    }}
+                    type="button"
+                    variant="ghost"
+                  >
+                    カードを作る
+                  </Button>
                   {verification !== undefined &&
                   (verification.status !== "match" ||
                     verification.bookmark.target.pinned === true) ? (
@@ -744,6 +762,18 @@ const LawViewerReadyState = ({
           onClose={() => {
             setIsCompareOpen(false);
           }}
+        />
+      ) : null}
+      {activeNode !== undefined && activeArticleNumber !== undefined ? (
+        <StudyCardCreateDialog
+          articleNumber={activeArticleNumber}
+          lawId={lawId}
+          lawTitle={state.law.title}
+          node={activeNode}
+          onOpenChange={setIsCardDialogOpen}
+          open={isCardDialogOpen}
+          revisionId={state.revision.revisionId}
+          storageRepository={storageRepository}
         />
       ) : null}
     </>
