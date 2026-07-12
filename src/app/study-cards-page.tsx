@@ -125,7 +125,12 @@ export const StudyCardsPage = ({
       {state.status === "ready" ? (
         visibleCards.length === 0 ? (
           <p className="rounded-md border border-dashed p-6 text-sm leading-6 text-muted-foreground">
-            カードはまだありません。法令ビューアの条文から作成できます。
+            {state.cards.length === 0
+              ? // 真の空状態: カードが 1 件も存在しない
+                "カードはまだありません。法令ビューアの条文から作成できます。"
+              : // フィルタ選択肢はカードのある法令から生成されるため通常操作では到達しないが、
+                // 防御として文言を区別する
+                "この法令のカードはありません。"}
           </p>
         ) : (
           <ul className="grid gap-2">
@@ -151,14 +156,20 @@ export const StudyCardsPage = ({
                   </span>
                   <p className="text-sm text-muted-foreground">
                     根拠:{" "}
-                    {/* ビューア起点の作成フローでは article が必ず入るため、有無の分岐はしない。 */}
+                    {/* ビューア起点の作成フローでは article が必ず入るが、
+                        データ不整合時に「第null条」がレンダリングされるのを防ぐため
+                        article が空の場合は条番号部分を省略して法令名のみ表示する。 */}
                     <Link
                       className="text-primary underline-offset-4 hover:underline"
                       params={{ lawId: card.target.lawId, article: card.target.article ?? "" }}
                       to="/laws/$lawId/articles/$article"
                     >
-                      {state.lawTitlesById.get(card.target.lawId) ?? card.target.lawId} 第
-                      {card.target.article}条
+                      {state.lawTitlesById.get(card.target.lawId) ?? card.target.lawId}
+                      {card.target.article === null ||
+                      card.target.article === undefined ||
+                      card.target.article === ""
+                        ? ""
+                        : ` 第${card.target.article}条`}
                     </Link>
                   </p>
                   {card.tags.length === 0 ? null : (
