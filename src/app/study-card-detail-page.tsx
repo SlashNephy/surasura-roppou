@@ -46,6 +46,8 @@ export const StudyCardDetailPage = ({
   const [examPinned, setExamPinned] = useState(false);
   const [message, setMessage] = useState<{ kind: "saved" | "error"; text: string }>();
   const [isSaving, setIsSaving] = useState(false);
+  // 削除処理の実行中フラグ。isSaving に対応する削除側の状態。
+  const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   useEffect(() => {
@@ -161,6 +163,8 @@ export const StudyCardDetailPage = ({
   };
 
   const handleDelete = async () => {
+    setIsDeleting(true);
+
     try {
       await storageRepository.deleteStudyCard(card.id);
       await navigate({ to: "/study/cards" });
@@ -170,6 +174,10 @@ export const StudyCardDetailPage = ({
         kind: "error",
         text: "カードを削除できませんでした。端末の保存領域を確認してください。",
       });
+    } finally {
+      // 成功時は navigate で画面を離脱するため実質的に意味はないが、
+      // isSaving の finally パターンと統一するために記述する。
+      setIsDeleting(false);
     }
   };
 
@@ -306,6 +314,7 @@ export const StudyCardDetailPage = ({
               キャンセル
             </Button>
             <Button
+              disabled={isDeleting}
               onClick={() => {
                 void handleDelete();
               }}

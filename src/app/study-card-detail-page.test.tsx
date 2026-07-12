@@ -1,7 +1,7 @@
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { StudyCard } from "@/core/domain";
 import { createMemoryStorageRepository } from "@/test/fixtures/storage";
@@ -82,5 +82,36 @@ describe("StudyCardDetailPage", () => {
     renderDetailPage("/study/cards/missing-card", []);
 
     expect(await screen.findByText("カードが見つかりません。")).toBeInTheDocument();
+  });
+
+  it("prevents double deletion while a delete is in flight", async () => {
+    const user = userEvent.setup();
+    const storage = createMemoryStorageRepository({ studyCards: [card] });
+
+    // resolve を保留して削除処理を in-flight 状態に保つスタブ
+    let resolveDelete: (() => void) | undefined;
+    const deleteStudyCard = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveDelete = resolve;
+        }),
+    );
+
+    // storage のリポジトリの deleteStudyCard だけをスタブに差し替える
+    const repository = { ...storage.repository, deleteStudyCard };
+    const history = createMemoryHistory({ initialEntries: [`/study/cards/${card.id}`] });
+
+    render(<RouterProvider router={createAppRouter({ history, storageRepository: repository })} />);
+
+    // 削除確認ダイアログを開いて「削除する」を 2 回クリックする
+    await user.click(await screen.findByRole("button", { name: "カードを削除" }));
+    const confirmButton = await screen.findByRole("button", { name: "削除する" });
+    await user.click(confirmButton);
+    // 2 回目のクリックは disabled により no-op になるはず
+    await user.click(confirmButton);
+
+    // deleteStudyCard は最初の 1 回のみ呼ばれる
+    expect(deleteStudyCard).toHaveBeenCalledTimes(1);
+    resolveDelete?.();
   });
 });
