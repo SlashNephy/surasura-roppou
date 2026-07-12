@@ -11,6 +11,9 @@ import type { CameraErrorKind, CameraStreamProvider, CapturedImage } from "@/cor
 import { Button } from "@/shared/ui/button";
 
 import { useCamera } from "./use-camera";
+import { OcrPanel } from "./ocr-panel";
+import { useOcr } from "./use-ocr";
+import type { UseOcr } from "./use-ocr";
 
 const defaultCameraStreamProvider = createCameraStreamProvider();
 
@@ -38,9 +41,16 @@ const cameraErrorMessage = (kind: CameraErrorKind): string => {
 
 export const ScannerPage = ({
   cameraStreamProvider = defaultCameraStreamProvider,
+  ocr: ocrProp,
 }: {
   cameraStreamProvider?: CameraStreamProvider;
+  // テストから決定的な OCR スタブを注入できるようにする。省略時は useOcr() を使う。
+  ocr?: UseOcr;
 }) => {
+  // Hook は無条件で呼ぶ必要があるため、prop が渡されても useOcr() 自体は常に呼ぶ。
+  const ocrDefault = useOcr();
+  const ocr = ocrProp ?? ocrDefault;
+
   const [image, setImage] = useState<CapturedImage | undefined>();
   // react-hooks/refs が camera オブジェクト全体をレンダー時 ref アクセスとして誤検知するため
   // 分割代入で個別変数に取り出す。stop は useCallback([], []) で安定している。
@@ -128,6 +138,12 @@ export const ScannerPage = ({
   );
 
   if (image !== undefined) {
+    // 撮り直し・選び直し時は OCR 状態もリセットして idle に戻す。
+    const handleDiscard = () => {
+      ocr.reset();
+      replaceImage(undefined);
+    };
+
     return (
       <section className="mx-auto grid w-full max-w-md gap-4 px-5 py-8 text-center">
         <h1 className="font-serif text-2xl font-semibold text-foreground">プレビュー</h1>
@@ -136,15 +152,8 @@ export const ScannerPage = ({
           className="w-full rounded-md border bg-card object-contain"
           src={image.objectUrl}
         />
-        <p className="text-xs text-muted-foreground">条文の読み取りは準備中です。</p>
-        <Button
-          className="w-full"
-          onClick={() => {
-            replaceImage(undefined);
-          }}
-          type="button"
-          variant="outline"
-        >
+        <OcrPanel blob={image.blob} ocr={ocr} onDiscard={handleDiscard} />
+        <Button className="w-full" onClick={handleDiscard} type="button" variant="outline">
           <RotateCcw className="size-4" aria-hidden="true" />
           {image.source === "camera" ? "撮り直す" : "選び直す"}
         </Button>
