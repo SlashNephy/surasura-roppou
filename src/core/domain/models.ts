@@ -112,6 +112,33 @@ export interface StudyCard {
 
 export type QuizRating = "again" | "hard" | "good" | "easy";
 
+// 追記専用の回答ログ。学習データの真実の源であり、スケジュール状態はここから再計算できる。
+export interface ReviewLog {
+  id: string;
+  cardId: string;
+  // 復習セッションへの紐付け（任意）。
+  sessionId?: string;
+  grade: QuizRating;
+  reviewedAt: ISODateString;
+  durationMs?: number;
+  // 出題間隔の算定方式。例: "fixed-interval@1"。算定方式の混在を後から検出できるようにする。
+  scheduler: string;
+}
+
+// ReviewLog からの導出キャッシュ。破損時はログの再計算で復元する。
+export interface CardSchedule {
+  cardId: string;
+  dueAt: ISODateString;
+  intervalDays: number;
+  // again で落ちた回数。
+  lapses: number;
+  reviews: number;
+  // 直近 8 回の回答に占める again の割合。
+  recentMistakeRate: number;
+  // 反映済みの最後の ReviewLog id（整合性チェック用）。
+  derivedFrom: string;
+}
+
 export interface QuizResult {
   cardId: string;
   answeredAt: ISODateString;
