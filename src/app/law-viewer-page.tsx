@@ -611,16 +611,20 @@ const LawViewerReadyState = ({
                   >
                     この条文を保存
                   </Button>
-                  <Button
-                    className="w-fit"
-                    onClick={() => {
-                      setIsCardDialogOpen(true);
-                    }}
-                    type="button"
-                    variant="ghost"
-                  >
-                    カードを作る
-                  </Button>
+                  {/* activeNode が undefined（条番号は分かるがノードが見つからない）ときは
+                      ダイアログを開けないためボタンを非表示にする */}
+                  {activeNode !== undefined ? (
+                    <Button
+                      className="w-fit"
+                      onClick={() => {
+                        setIsCardDialogOpen(true);
+                      }}
+                      type="button"
+                      variant="ghost"
+                    >
+                      カードを作る
+                    </Button>
+                  ) : null}
                   {verification !== undefined &&
                   (verification.status !== "match" ||
                     verification.bookmark.target.pinned === true) ? (

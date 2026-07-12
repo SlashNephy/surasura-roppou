@@ -91,6 +91,60 @@ describe("StudyCardCreateDialog", () => {
     expect(storage.getStudyCards()).toHaveLength(0);
   });
 
+  it("clears the form when the dialog is closed", async () => {
+    const user = userEvent.setup();
+    const storage = createMemoryStorageRepository();
+    let latestOpen = true;
+    const handleOpenChange = (open: boolean) => {
+      latestOpen = open;
+    };
+    const view = render(
+      <StudyCardCreateDialog
+        articleNumber="1"
+        lawId="129AC0000000089"
+        lawTitle="民法"
+        node={articleNode}
+        onOpenChange={handleOpenChange}
+        open
+        revisionId="rev-1"
+        storageRepository={storage.repository}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("問題文"), "途中の入力");
+    await user.click(screen.getByRole("button", { name: "キャンセル" }));
+    expect(latestOpen).toBe(false);
+
+    // open を false にしてから true に切り替えると再度ダイアログが開く。
+    // 閉じたときに resetForm が呼ばれていれば入力が空になる。
+    view.rerender(
+      <StudyCardCreateDialog
+        articleNumber="1"
+        lawId="129AC0000000089"
+        lawTitle="民法"
+        node={articleNode}
+        onOpenChange={handleOpenChange}
+        open={false}
+        revisionId="rev-1"
+        storageRepository={storage.repository}
+      />,
+    );
+    view.rerender(
+      <StudyCardCreateDialog
+        articleNumber="1"
+        lawId="129AC0000000089"
+        lawTitle="民法"
+        node={articleNode}
+        onOpenChange={handleOpenChange}
+        open
+        revisionId="rev-1"
+        storageRepository={storage.repository}
+      />,
+    );
+
+    expect(screen.getByLabelText("問題文")).toHaveValue("");
+  });
+
   it("keeps the dialog open and shows an error when saving fails", async () => {
     const user = userEvent.setup();
     const storage = createMemoryStorageRepository();

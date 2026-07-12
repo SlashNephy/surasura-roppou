@@ -92,8 +92,7 @@ export const StudyCardCreateDialog = ({
         createdAt: now,
         updatedAt: now,
       });
-      resetForm();
-      onOpenChange(false);
+      handleOpenChange(false);
     } catch {
       setError("カードを保存できませんでした。端末の保存領域を確認してください。");
     } finally {
@@ -101,8 +100,17 @@ export const StudyCardCreateDialog = ({
     }
   };
 
+  // 閉じるときは途中入力を破棄する。別の条文で開き直したとき前回の入力が混ざるのを防ぐ。
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      resetForm();
+    }
+
+    onOpenChange(nextOpen);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-h-[85dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>学習カードを作る</DialogTitle>
@@ -186,14 +194,18 @@ export const StudyCardCreateDialog = ({
           <DialogFooter>
             <Button
               onClick={() => {
-                onOpenChange(false);
+                handleOpenChange(false);
               }}
               type="button"
               variant="outline"
             >
               キャンセル
             </Button>
-            <Button disabled={isSaving} type="submit">
+            <Button
+              aria-describedby={error === undefined ? undefined : `${formId}-error`}
+              disabled={isSaving}
+              type="submit"
+            >
               カードを保存
             </Button>
           </DialogFooter>
