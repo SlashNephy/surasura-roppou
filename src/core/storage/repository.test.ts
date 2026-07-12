@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type {
   Annotation,
   Bookmark,
+  CardSchedule,
   Collection,
   Law,
   LawNode,
@@ -18,7 +19,6 @@ import {
   createStorageRepository as originalCreateStorageRepository,
   deleteSurasuraDatabase,
   openSurasuraDatabase,
-  surasuraDatabaseVersion,
 } from "./repository";
 import type { StorageRepository, StorageRepositoryOptions } from "./repository";
 
@@ -184,28 +184,57 @@ describe("StorageRepository", () => {
     await expect(repository.listCollections()).resolves.toEqual([collection]);
     await expect(repository.listAnnotations({ lawId: law.lawId })).resolves.toEqual([annotation]);
     await expect(repository.listAnnotations({ lawId: "not-matching-law" })).resolves.toEqual([]);
-    await expect(repository.listDueStudyCards("2026-07-07T00:00:00.000Z")).resolves.toEqual([
-      studyCard,
-    ]);
+    await expect(repository.listStudyCards()).resolves.toEqual([studyCard]);
+    await expect(repository.listStudyCards({ lawId: law.lawId })).resolves.toEqual([studyCard]);
+    await expect(repository.listStudyCards({ lawId: "not-matching-law" })).resolves.toEqual([]);
+    // スケジュール（= 回答履歴）を持たない未学習カードは出題キューに現れない。
+    await expect(repository.listDueStudyCards("2026-07-07T00:00:00.000Z")).resolves.toEqual([]);
     await expect(repository.listStudySessions()).resolves.toEqual([studySession]);
   });
 
-  it("returns only due study cards at or before the requested timestamp", async () => {
+  it("returns due cards joined with their schedules in dueAt order", async () => {
+    const databaseName = createDatabaseName();
     const repository = createStorageRepository({
-      databaseName: createDatabaseName(),
+      databaseName,
       now: fixedNow,
     });
-    const futureStudyCard = {
+    const secondCard = {
       ...studyCard,
       id: "card-2",
-      dueAt: "2026-07-08T00:00:00.000Z",
     } satisfies StudyCard;
+    const dueSchedule = {
+      cardId: studyCard.id,
+      dueAt: "2026-07-05T00:00:00.000Z",
+      intervalDays: 1,
+      lapses: 0,
+      reviews: 1,
+      recentMistakeRate: 0,
+      derivedFrom: "log-1",
+    } satisfies CardSchedule;
+    const futureSchedule = {
+      ...dueSchedule,
+      cardId: secondCard.id,
+      dueAt: "2026-07-08T00:00:00.000Z",
+      derivedFrom: "log-2",
+    } satisfies CardSchedule;
 
     await repository.putStudyCard(studyCard);
-    await repository.putStudyCard(futureStudyCard);
+    await repository.putStudyCard(secondCard);
+
+    const database = await openSurasuraDatabase(databaseName);
+    try {
+      await database.put("cardSchedules", dueSchedule);
+      await database.put("cardSchedules", futureSchedule);
+    } finally {
+      database.close();
+    }
 
     await expect(repository.listDueStudyCards("2026-07-06T00:00:00.000Z")).resolves.toEqual([
-      studyCard,
+      { card: studyCard, schedule: dueSchedule },
+    ]);
+    await expect(repository.listDueStudyCards("2026-07-08T00:00:00.000Z")).resolves.toEqual([
+      { card: studyCard, schedule: dueSchedule },
+      { card: secondCard, schedule: futureSchedule },
     ]);
   });
 
@@ -247,8 +276,131 @@ describe("StorageRepository", () => {
     }
   });
 
-  it("exposes schema version 2 for the search index migration", () => {
-    expect(surasuraDatabaseVersion).toBe(2);
+  it("returns a stored study card by id and undefined for unknown ids", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.putStudyCard(studyCard);
+
+    await expect(repository.getStudyCard(studyCard.id)).resolves.toEqual(studyCard);
+    await expect(repository.getStudyCard("missing-card")).resolves.toBeUndefined();
+  });
+
+  it("records a review by appending the log and deriving the schedule", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.putStudyCard(studyCard);
+
+    const schedule = await repository.recordReview({
+      id: "log-1",
+      cardId: studyCard.id,
+      grade: "good",
+      reviewedAt: "2026-07-06T00:00:00.000Z",
+      scheduler: "fixed-interval@1",
+    });
+
+    // 初回 good は学習 step 1 に進み 10 分後が期限になる（fixed-interval@1）。
+    expect(schedule.dueAt).toBe("2026-07-06T00:10:00.000Z");
+    expect(schedule.reviews).toBe(1);
+    expect(schedule.derivedFrom).toBe("log-1");
+    await expect(repository.listReviewLogs(studyCard.id)).resolves.toEqual([
+      expect.objectContaining({ id: "log-1" }),
+    ]);
+    await expect(repository.listDueStudyCards("2026-07-07T00:00:00.000Z")).resolves.toEqual([
+      { card: studyCard, schedule },
+    ]);
+  });
+
+  it("lists all review logs across cards when no cardId is given", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+    const secondCard = { ...studyCard, id: "card-2" } satisfies StudyCard;
+
+    await repository.putStudyCard(studyCard);
+    await repository.putStudyCard(secondCard);
+    await repository.recordReview({
+      id: "log-1",
+      cardId: studyCard.id,
+      grade: "good",
+      reviewedAt: "2026-07-06T00:00:00.000Z",
+      scheduler: "fixed-interval@1",
+    });
+    await repository.recordReview({
+      id: "log-2",
+      cardId: secondCard.id,
+      grade: "easy",
+      reviewedAt: "2026-07-06T01:00:00.000Z",
+      scheduler: "fixed-interval@1",
+    });
+
+    const logs = await repository.listReviewLogs();
+
+    expect(logs.map((log) => log.id).sort()).toEqual(["log-1", "log-2"]);
+  });
+
+  it("replays the full history when recording additional reviews", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.putStudyCard(studyCard);
+    await repository.recordReview({
+      id: "log-1",
+      cardId: studyCard.id,
+      grade: "good",
+      reviewedAt: "2026-07-06T00:00:00.000Z",
+      scheduler: "fixed-interval@1",
+    });
+
+    const schedule = await repository.recordReview({
+      id: "log-2",
+      cardId: studyCard.id,
+      grade: "good",
+      reviewedAt: "2026-07-06T00:10:00.000Z",
+      scheduler: "fixed-interval@1",
+    });
+
+    // good good で卒業して 1 日後。
+    expect(schedule.dueAt).toBe("2026-07-07T00:10:00.000Z");
+    expect(schedule.reviews).toBe(2);
+    expect(schedule.derivedFrom).toBe("log-2");
+  });
+
+  it("deletes a study card together with its review logs and schedule", async () => {
+    const databaseName = createDatabaseName();
+    const repository = createStorageRepository({
+      databaseName,
+      now: fixedNow,
+    });
+
+    await repository.putStudyCard(studyCard);
+    await repository.recordReview({
+      id: "log-1",
+      cardId: studyCard.id,
+      grade: "good",
+      reviewedAt: "2026-07-06T00:00:00.000Z",
+      scheduler: "fixed-interval@1",
+    });
+
+    await repository.deleteStudyCard(studyCard.id);
+
+    await expect(repository.getStudyCard(studyCard.id)).resolves.toBeUndefined();
+    await expect(repository.listReviewLogs(studyCard.id)).resolves.toEqual([]);
+
+    const database = await openSurasuraDatabase(databaseName);
+    try {
+      await expect(database.get("cardSchedules", studyCard.id)).resolves.toBeUndefined();
+    } finally {
+      database.close();
+    }
   });
 
   it("closes the cached connection and can reopen on later operations", async () => {
@@ -363,10 +515,7 @@ const studyCard = {
   question: "私権の公共の福祉適合性は何条か。",
   answer: "民法1条",
   tags: ["民法"],
-  dueAt: "2026-07-06T00:00:00.000Z",
-  intervalDays: 1,
-  ease: 2.5,
-  mistakes: 0,
+  examPinned: false,
   createdAt: "2026-07-06T00:00:00.000Z",
   updatedAt: "2026-07-06T00:00:00.000Z",
 } satisfies StudyCard;
@@ -376,15 +525,6 @@ const studySession = {
   startedAt: "2026-07-06T00:00:00.000Z",
   finishedAt: "2026-07-06T00:05:00.000Z",
   cardIds: [studyCard.id],
-  results: [
-    {
-      cardId: studyCard.id,
-      answeredAt: "2026-07-06T00:04:00.000Z",
-      rating: "good",
-      elapsedMs: 1200,
-      wasCorrect: true,
-    },
-  ],
 } satisfies StudySession;
 
 const ocrSession = {

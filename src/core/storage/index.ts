@@ -9,6 +9,7 @@ export {
   surasuraDatabaseVersion,
 } from "./repository";
 export type {
+  DueStudyCard,
   LawDocumentInput,
   LawScopedQuery,
   SavedLawDocument,

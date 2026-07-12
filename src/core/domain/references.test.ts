@@ -15,7 +15,7 @@ import type {
   LawNode,
   LawReferenceCandidate,
   LawRevision,
-  QuizResult,
+  ReviewLog,
   StudyCard,
   StudySession,
 } from "./models";
@@ -235,28 +235,25 @@ describe("domain model contracts", () => {
       answer: "民法709条",
       explanation: "故意又は過失による権利侵害の損害賠償責任を定める。",
       tags: ["民法"],
-      dueAt: "2026-07-06T00:00:00.000Z",
-      intervalDays: 1,
-      ease: 2.5,
-      mistakes: 0,
+      examPinned: false,
       createdAt: "2026-07-05T00:00:00.000Z",
       updatedAt: "2026-07-05T00:00:00.000Z",
     } satisfies StudyCard;
 
-    const quizResult = {
+    const reviewLog = {
+      id: "review-log-1",
       cardId: studyCard.id,
-      answeredAt: "2026-07-05T00:00:00.000Z",
-      rating: "good",
-      elapsedMs: 4200,
-      wasCorrect: true,
-    } satisfies QuizResult;
+      grade: "good",
+      reviewedAt: "2026-07-06T00:04:00.000Z",
+      durationMs: 1200,
+      scheduler: "fixed-interval@1",
+    } satisfies ReviewLog;
 
     const studySession = {
       id: "session-1",
       startedAt: "2026-07-05T00:00:00.000Z",
       finishedAt: "2026-07-05T00:10:00.000Z",
       cardIds: [studyCard.id],
-      results: [quizResult],
     } satisfies StudySession;
 
     expect(articleNode.path).toBe("article:709");
@@ -264,6 +261,7 @@ describe("domain model contracts", () => {
     expect(lawTopBookmark.target).toEqual({ lawId: law.lawId });
     expect(annotation.target).toEqual(bookmark.target);
     expect(detectedReference.candidates[0]).toEqual(candidate);
-    expect(studySession.results[0]).toEqual(quizResult);
+    expect(studySession.cardIds[0]).toEqual(studyCard.id);
+    expect(reviewLog.cardId).toEqual(studyCard.id);
   });
 });

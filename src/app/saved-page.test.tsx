@@ -101,7 +101,7 @@ describe("SavedPage", () => {
 
       expect(payload.bookmarks).toEqual([bookmark]);
       expect(payload.collections).toEqual([collection]);
-      expect(payload.version).toBe(1);
+      expect(payload.version).toBe(2);
       expect(payload.savedLaws).toHaveLength(1);
       expect(payload.savedLaws[0]).toMatchObject({
         law: { lawId: "129AC0000000089", title: "民法" },

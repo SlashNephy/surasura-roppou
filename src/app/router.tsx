@@ -16,6 +16,8 @@ import {
   StudyPage,
 } from "./pages";
 import { SavedCollectionPage, SavedPage } from "./saved-page";
+import { StudyCardDetailPage } from "./study-card-detail-page";
+import { StudyCardsPage } from "./study-cards-page";
 
 interface CreateAppRouterOptions {
   history?: RouterHistory;
@@ -90,10 +92,31 @@ const createRouteTree = ({
     component: ScannerPage,
   });
 
+  // StudyPage に storageRepository を DI するため closure で包む。
+  const StudyRoute = () => <StudyPage storageRepository={storageRepository} />;
+
   const studyRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "study",
-    component: StudyPage,
+    component: StudyRoute,
+  });
+
+  // StudyCardsPage に storageRepository を DI するため closure で包む。
+  const StudyCardsRoute = () => <StudyCardsPage storageRepository={storageRepository} />;
+
+  const studyCardsRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "study/cards",
+    component: StudyCardsRoute,
+  });
+
+  // StudyCardDetailPage に storageRepository を DI するため closure で包む。
+  const StudyCardDetailRoute = () => <StudyCardDetailPage storageRepository={storageRepository} />;
+
+  const studyCardDetailRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "study/cards/$cardId",
+    component: StudyCardDetailRoute,
   });
 
   const settingsRoute = createRoute({
@@ -122,6 +145,8 @@ const createRouteTree = ({
     savedCollectionRoute,
     scannerRoute,
     studyRoute,
+    studyCardsRoute,
+    studyCardDetailRoute,
     settingsRoute,
     searchRoute,
   ]);

@@ -3,12 +3,16 @@ import { vi } from "vitest";
 import type {
   Annotation,
   Bookmark,
+  CardSchedule,
   Collection,
   OcrSession,
+  ReviewLog,
   StudyCard,
   StudySession,
 } from "@/core/domain";
+import { fixedIntervalScheduler } from "@/core/study";
 import type {
+  DueStudyCard,
   LawDocumentInput,
   SavedLawDocument,
   SavedLawSummary,
@@ -24,6 +28,8 @@ export const createMemoryStorageRepository = (
   getAnnotations(): Annotation[];
   getStudyCards(): StudyCard[];
   getStudySessions(): StudySession[];
+  getReviewLogs(): ReviewLog[];
+  getCardSchedules(): CardSchedule[];
   repository: StorageRepository;
 } => {
   const options: MemoryStorageRepositoryOptions =
@@ -36,6 +42,8 @@ export const createMemoryStorageRepository = (
   let collections = [...(options.collections ?? [])];
   let studyCards = [...(options.studyCards ?? [])];
   let studySessions = [...(options.studySessions ?? [])];
+  let reviewLogs = [...(options.reviewLogs ?? [])];
+  let cardSchedules = [...(options.cardSchedules ?? [])];
   let savedDocument = initialDocument;
   let savedAt = initialDocument?.savedAt;
   let updatedAt = initialDocument?.revision.fetchedAt ?? initialDocument?.savedAt;
@@ -58,6 +66,12 @@ export const createMemoryStorageRepository = (
     },
     getStudySessions() {
       return studySessions;
+    },
+    getReviewLogs() {
+      return reviewLogs;
+    },
+    getCardSchedules() {
+      return cardSchedules;
     },
     repository: {
       saveLawDocument(document) {
@@ -137,8 +151,54 @@ export const createMemoryStorageRepository = (
         studyCards = [...studyCards.filter((existingCard) => existingCard.id !== card.id), card];
         return Promise.resolve();
       },
+      getStudyCard(cardId) {
+        return Promise.resolve(studyCards.find((card) => card.id === cardId));
+      },
+      deleteStudyCard(cardId) {
+        studyCards = studyCards.filter((card) => card.id !== cardId);
+        reviewLogs = reviewLogs.filter((log) => log.cardId !== cardId);
+        cardSchedules = cardSchedules.filter((schedule) => schedule.cardId !== cardId);
+        return Promise.resolve();
+      },
+      recordReview(log) {
+        reviewLogs = [...reviewLogs.filter((existingLog) => existingLog.id !== log.id), log];
+
+        const schedule = fixedIntervalScheduler(
+          reviewLogs.filter((candidate) => candidate.cardId === log.cardId),
+          new Date(log.reviewedAt),
+        );
+
+        cardSchedules = [
+          ...cardSchedules.filter((existingSchedule) => existingSchedule.cardId !== log.cardId),
+          schedule,
+        ];
+        return Promise.resolve(schedule);
+      },
+      listStudyCards(query) {
+        const filteredCards =
+          query?.lawId === undefined
+            ? studyCards
+            : studyCards.filter((card) => card.target.lawId === query.lawId);
+
+        return Promise.resolve(filteredCards);
+      },
       listDueStudyCards(dueAtOrBefore) {
-        return Promise.resolve(studyCards.filter((card) => card.dueAt <= dueAtOrBefore));
+        const dueCards: DueStudyCard[] = cardSchedules
+          .filter((schedule) => schedule.dueAt <= dueAtOrBefore)
+          .sort((left, right) => left.dueAt.localeCompare(right.dueAt))
+          .flatMap((schedule) => {
+            const card = studyCards.find((candidate) => candidate.id === schedule.cardId);
+
+            return card === undefined ? [] : [{ card, schedule }];
+          });
+
+        return Promise.resolve(dueCards);
+      },
+      listReviewLogs(cardId) {
+        const filteredLogs =
+          cardId === undefined ? reviewLogs : reviewLogs.filter((log) => log.cardId === cardId);
+
+        return Promise.resolve(filteredLogs);
       },
       putStudySession(session) {
         studySessions = [
@@ -164,6 +224,8 @@ interface MemoryStorageRepositoryOptions {
   collections?: Collection[];
   studyCards?: StudyCard[];
   studySessions?: StudySession[];
+  reviewLogs?: ReviewLog[];
+  cardSchedules?: CardSchedule[];
 }
 
 export const createSavedLawDocument = ({

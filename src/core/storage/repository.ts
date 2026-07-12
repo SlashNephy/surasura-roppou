@@ -1,10 +1,13 @@
 import { deleteDB, openDB } from "idb";
-import type { IDBPDatabase } from "idb";
+import type { IDBPDatabase, IDBPTransaction, StoreNames } from "idb";
 
 import { buildArticleReferenceKey } from "@/core/domain";
+import { fixedIntervalScheduler } from "@/core/study";
+import { migrateRecordsToVersion3 } from "./migrations";
 import type {
   Annotation,
   Bookmark,
+  CardSchedule,
   Collection,
   ISODateString,
   Law,
@@ -12,6 +15,7 @@ import type {
   LawReferenceTarget,
   LawRevision,
   OcrSession,
+  ReviewLog,
   StudyCard,
   StudySession,
 } from "@/core/domain";
@@ -56,6 +60,12 @@ export interface LawScopedQuery {
   lawId?: string;
 }
 
+// 出題キューの 1 項目。カード本文と導出スケジュールを結合して返す。
+export interface DueStudyCard {
+  card: StudyCard;
+  schedule: CardSchedule;
+}
+
 export interface StorageRepository {
   saveLawDocument(document: LawDocumentInput): Promise<void>;
   getLawDocument(lawId: string): Promise<SavedLawDocument | undefined>;
@@ -68,7 +78,12 @@ export interface StorageRepository {
   putAnnotation(annotation: Annotation): Promise<void>;
   listAnnotations(query?: LawScopedQuery): Promise<Annotation[]>;
   putStudyCard(card: StudyCard): Promise<void>;
-  listDueStudyCards(dueAtOrBefore: ISODateString): Promise<StudyCard[]>;
+  getStudyCard(cardId: string): Promise<StudyCard | undefined>;
+  listStudyCards(query?: LawScopedQuery): Promise<StudyCard[]>;
+  deleteStudyCard(cardId: string): Promise<void>;
+  listDueStudyCards(dueAtOrBefore: ISODateString): Promise<DueStudyCard[]>;
+  listReviewLogs(cardId?: string): Promise<ReviewLog[]>;
+  recordReview(log: ReviewLog): Promise<CardSchedule>;
   putStudySession(session: StudySession): Promise<void>;
   listStudySessions(): Promise<StudySession[]>;
   putOcrSession(session: OcrSession): Promise<void>;
@@ -281,15 +296,87 @@ export const createStorageRepository = (
       });
     },
 
+    async getStudyCard(cardId) {
+      return withDatabase(async (db) => {
+        const record = await db.get("studyCards", cardId);
+
+        return record === undefined ? undefined : stripTargetIndexes(record);
+      });
+    },
+
+    async listStudyCards(query = {}) {
+      return withDatabase(async (db) => {
+        const records =
+          query.lawId === undefined
+            ? await db.getAll("studyCards")
+            : await db.getAllFromIndex("studyCards", "by-law-id", query.lawId);
+
+        return records.map(stripTargetIndexes);
+      });
+    },
+
+    async deleteStudyCard(cardId) {
+      await withDatabase(async (db) => {
+        // カードに紐づくログとスケジュールも同一トランザクションで消す。
+        // 孤児ログは再計算先を失い、export しても import 先で整合しないため。
+        const tx = db.transaction(["studyCards", "reviewLogs", "cardSchedules"], "readwrite");
+        const logKeys = await tx.objectStore("reviewLogs").index("by-card-id").getAllKeys(cardId);
+
+        for (const key of logKeys) {
+          void tx.objectStore("reviewLogs").delete(key);
+        }
+
+        void tx.objectStore("cardSchedules").delete(cardId);
+        void tx.objectStore("studyCards").delete(cardId);
+        await tx.done;
+      });
+    },
+
     async listDueStudyCards(dueAtOrBefore) {
       return withDatabase(async (db) => {
-        const records = await db.getAllFromIndex(
-          "studyCards",
+        // by-due-at インデックスはキー昇順で返るため、そのまま出題順（dueAt 昇順）になる。
+        const schedules = await db.getAllFromIndex(
+          "cardSchedules",
           "by-due-at",
           IDBKeyRange.upperBound(dueAtOrBefore),
         );
+        const dueCards: DueStudyCard[] = [];
 
-        return records.map(stripTargetIndexes);
+        for (const schedule of schedules) {
+          const record = await db.get("studyCards", schedule.cardId);
+
+          // スケジュールだけが残った孤児（想定外の不整合）は出題キューから除く。
+          if (record !== undefined) {
+            dueCards.push({ card: stripTargetIndexes(record), schedule });
+          }
+        }
+
+        return dueCards;
+      });
+    },
+
+    async listReviewLogs(cardId) {
+      return withDatabase((db) =>
+        cardId === undefined
+          ? db.getAll("reviewLogs")
+          : db.getAllFromIndex("reviewLogs", "by-card-id", cardId),
+      );
+    },
+
+    async recordReview(log) {
+      return withDatabase(async (db) => {
+        // 追記と再計算を同一トランザクションで行い、ログとスケジュールのずれを防ぐ。
+        const tx = db.transaction(["reviewLogs", "cardSchedules"], "readwrite");
+
+        await tx.objectStore("reviewLogs").put(log);
+
+        const history = await tx.objectStore("reviewLogs").index("by-card-id").getAll(log.cardId);
+        const schedule = fixedIntervalScheduler(history, now());
+
+        await tx.objectStore("cardSchedules").put(schedule);
+        await tx.done;
+
+        return schedule;
       });
     },
 
@@ -329,13 +416,33 @@ export const openSurasuraDatabase = async (
   databaseName = surasuraDatabaseName,
 ): Promise<IDBPDatabase<SurasuraDatabase>> =>
   openDB<SurasuraDatabase>(databaseName, surasuraDatabaseVersion, {
-    upgrade(database, oldVersion) {
+    upgrade(database, oldVersion, _newVersion, transaction) {
       if (oldVersion < 1) {
         createVersion1Stores(database);
       }
 
       if (oldVersion < 2) {
         createVersion2Stores(database);
+      }
+
+      if (oldVersion < 3) {
+        createVersion3Stores(database, transaction);
+
+        // ストア新設と同じ versionchange トランザクション内で旧レコードを変換する。
+        // idb の upgrade コールバックは async 非対応（void 型）のため void で発火する。
+        // IDB のトランザクション自動コミットは未完了リクエストがある間は発生しないため、
+        // 移行完了まで versionchange トランザクションは維持される。
+        if (oldVersion > 0) {
+          void migrateRecordsToVersion3(transaction).catch((error: unknown) => {
+            // 予期しない移行例外は versionchange トランザクションを abort して openDB の reject へ流す（スペック 8 章）。
+            console.error("study data migration failed", error);
+            try {
+              transaction.abort();
+            } catch {
+              // トランザクションが既に終了していると abort は InvalidStateError を投げるが、その場合は既に失敗経路にある。
+            }
+          });
+        }
       }
     },
     blocked() {
@@ -384,7 +491,8 @@ const createVersion1Stores = (database: IDBPDatabase<SurasuraDatabase>) => {
   annotations.createIndex("by-updated-at", "updatedAt");
 
   const studyCards = database.createObjectStore("studyCards", { keyPath: "id" });
-  studyCards.createIndex("by-due-at", "dueAt");
+  // v1 では by-due-at インデックスを作成する。v3 マイグレーションで削除される。
+  (studyCards as unknown as IDBObjectStore).createIndex("by-due-at", "dueAt");
   studyCards.createIndex("by-law-id", "lawId");
   studyCards.createIndex("by-target-key", "targetKey");
   studyCards.createIndex("by-updated-at", "updatedAt");
@@ -407,6 +515,28 @@ const createVersion2Stores = (database: IDBPDatabase<SurasuraDatabase>) => {
   });
   searchPostings.createIndex("by-bigram", "bigram");
   searchPostings.createIndex("by-law-id", "lawId");
+};
+
+export type VersionChangeTransaction = IDBPTransaction<
+  SurasuraDatabase,
+  ArrayLike<StoreNames<SurasuraDatabase>>,
+  "versionchange"
+>;
+
+const createVersion3Stores = (
+  database: IDBPDatabase<SurasuraDatabase>,
+  transaction: VersionChangeTransaction,
+) => {
+  const reviewLogs = database.createObjectStore("reviewLogs", { keyPath: "id" });
+  reviewLogs.createIndex("by-card-id", "cardId");
+  reviewLogs.createIndex("by-reviewed-at", "reviewedAt");
+
+  const cardSchedules = database.createObjectStore("cardSchedules", { keyPath: "cardId" });
+  cardSchedules.createIndex("by-due-at", "dueAt");
+
+  // 期限は cardSchedules に一本化するため、v1 で作った studyCards の by-due-at は捨てる。
+  // v3 スキーマからは除去済みなので、型チェックを回避して raw IDB を使う。
+  (transaction.objectStore("studyCards") as unknown as IDBObjectStore).deleteIndex("by-due-at");
 };
 
 const toOrderedNodes = (records: StoredLawNode[]): LawNode[] =>

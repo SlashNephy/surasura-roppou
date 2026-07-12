@@ -3,6 +3,7 @@ import type {
   Bookmark,
   Collection,
   ISODateString,
+  ReviewLog,
   StudyCard,
   StudySession,
 } from "@/core/domain";
@@ -10,32 +11,40 @@ import type {
 import type { SavedLawDocument, StorageRepository } from "./repository";
 
 export interface SavedDataExport {
-  version: 1;
+  version: 2;
   exportedAt: ISODateString;
   savedLaws: SavedLawDocument[];
   bookmarks: Bookmark[];
   collections: Collection[];
   annotations: Annotation[];
   studyCards: StudyCard[];
+  // 回答履歴を含めることで、端末移行後も任意のスケジューラで状態を再構築できる。
+  // CardSchedule は導出キャッシュなので含めない（import 後に再計算する）。
+  reviewLogs: ReviewLog[];
   studySessions: StudySession[];
 }
-
-// listDueStudyCards は指定日時以前のカードを返すため、遠い未来の日時で全カードを取得する。
-const allDueStudyCardsDate = "9999-12-31T23:59:59.999Z";
 
 export const createSavedDataExport = async (
   repository: StorageRepository,
   exportedAt: ISODateString,
 ): Promise<SavedDataExport> => {
-  const [savedLawSummaries, bookmarks, collections, annotations, studyCards, studySessions] =
-    await Promise.all([
-      repository.listSavedLaws(),
-      repository.listBookmarks(),
-      repository.listCollections(),
-      repository.listAnnotations(),
-      repository.listDueStudyCards(allDueStudyCardsDate),
-      repository.listStudySessions(),
-    ]);
+  const [
+    savedLawSummaries,
+    bookmarks,
+    collections,
+    annotations,
+    studyCards,
+    reviewLogs,
+    studySessions,
+  ] = await Promise.all([
+    repository.listSavedLaws(),
+    repository.listBookmarks(),
+    repository.listCollections(),
+    repository.listAnnotations(),
+    repository.listStudyCards(),
+    repository.listReviewLogs(),
+    repository.listStudySessions(),
+  ]);
   const savedLawDocuments: SavedLawDocument[] = [];
   for (const savedLaw of savedLawSummaries) {
     try {
@@ -56,7 +65,8 @@ export const createSavedDataExport = async (
     exportedAt,
     savedLaws: savedLawDocuments,
     studyCards,
+    reviewLogs,
     studySessions,
-    version: 1,
+    version: 2,
   };
 };

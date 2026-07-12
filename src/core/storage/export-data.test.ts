@@ -7,6 +7,7 @@ import type {
   Law,
   LawNode,
   LawRevision,
+  ReviewLog,
   StudyCard,
   StudySession,
 } from "@/core/domain";
@@ -75,10 +76,7 @@ const studyCard = {
   question: "私権の基本原則は何条か。",
   answer: "民法1条",
   tags: ["民法"],
-  dueAt: "2026-07-08T00:00:00.000Z",
-  intervalDays: 1,
-  ease: 2.5,
-  mistakes: 0,
+  examPinned: false,
   createdAt: "2026-07-06T00:00:00.000Z",
   updatedAt: "2026-07-06T00:00:00.000Z",
 } satisfies StudyCard;
@@ -87,8 +85,16 @@ const studySession = {
   id: "study-session-1",
   startedAt: "2026-07-06T00:00:00.000Z",
   cardIds: [studyCard.id],
-  results: [],
 } satisfies StudySession;
+
+const reviewLog = {
+  id: "review-log-1",
+  cardId: studyCard.id,
+  grade: "good",
+  reviewedAt: "2026-07-06T00:04:00.000Z",
+  durationMs: 1200,
+  scheduler: "fixed-interval@1",
+} satisfies ReviewLog;
 
 describe("createSavedDataExport", () => {
   it.each([
@@ -107,6 +113,7 @@ describe("createSavedDataExport", () => {
         savedAt: "2026-07-06T00:00:00.000Z",
       }),
       studyCards: [studyCard],
+      reviewLogs: [reviewLog],
       studySessions: [studySession],
     });
 
@@ -124,8 +131,9 @@ describe("createSavedDataExport", () => {
         },
       ],
       studyCards: [studyCard],
+      reviewLogs: [reviewLog],
       studySessions: [studySession],
-      version: 1,
+      version: 2,
     });
   });
 
@@ -149,7 +157,7 @@ describe("createSavedDataExport", () => {
       bookmarks: [],
       collections: [],
       savedLaws: [],
-      version: 1,
+      version: 2,
     });
     expect(repository.getLawDocument).toHaveBeenCalledWith(law.lawId);
   });
@@ -185,7 +193,7 @@ describe("createSavedDataExport", () => {
       savedLaws: [],
       studyCards: [studyCard],
       studySessions: [studySession],
-      version: 1,
+      version: 2,
     });
     expect(repository.getLawDocument).toHaveBeenCalledWith(law.lawId);
   });

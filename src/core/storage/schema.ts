@@ -3,18 +3,20 @@ import type { DBSchema } from "idb";
 import type {
   Annotation,
   Bookmark,
+  CardSchedule,
   Collection,
   ISODateString,
   Law,
   LawNode,
   LawRevision,
   OcrSession,
+  ReviewLog,
   StudyCard,
   StudySession,
 } from "@/core/domain";
 
 export const surasuraDatabaseName = "surasura-roppou";
-export const surasuraDatabaseVersion = 2;
+export const surasuraDatabaseVersion = 3;
 
 export interface SavedLawRecord {
   lawId: string;
@@ -115,10 +117,24 @@ export interface SurasuraDatabase extends DBSchema {
     key: string;
     value: StudyCard & TargetIndexes;
     indexes: {
-      "by-due-at": string;
       "by-law-id": string;
       "by-target-key": string;
       "by-updated-at": string;
+    };
+  };
+  reviewLogs: {
+    key: string;
+    value: ReviewLog;
+    indexes: {
+      "by-card-id": string;
+      "by-reviewed-at": string;
+    };
+  };
+  cardSchedules: {
+    key: string;
+    value: CardSchedule;
+    indexes: {
+      "by-due-at": string;
     };
   };
   studySessions: {
