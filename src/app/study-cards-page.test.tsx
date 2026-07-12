@@ -101,4 +101,19 @@ describe("StudyCardsPage", () => {
       await screen.findByText("カードはまだありません。法令ビューアの条文から作成できます。"),
     ).toBeInTheDocument();
   });
+
+  it("renders question as a link pointing to the card detail page", async () => {
+    renderStudyCardsPage([minpoCard]);
+
+    // カード一覧が表示されるまで待機する。
+    await screen.findByText("1 件");
+
+    // 問題文リンクがカード詳細ページ（/study/cards/<id>）を指すことを確認する。
+    // getByRole("link") で各種リンクをすべて取得し、href が目的のパスを指すものを選ぶ。
+    const links = screen.getAllByRole("link");
+    const questionLink = links.find(
+      (link) => link.getAttribute("href") === `/study/cards/${minpoCard.id}`,
+    );
+    expect(questionLink).toBeInTheDocument();
+  });
 });

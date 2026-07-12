@@ -149,11 +149,13 @@ export const StudyCardsPage = ({
                       更新 {formatIsoDateLabel(card.updatedAt)}
                     </span>
                   </div>
-                  {/* Task 9 でカード詳細ルート（/study/cards/$cardId）が追加されるまでは
-                      span で表示し、詳細ページへのリンクは後続タスクで実装する。 */}
-                  <span className="line-clamp-2 whitespace-pre-wrap break-words text-base font-semibold text-foreground">
+                  <Link
+                    className="line-clamp-2 whitespace-pre-wrap break-words text-base font-semibold text-foreground hover:underline underline-offset-4"
+                    params={{ cardId: card.id }}
+                    to="/study/cards/$cardId"
+                  >
                     {card.question}
-                  </span>
+                  </Link>
                   <p className="text-sm text-muted-foreground">
                     根拠:{" "}
                     {/* ビューア起点の作成フローでは article が必ず入るが、
