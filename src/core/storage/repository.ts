@@ -3,6 +3,7 @@ import type { IDBPDatabase, IDBPTransaction, StoreNames } from "idb";
 
 import { buildArticleReferenceKey } from "@/core/domain";
 import { fixedIntervalScheduler } from "@/core/study";
+import { migrateRecordsToVersion3 } from "./migrations";
 import type {
   Annotation,
   Bookmark,
@@ -426,6 +427,14 @@ export const openSurasuraDatabase = async (
 
       if (oldVersion < 3) {
         createVersion3Stores(database, transaction);
+
+        // ストア新設と同じ versionchange トランザクション内で旧レコードを変換する。
+        // idb の upgrade コールバックは async 非対応（void 型）のため void で発火する。
+        // IDB のトランザクション自動コミットは未完了リクエストがある間は発生しないため、
+        // 移行完了まで versionchange トランザクションは維持される。
+        if (oldVersion > 0) {
+          void migrateRecordsToVersion3(transaction);
+        }
       }
     },
     blocked() {
@@ -500,7 +509,7 @@ const createVersion2Stores = (database: IDBPDatabase<SurasuraDatabase>) => {
   searchPostings.createIndex("by-law-id", "lawId");
 };
 
-type VersionChangeTransaction = IDBPTransaction<
+export type VersionChangeTransaction = IDBPTransaction<
   SurasuraDatabase,
   ArrayLike<StoreNames<SurasuraDatabase>>,
   "versionchange"
