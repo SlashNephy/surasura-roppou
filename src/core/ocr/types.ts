@@ -40,3 +40,16 @@ export interface OcrProgress {
 // 失敗の UI 文言への写像。手入力 fallback へ必ず逃がすため種別化する。
 export type OcrErrorKind =
   "model-download-failed" | "engine-load-failed" | "recognize-failed" | "unknown";
+
+// UI 層が OcrErrorKind ごとに誘導文言を出し分けられるよう、失敗種別を保持するエラークラス（spec §6）。
+// 生の Error を catch してフォールバック文言だけ表示するより、分類した情報を伝播させる。
+export class OcrError extends Error {
+  constructor(
+    readonly kind: OcrErrorKind,
+    options?: ErrorOptions,
+  ) {
+    // Error message in English per project convention.
+    super(`ocr failed: ${kind}`, options);
+    this.name = "OcrError";
+  }
+}

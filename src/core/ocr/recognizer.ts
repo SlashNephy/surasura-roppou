@@ -1,8 +1,8 @@
 import type { BoundingBox } from "@/core/domain";
 
 import { MODEL_LANG, OCR_CORE_PATH, OCR_LANG_PATH, OCR_WORKER_PATH } from "./model";
-export type { OcrProgress, OcrResult } from "./types";
-import type { OcrProgress, OcrResult, OcrWord } from "./types";
+import { OcrError } from "./types";
+import type { OcrErrorKind, OcrProgress, OcrResult, OcrWord } from "./types";
 
 export interface OcrWorkerHandle {
   recognize(blob: Blob): Promise<OcrResult>;
@@ -34,21 +34,41 @@ const toBoundingBox = (bbox: { x0: number; y0: number; x1: number; y1: number })
 const mapLoggerStatus = (status: string): OcrProgress["status"] =>
   status.includes("recognizing") ? "recognizing" : "loading-model";
 
+// createWorker 失敗時の OcrErrorKind を最後に受信した logger status から推定する。
+// tesseract.js の worker 生成フェーズにおける status の遷移は概ね次の順序を辿る:
+//   "loading tesseract core" → "initializing tesseract" → "loading language traineddata" → "initializing api"
+// "traineddata" が最後の status に含まれている場合はモデルの fetch/デコードで失敗したと判断し
+// "model-download-failed" を返す。それより前（または status が未受信）はエンジン/wasm/worker
+// の読み込み失敗とみなし "engine-load-failed" を返す。これは外部システム(tesseract.js)の
+// 内部挙動に依拠した分類であるため、将来のライブラリ更新で変化しうる。
+export const classifyWorkerCreateError = (lastStatus: string | undefined): OcrErrorKind =>
+  lastStatus?.includes("traineddata") === true ? "model-download-failed" : "engine-load-failed";
+
 // 本番 factory: tesseract.js を動的 import して worker を生成する（初回のみ読み込む）。
 export const createOcrWorkerFactory = (): OcrWorkerFactory => ({
   create: async (onProgress) => {
     const { createWorker } = await import("tesseract.js");
-    const worker = await createWorker(MODEL_LANG, 1, {
-      langPath: OCR_LANG_PATH,
-      corePath: OCR_CORE_PATH,
-      workerPath: OCR_WORKER_PATH,
-      // 配信する traineddata は非圧縮（Task 5 参照）。既定 gzip:true だと
-      // 非圧縮ファイルを pako 解凍しようとして失敗するため false を明示する。
-      gzip: false,
-      logger: (message: { status: string; progress: number }) => {
-        onProgress({ status: mapLoggerStatus(message.status), progress: message.progress });
-      },
-    });
+
+    // createWorker 失敗時の種別分類に使う。最後に受信した logger status を保持する。
+    let lastLoggerStatus: string | undefined;
+
+    let worker;
+    try {
+      worker = await createWorker(MODEL_LANG, 1, {
+        langPath: OCR_LANG_PATH,
+        corePath: OCR_CORE_PATH,
+        workerPath: OCR_WORKER_PATH,
+        // 配信する traineddata は非圧縮（Task 5 参照）。既定 gzip:true だと
+        // 非圧縮ファイルを pako 解凍しようとして失敗するため false を明示する。
+        gzip: false,
+        logger: (message: { status: string; progress: number }) => {
+          lastLoggerStatus = message.status;
+          onProgress({ status: mapLoggerStatus(message.status), progress: message.progress });
+        },
+      });
+    } catch (error) {
+      throw new OcrError(classifyWorkerCreateError(lastLoggerStatus), { cause: error });
+    }
 
     return {
       recognize: async (blob) => {
@@ -136,7 +156,16 @@ export const createOcrRecognizer = (
           })
           .catch((error: unknown) => {
             signal?.removeEventListener("abort", onAbort);
-            reject(error instanceof Error ? error : new Error(String(error)));
+            // OcrError はそのまま伝播させ、それ以外は recognize-failed として包む。
+            if (error instanceof OcrError) {
+              reject(error);
+            } else {
+              reject(
+                new OcrError("recognize-failed", {
+                  cause: error instanceof Error ? error : new Error(String(error)),
+                }),
+              );
+            }
           });
       });
     },

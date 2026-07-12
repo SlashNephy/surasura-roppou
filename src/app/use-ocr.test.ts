@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { OcrRecognizer, OcrResult } from "@/core/ocr";
+import { OcrError, type OcrRecognizer, type OcrResult } from "@/core/ocr";
 
 import { useOcr } from "./use-ocr";
 
@@ -70,8 +70,10 @@ describe("useOcr", () => {
   });
 
   it("認識失敗で error フェーズになる", async () => {
+    // 本番の recognizer は常に OcrError で包んで投げる。
+    // fake でも同じ契約を守り OcrError("recognize-failed") を使う。
     const { result: hook } = renderHook(() =>
-      useOcr(fakeRecognizer(() => Promise.reject(new Error("boom")))),
+      useOcr(fakeRecognizer(() => Promise.reject(new OcrError("recognize-failed")))),
     );
     await act(async () => {
       await hook.current.grantConsentAndRecognize(new Blob(["x"]));
@@ -137,6 +139,77 @@ describe("useOcr", () => {
     expect(hook.current.phase).toBe("idle");
     // errorKind は設定されない（キャンセルはエラー扱いしない）。
     expect(hook.current.errorKind).toBeUndefined();
+  });
+
+  it("OcrError(model-download-failed) が投げられると errorKind が model-download-failed になる", async () => {
+    const { result: hook } = renderHook(() =>
+      useOcr(fakeRecognizer(() => Promise.reject(new OcrError("model-download-failed")))),
+    );
+    await act(async () => {
+      await hook.current.grantConsentAndRecognize(new Blob(["x"]));
+    });
+    await waitFor(() => {
+      expect(hook.current.phase).toBe("error");
+    });
+    expect(hook.current.errorKind).toBe("model-download-failed");
+  });
+
+  it("未分類の Error が投げられると errorKind が unknown になる", async () => {
+    // 分類されていない例外（OcrError でない）は "unknown" に写像される。
+    const { result: hook } = renderHook(() =>
+      useOcr(fakeRecognizer(() => Promise.reject(new Error("boom")))),
+    );
+    await act(async () => {
+      await hook.current.grantConsentAndRecognize(new Blob(["x"]));
+    });
+    await waitFor(() => {
+      expect(hook.current.phase).toBe("error");
+    });
+    expect(hook.current.errorKind).toBe("unknown");
+  });
+
+  it("onProgress が伝播し recognizing フェーズを経由する", async () => {
+    // deferred promise で recognize 完了を外部から制御し、
+    // onProgress 呼び出しの中間状態を waitFor で観測する。
+    let resolveRecognize!: (r: OcrResult) => void;
+    const recognizePromise = new Promise<OcrResult>((res) => {
+      resolveRecognize = res;
+    });
+
+    // fakeRecognizer の onProgress 型は never のため、OcrRecognizer を直接組み立てる。
+    const recognizer: OcrRecognizer = {
+      recognize: (_blob, opts) => {
+        // 2 回進捗を通知してから resolveRecognize が呼ばれるまで待つ。
+        opts.onProgress?.({ status: "loading-model", progress: 0.3 });
+        opts.onProgress?.({ status: "recognizing", progress: 0.7 });
+        return recognizePromise;
+      },
+      terminate: () => Promise.resolve(),
+    };
+
+    const { result: hook } = renderHook(() => useOcr(recognizer));
+
+    // grantConsentAndRecognize は認識完了を待つため fire-and-forget で開始する。
+    let mainPromise: Promise<void>;
+    act(() => {
+      mainPromise = hook.current.grantConsentAndRecognize(new Blob(["x"]));
+    });
+
+    // onProgress({ status: "recognizing", progress: 0.7 }) が反映されるまで待つ。
+    await waitFor(() => {
+      expect(hook.current.progress).toBe(0.7);
+    });
+    expect(hook.current.phase).toBe("recognizing");
+
+    // resolve して完了を確認する。
+    await act(async () => {
+      resolveRecognize(ocrResult);
+      await mainPromise;
+    });
+
+    await waitFor(() => {
+      expect(hook.current.phase).toBe("done");
+    });
   });
 
   // Finding 3: アンマウント時に recognizer.terminate が呼ばれることを確認する。

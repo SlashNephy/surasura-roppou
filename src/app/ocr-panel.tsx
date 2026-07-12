@@ -98,28 +98,19 @@ export const OcrPanel = ({ blob, ocr, onDiscard }: OcrPanelProps) => {
         <pre className="max-h-48 overflow-y-auto rounded-md border bg-muted p-3 text-left text-sm whitespace-pre-wrap break-words">
           {result.text}
         </pre>
-        <div className="grid grid-cols-2 gap-2">
-          <Button
-            onClick={() => {
-              ocr.reset();
-              void ocr.requestRecognize(blob);
-            }}
-            type="button"
-            variant="outline"
-          >
-            もう一度読み取る
-          </Button>
-          <Button
-            onClick={() => {
-              ocr.reset();
-              onDiscard?.();
-            }}
-            type="button"
-            variant="outline"
-          >
-            選び直す
-          </Button>
-        </div>
+        {/* 「選び直す」は ScannerPage が常時表示するプレビュー外ボタンで担うため、
+            ここに同じラベルを置くと二重になる。再認識専用ボタンのみ残す。 */}
+        <Button
+          className="w-full"
+          onClick={() => {
+            ocr.reset();
+            void ocr.requestRecognize(blob);
+          }}
+          type="button"
+          variant="outline"
+        >
+          もう一度読み取る
+        </Button>
       </div>
     );
   }

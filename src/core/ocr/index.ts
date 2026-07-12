@@ -11,6 +11,7 @@ export type { CameraStreamProvider } from "./camera";
 
 export { MODEL_LANG, MODEL_SIZE_BYTES, formatModelSizeLabel } from "./model";
 export { OCR_LANG_PATH, OCR_CORE_PATH, OCR_WORKER_PATH } from "./model";
+export { OcrError } from "./types";
 export type { OcrWord, OcrResult, OcrProgress, OcrErrorKind } from "./types";
 
 export { computeResizeDimensions, prepareImageForOcr } from "./preprocess";

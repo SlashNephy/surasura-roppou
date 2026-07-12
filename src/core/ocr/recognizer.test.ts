@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createOcrRecognizer } from "./recognizer";
-import type { OcrProgress, OcrResult, OcrWorkerFactory, OcrWorkerHandle } from "./recognizer";
+import { classifyWorkerCreateError, createOcrRecognizer } from "./recognizer";
+import type { OcrWorkerFactory, OcrWorkerHandle } from "./recognizer";
+import { OcrError } from "./types";
+import type { OcrProgress, OcrResult } from "./types";
 
 const sampleResult: OcrResult = {
   text: "第一条",
@@ -36,6 +38,20 @@ const createFakeFactory = (
   return { factory, terminate, progresses };
 };
 
+describe("classifyWorkerCreateError", () => {
+  it("traineddata を含む status は model-download-failed", () => {
+    expect(classifyWorkerCreateError("loading language traineddata")).toBe("model-download-failed");
+  });
+
+  it("traineddata を含まない status は engine-load-failed", () => {
+    expect(classifyWorkerCreateError("loading tesseract core")).toBe("engine-load-failed");
+  });
+
+  it("status が undefined のときは engine-load-failed", () => {
+    expect(classifyWorkerCreateError(undefined)).toBe("engine-load-failed");
+  });
+});
+
 describe("createOcrRecognizer", () => {
   it("認識結果をそのまま返す", async () => {
     const { factory } = createFakeFactory(() => Promise.resolve(sampleResult));
@@ -69,5 +85,28 @@ describe("createOcrRecognizer", () => {
     await expect(promise).rejects.toMatchObject({ name: "AbortError" });
     expect(terminate).toHaveBeenCalledTimes(1);
     resolveRecognize(sampleResult); // ハングを避けるため解放
+  });
+
+  it("handle.recognize の rejection は OcrError(recognize-failed) になる", async () => {
+    // handle.recognize が plain Error を投げるとき、recognizer は recognize-failed で包む。
+    const { factory } = createFakeFactory(() => Promise.reject(new Error("tesseract internal")));
+    const recognizer = createOcrRecognizer({ workerFactory: factory });
+    const promise = recognizer.recognize(new Blob(["x"]), {});
+    await expect(promise).rejects.toSatisfy(
+      (e: unknown) => e instanceof OcrError && e.kind === "recognize-failed",
+    );
+  });
+
+  it("factory.create が OcrError を投げるとき kind がそのまま伝播する", async () => {
+    // factory.create が model-download-failed を既に分類済みで投げる場合、
+    // ensureHandle を通じてそのまま呼び出し元へ届く。
+    const factory: OcrWorkerFactory = {
+      create: () => Promise.reject(new OcrError("model-download-failed")),
+    };
+    const recognizer = createOcrRecognizer({ workerFactory: factory });
+    const promise = recognizer.recognize(new Blob(["x"]), {});
+    await expect(promise).rejects.toSatisfy(
+      (e: unknown) => e instanceof OcrError && e.kind === "model-download-failed",
+    );
   });
 });

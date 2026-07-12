@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   createOcrRecognizer,
+  OcrError,
   prepareImageForOcr,
   type OcrErrorKind,
   type OcrRecognizer,
@@ -62,12 +63,19 @@ export const useOcr = (recognizer: OcrRecognizer = defaultRecognizer): UseOcr =>
         setResult(ocrResult);
         setPhase("done");
       } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") {
+        if (
+          (error instanceof Error || error instanceof DOMException) &&
+          error.name === "AbortError"
+        ) {
           // キャンセルは失敗表示にせず idle へ戻す。
+          // jsdom は DOMException が Error を継承しないため両方を OR で確認する。
+          // 実ブラウザ・Node.js では DOMException は Error のサブクラスだが、
+          // テスト環境との互換性のため DOMException も独立して確認する。
           setPhase("idle");
           return;
         }
-        setErrorKind("recognize-failed");
+        // OcrError は分類済みの kind をそのまま使い、未分類の例外は "unknown" とする。
+        setErrorKind(error instanceof OcrError ? error.kind : "unknown");
         setPhase("error");
       } finally {
         abortRef.current = undefined;
