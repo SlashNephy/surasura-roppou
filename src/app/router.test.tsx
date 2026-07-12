@@ -131,4 +131,36 @@ describe("app router", () => {
     expect(await screen.findByRole("heading", { name: "法令を探す" })).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("保存済み法令を読み込めませんでした。");
   });
+
+  it("shows the study card count and list link on the study page", async () => {
+    const history = createMemoryHistory({ initialEntries: ["/study"] });
+    const storage = createMemoryStorageRepository({
+      studyCards: [
+        {
+          id: "card-1",
+          source: "manual",
+          target: { lawId: "129AC0000000089", revisionId: "rev-1", article: "1" },
+          type: "fill_blank",
+          question: "Q",
+          answer: "A",
+          tags: [],
+          examPinned: false,
+          createdAt: "2026-07-01T00:00:00.000Z",
+          updatedAt: "2026-07-01T00:00:00.000Z",
+        },
+      ],
+    });
+
+    render(
+      <RouterProvider
+        router={createAppRouter({ history, storageRepository: storage.repository })}
+      />,
+    );
+
+    expect(await screen.findByText("1 件のカード")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "カード一覧を開く" })).toHaveAttribute(
+      "href",
+      "/study/cards",
+    );
+  });
 });

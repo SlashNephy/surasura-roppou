@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { BookOpenCheck } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { createStorageRepository } from "@/core/storage";
 import type { SavedLawSummary, StorageRepository } from "@/core/storage";
@@ -86,23 +87,67 @@ export const LawsPage = ({
 const formatSavedLawFetchedDate = (savedLaw: SavedLawSummary): string =>
   formatIsoDateLabel(savedLaw.revision.fetchedAt);
 
-export const StudyPage = () => (
-  <section className="mx-auto grid w-full max-w-2xl gap-4 px-5 py-10">
-    <h1 className="font-serif text-2xl font-semibold text-foreground">復習</h1>
-    <div className="rounded-md bg-primary p-4 text-primary-foreground">
-      <p className="font-semibold">今日の復習</p>
-      <p className="mt-1 text-xs opacity-75">復習カード機能は準備中です</p>
-    </div>
-    <div className="grid gap-3 sm:grid-cols-2">
-      {(["苦手な条文", "カードの内訳", "科目別プリセット"] as const).map((title) => (
-        <section key={title} className="rounded-md border bg-card p-4">
-          <h2 className="text-sm font-medium text-foreground">{title}</h2>
-          <p className="mt-2 text-xs leading-5 text-muted-foreground">準備中</p>
+export const StudyPage = ({ storageRepository }: { storageRepository?: StorageRepository }) => {
+  const [cardCount, setCardCount] = useState<number>();
+
+  useEffect(() => {
+    if (storageRepository === undefined) {
+      return;
+    }
+
+    let isCurrent = true;
+
+    void storageRepository
+      .listStudyCards()
+      .then((cards) => {
+        if (isCurrent) {
+          setCardCount(cards.length);
+        }
+      })
+      .catch(() => {
+        // 読み込み失敗時は件数を出さないだけに留め、ページ全体は表示する。
+        if (isCurrent) {
+          setCardCount(undefined);
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [storageRepository]);
+
+  return (
+    <section className="mx-auto grid w-full max-w-2xl gap-4 px-5 py-10">
+      <h1 className="font-serif text-2xl font-semibold text-foreground">復習</h1>
+      <div className="rounded-md bg-primary p-4 text-primary-foreground">
+        <p className="font-semibold">今日の復習</p>
+        <p className="mt-1 text-xs opacity-75">復習カード機能は準備中です</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <section className="rounded-md border bg-card p-4">
+          <h2 className="text-sm font-medium text-foreground">条文カード</h2>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            {cardCount === undefined
+              ? "保存したカードを一覧できます"
+              : `${String(cardCount)} 件のカード`}
+          </p>
+          <Link
+            className="mt-2 inline-block text-sm text-primary underline-offset-4 hover:underline"
+            to="/study/cards"
+          >
+            カード一覧を開く
+          </Link>
         </section>
-      ))}
-    </div>
-  </section>
-);
+        {(["苦手な条文", "科目別プリセット"] as const).map((title) => (
+          <section key={title} className="rounded-md border bg-card p-4">
+            <h2 className="text-sm font-medium text-foreground">{title}</h2>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">準備中</p>
+          </section>
+        ))}
+      </div>
+    </section>
+  );
+};
 
 export { HomePage } from "./home-page";
 export { LawViewerPage } from "./law-viewer-page";

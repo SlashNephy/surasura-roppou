@@ -92,10 +92,13 @@ const createRouteTree = ({
     component: ScannerPage,
   });
 
+  // StudyPage に storageRepository を DI するため closure で包む。
+  const StudyRoute = () => <StudyPage storageRepository={storageRepository} />;
+
   const studyRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "study",
-    component: StudyPage,
+    component: StudyRoute,
   });
 
   // StudyCardsPage に storageRepository を DI するため closure で包む。
