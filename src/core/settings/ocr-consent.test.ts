@@ -1,9 +1,10 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getOcrModelConsent, setOcrModelConsent } from "./ocr-consent";
 
 afterEach(() => {
   localStorage.clear();
+  vi.restoreAllMocks();
 });
 
 describe("ocr model consent", () => {
@@ -20,5 +21,25 @@ describe("ocr model consent", () => {
     setOcrModelConsent(true);
     setOcrModelConsent(false);
     expect(getOcrModelConsent()).toBe(false);
+  });
+});
+
+describe("ocr model consent（ストレージブロック）", () => {
+  it("getItem が例外を投げる環境では false を返す", () => {
+    // プライベートブラウジング等でストレージアクセスが blocked されるケースをシミュレート。
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("blocked");
+    });
+    expect(getOcrModelConsent()).toBe(false);
+  });
+
+  it("setItem が例外を投げる環境でも例外を外に出さない", () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("QuotaExceededError");
+    });
+    // 例外がスローされないことを確認する。
+    expect(() => {
+      setOcrModelConsent(true);
+    }).not.toThrow();
   });
 });

@@ -96,7 +96,9 @@ export const OcrPanel = ({ blob, ocr, onDiscard }: OcrPanelProps) => {
       <div className="grid gap-3">
         {/* whitespace-pre-wrap + break-words で長文が max-w-md 内に収まる */}
         <pre className="max-h-48 overflow-y-auto rounded-md border bg-muted p-3 text-left text-sm whitespace-pre-wrap break-words">
-          {result.text}
+          {/* 空白のみの text は認識できなかったと見なしてプレースホルダーを表示する。
+              空の <pre> だとユーザーに何が起きたか伝わらないため。 */}
+          {result.text.trim() !== "" ? result.text : "テキストが検出されませんでした。"}
         </pre>
         {/* 「選び直す」は ScannerPage が常時表示するプレビュー外ボタンで担うため、
             ここに同じラベルを置くと二重になる。再認識専用ボタンのみ残す。 */}

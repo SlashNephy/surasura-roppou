@@ -109,4 +109,42 @@ describe("createOcrRecognizer", () => {
       (e: unknown) => e instanceof OcrError && e.kind === "model-download-failed",
     );
   });
+
+  it("並行 recognize() は worker を 1 つしか生成しない（競合防止）", async () => {
+    // deferred な create を使い、2 つの recognize() を同時に開始したとき
+    // factory.create が 1 回しか呼ばれないことを検証する。
+    let resolveCreate!: (handle: OcrWorkerHandle) => void;
+    const createDeferred = new Promise<OcrWorkerHandle>((res) => {
+      resolveCreate = res;
+    });
+    let createCallCount = 0;
+
+    const factory: OcrWorkerFactory = {
+      create: (onProgress) => {
+        void onProgress;
+        createCallCount++;
+        return createDeferred;
+      },
+    };
+
+    const handle: OcrWorkerHandle = {
+      recognize: () => Promise.resolve(sampleResult),
+      terminate: vi.fn(() => Promise.resolve()),
+    };
+
+    const recognizer = createOcrRecognizer({ workerFactory: factory });
+
+    // 2 つの recognize() を await なしで同時に開始する。
+    const promiseA = recognizer.recognize(new Blob(["a"]), {});
+    const promiseB = recognizer.recognize(new Blob(["b"]), {});
+
+    // worker 生成を完了させ、両方の recognize() が settle するまで待つ。
+    resolveCreate(handle);
+    const [resultA, resultB] = await Promise.all([promiseA, promiseB]);
+
+    // factory.create は 1 回だけ呼ばれ、両方とも結果を受け取れる。
+    expect(createCallCount).toBe(1);
+    expect(resultA).toEqual(sampleResult);
+    expect(resultB).toEqual(sampleResult);
+  });
 });

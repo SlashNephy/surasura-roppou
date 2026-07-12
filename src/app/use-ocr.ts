@@ -44,6 +44,9 @@ export const useOcr = (recognizer: OcrRecognizer = defaultRecognizer): UseOcr =>
 
   const runRecognize = useCallback(
     async (blob: Blob) => {
+      // 前回の認識が残っていれば中断する。前のランが後から setResult/setPhase を
+      // 呼び出してこのランの状態を上書きする「古いランの汚染」を防ぐ。
+      abortRef.current?.abort();
       setResult(undefined);
       setErrorKind(undefined);
       setProgress(0);
@@ -51,18 +54,28 @@ export const useOcr = (recognizer: OcrRecognizer = defaultRecognizer): UseOcr =>
       abortRef.current = controller;
       try {
         const prepared = await prepareImageForOcr(blob);
+        // 画像変換中に abort された場合は即座に抜ける。
+        if (controller.signal.aborted) return;
         setPhase("loading-model");
         const ocrResult = await recognizer.recognize(prepared, {
           signal: controller.signal,
           onProgress: (p) => {
+            // abort 後の進捗コールバックが新しいランの状態を上書きしないよう guard する。
+            if (controller.signal.aborted) return;
             // tesseract の status を OCR フェーズに写像する。
             setPhase(p.status === "recognizing" ? "recognizing" : "loading-model");
             setProgress(p.progress);
           },
         });
+        // recognizer.recognize は abort 時に AbortError を throw するため、正常 return の
+        // 時点で controller.signal.aborted は false と保証される。setResult/setPhase は安全。
         setResult(ocrResult);
         setPhase("done");
       } catch (error) {
+        // abort 済みのランは状態を一切書き換えない。
+        // cancel() が同期的に setPhase("idle") を呼んでいるため、ここで再セットすると
+        // 後から開始した新しいランの状態を踏み荒らす。
+        if (controller.signal.aborted) return;
         if (
           (error instanceof Error || error instanceof DOMException) &&
           error.name === "AbortError"
@@ -78,7 +91,11 @@ export const useOcr = (recognizer: OcrRecognizer = defaultRecognizer): UseOcr =>
         setErrorKind(error instanceof OcrError ? error.kind : "unknown");
         setPhase("error");
       } finally {
-        abortRef.current = undefined;
+        // 古いランの finally が新しいランの controller を消さないよう同一性を確認する。
+        // unconditional に undefined を代入すると、新しいランの cancel() が無効になる。
+        if (abortRef.current === controller) {
+          abortRef.current = undefined;
+        }
       }
     },
     [recognizer],

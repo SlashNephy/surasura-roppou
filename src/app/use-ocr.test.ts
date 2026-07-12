@@ -212,6 +212,93 @@ describe("useOcr", () => {
     });
   });
 
+  it("古いランが完了しても新しいランの状態を上書きしない（stale-run 隔離）", async () => {
+    // ランAとランBで独立した deferred promise を使い、A が B より後に settle しても
+    // B の状態が保持されることを確認する。
+    // ランA の recognize() が呼ばれたことを確認してから B を開始することで、
+    // A が実際に recognize まで到達していることを保証する。
+    const resultB: OcrResult = { text: "ランBの結果", confidence: 90, words: [] };
+
+    // ランA の recognize() 開始を外部から検知するための通知用 Promise。
+    let notifyAStarted!: () => void;
+    const aStarted = new Promise<void>((res) => {
+      notifyAStarted = res;
+    });
+
+    let rejectA!: (e: unknown) => void;
+    let resolveB!: (r: OcrResult) => void;
+    let signalA: AbortSignal | undefined;
+
+    // 各 recognize() 呼び出しに対して deferred promise を順番に返す。
+    // ランA の呼び出し時に notifyAStarted を呼んで A の到達を通知する。
+    let callIndex = 0;
+    const recognizeDeferred = (_blob: Blob, opts: { signal?: AbortSignal }): Promise<OcrResult> => {
+      callIndex++;
+      if (callIndex === 1) {
+        signalA = opts.signal;
+        notifyAStarted();
+        return new Promise<OcrResult>((_res, rej) => {
+          rejectA = rej;
+        });
+      }
+      return new Promise<OcrResult>((res) => {
+        resolveB = res;
+      });
+    };
+
+    const { result: hook } = renderHook(() => useOcr(fakeRecognizer(recognizeDeferred)));
+
+    // ランA を開始し、まだ完了させない（fire-and-forget）。
+    let promiseA!: Promise<void>;
+    act(() => {
+      promiseA = hook.current.grantConsentAndRecognize(new Blob(["a"]));
+    });
+
+    // ランA の recognize() が実際に呼ばれるまでマイクロタスクを進める。
+    // これにより A が recognize まで到達した後に B を開始できる。
+    await act(async () => {
+      await aStarted;
+    });
+
+    // ランB を開始する。runRecognize 先頭の abort() でランA が中断される。
+    let promiseB!: Promise<void>;
+    act(() => {
+      promiseB = hook.current.grantConsentAndRecognize(new Blob(["b"]));
+    });
+
+    // ランB の recognize() まで到達させ、B を先に完了させる。
+    await act(async () => {
+      // resolveB は B の recognize() が呼ばれて初めて代入されるため、
+      // 十分なマイクロタスクを消費してから resolve する。
+      await Promise.resolve();
+      await Promise.resolve();
+      resolveB(resultB);
+      await promiseB;
+    });
+
+    await waitFor(() => {
+      expect(hook.current.phase).toBe("done");
+    });
+    expect(hook.current.result?.text).toBe("ランBの結果");
+
+    // ランA を AbortError で終了させる。A は中断されているため状態を書き換えない。
+    // 実際の recognizer は abort 時に AbortError を throw するため、
+    // fake も同じ契約に従い reject する。catch の abort guard が機能することを検証する。
+    await act(async () => {
+      rejectA(new DOMException("aborted", "AbortError"));
+      await promiseA.catch(() => {
+        // mock implementation
+      });
+    });
+
+    // B の結果が維持され、A の reject が状態を上書きしない。
+    expect(hook.current.phase).toBe("done");
+    expect(hook.current.result?.text).toBe("ランBの結果");
+
+    // ランA の signal は abort されている（runRecognize の先頭で abort される）。
+    expect(signalA?.aborted).toBe(true);
+  });
+
   // Finding 3: アンマウント時に recognizer.terminate が呼ばれることを確認する。
   it("アンマウント時に recognizer.terminate が呼ばれる", async () => {
     const terminate = vi.fn((): Promise<void> => Promise.resolve());

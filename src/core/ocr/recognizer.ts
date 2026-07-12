@@ -97,7 +97,10 @@ export const createOcrRecognizer = (
   options: { workerFactory?: OcrWorkerFactory } = {},
 ): OcrRecognizer => {
   const workerFactory = options.workerFactory ?? createOcrWorkerFactory();
-  let handle: OcrWorkerHandle | undefined;
+  // Promise を保持することで並行 recognize() が複数 worker を生成する競合を防ぐ。
+  // handle そのものを保持すると、await 前後の null チェックが2回独立して走り
+  // 両方が undefined を見て二重生成してしまうため、Promise 単位でガードする。
+  let handlePromise: Promise<OcrWorkerHandle> | undefined;
 
   // 進捗コールバック未指定時に OcrWorkerFactory.create へ渡す no-op。
   // void 式でパラメータを参照し、lint の unused-vars を満たす。
@@ -107,19 +110,34 @@ export const createOcrRecognizer = (
 
   // onProgress は worker 生成フェーズでのモデル読み込み進捗に使う。
   // 未指定時は discardProgress を渡して OcrWorkerFactory の型制約を満たす。
-  const ensureHandle = async (
+  // 同期的に Promise を割り当てることで、並行呼び出しが同一 Promise を共有する。
+  const ensureHandle = (
     onProgress: ((progress: OcrProgress) => void) | undefined,
   ): Promise<OcrWorkerHandle> => {
-    // 初回 recognize まで worker を生成しない（lazy load）。
-    handle ??= await workerFactory.create(onProgress ?? discardProgress);
-    return handle;
+    // 生成失敗時は handlePromise をリセットして次回の retry を可能にする。
+    // リセットしないと失敗した Promise が永続し、以降の recognize() がすべて即エラーになる。
+    handlePromise ??= workerFactory
+      .create(onProgress ?? discardProgress)
+      .catch((error: unknown) => {
+        handlePromise = undefined;
+        throw error;
+      });
+    return handlePromise;
   };
 
   const terminate = async (): Promise<void> => {
-    if (handle !== undefined) {
-      const current = handle;
-      handle = undefined;
-      await current.terminate();
+    const captured = handlePromise;
+    handlePromise = undefined;
+    if (captured !== undefined) {
+      let handle: OcrWorkerHandle | undefined;
+      try {
+        handle = await captured;
+      } catch {
+        // 生成失敗の Promise だった場合はすでに recognize() の呼び出し元へエラーが
+        // 伝播済みであり、terminate 側で後始末するものは何もない。
+        return;
+      }
+      await handle.terminate();
     }
   };
 
