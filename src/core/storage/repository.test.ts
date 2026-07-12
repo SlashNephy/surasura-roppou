@@ -277,6 +277,104 @@ describe("StorageRepository", () => {
     }
   });
 
+  it("returns a stored study card by id and undefined for unknown ids", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.putStudyCard(studyCard);
+
+    await expect(repository.getStudyCard(studyCard.id)).resolves.toEqual(studyCard);
+    await expect(repository.getStudyCard("missing-card")).resolves.toBeUndefined();
+  });
+
+  it("records a review by appending the log and deriving the schedule", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.putStudyCard(studyCard);
+
+    const schedule = await repository.recordReview({
+      id: "log-1",
+      cardId: studyCard.id,
+      grade: "good",
+      reviewedAt: "2026-07-06T00:00:00.000Z",
+      scheduler: "fixed-interval@1",
+    });
+
+    // 初回 good は学習 step 1 に進み 10 分後が期限になる（fixed-interval@1）。
+    expect(schedule.dueAt).toBe("2026-07-06T00:10:00.000Z");
+    expect(schedule.reviews).toBe(1);
+    expect(schedule.derivedFrom).toBe("log-1");
+    await expect(repository.listReviewLogs(studyCard.id)).resolves.toEqual([
+      expect.objectContaining({ id: "log-1" }),
+    ]);
+    await expect(repository.listDueStudyCards("2026-07-07T00:00:00.000Z")).resolves.toEqual([
+      { card: studyCard, schedule },
+    ]);
+  });
+
+  it("replays the full history when recording additional reviews", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.putStudyCard(studyCard);
+    await repository.recordReview({
+      id: "log-1",
+      cardId: studyCard.id,
+      grade: "good",
+      reviewedAt: "2026-07-06T00:00:00.000Z",
+      scheduler: "fixed-interval@1",
+    });
+
+    const schedule = await repository.recordReview({
+      id: "log-2",
+      cardId: studyCard.id,
+      grade: "good",
+      reviewedAt: "2026-07-06T00:10:00.000Z",
+      scheduler: "fixed-interval@1",
+    });
+
+    // good good で卒業して 1 日後。
+    expect(schedule.dueAt).toBe("2026-07-07T00:10:00.000Z");
+    expect(schedule.reviews).toBe(2);
+    expect(schedule.derivedFrom).toBe("log-2");
+  });
+
+  it("deletes a study card together with its review logs and schedule", async () => {
+    const databaseName = createDatabaseName();
+    const repository = createStorageRepository({
+      databaseName,
+      now: fixedNow,
+    });
+
+    await repository.putStudyCard(studyCard);
+    await repository.recordReview({
+      id: "log-1",
+      cardId: studyCard.id,
+      grade: "good",
+      reviewedAt: "2026-07-06T00:00:00.000Z",
+      scheduler: "fixed-interval@1",
+    });
+
+    await repository.deleteStudyCard(studyCard.id);
+
+    await expect(repository.getStudyCard(studyCard.id)).resolves.toBeUndefined();
+    await expect(repository.listReviewLogs(studyCard.id)).resolves.toEqual([]);
+
+    const database = await openSurasuraDatabase(databaseName);
+    try {
+      await expect(database.get("cardSchedules", studyCard.id)).resolves.toBeUndefined();
+    } finally {
+      database.close();
+    }
+  });
+
   it("exposes schema version 3 for the study card data layer migration", () => {
     expect(surasuraDatabaseVersion).toBe(3);
   });

@@ -10,6 +10,7 @@ import type {
   StudyCard,
   StudySession,
 } from "@/core/domain";
+import { fixedIntervalScheduler } from "@/core/study";
 import type {
   DueStudyCard,
   LawDocumentInput,
@@ -41,8 +42,8 @@ export const createMemoryStorageRepository = (
   let collections = [...(options.collections ?? [])];
   let studyCards = [...(options.studyCards ?? [])];
   let studySessions = [...(options.studySessions ?? [])];
-  const reviewLogs = [...(options.reviewLogs ?? [])];
-  const cardSchedules = [...(options.cardSchedules ?? [])];
+  let reviewLogs = [...(options.reviewLogs ?? [])];
+  let cardSchedules = [...(options.cardSchedules ?? [])];
   let savedDocument = initialDocument;
   let savedAt = initialDocument?.savedAt;
   let updatedAt = initialDocument?.revision.fetchedAt ?? initialDocument?.savedAt;
@@ -149,6 +150,29 @@ export const createMemoryStorageRepository = (
       putStudyCard(card) {
         studyCards = [...studyCards.filter((existingCard) => existingCard.id !== card.id), card];
         return Promise.resolve();
+      },
+      getStudyCard(cardId) {
+        return Promise.resolve(studyCards.find((card) => card.id === cardId));
+      },
+      deleteStudyCard(cardId) {
+        studyCards = studyCards.filter((card) => card.id !== cardId);
+        reviewLogs = reviewLogs.filter((log) => log.cardId !== cardId);
+        cardSchedules = cardSchedules.filter((schedule) => schedule.cardId !== cardId);
+        return Promise.resolve();
+      },
+      recordReview(log) {
+        reviewLogs = [...reviewLogs.filter((existingLog) => existingLog.id !== log.id), log];
+
+        const schedule = fixedIntervalScheduler(
+          reviewLogs.filter((candidate) => candidate.cardId === log.cardId),
+          new Date(log.reviewedAt),
+        );
+
+        cardSchedules = [
+          ...cardSchedules.filter((existingSchedule) => existingSchedule.cardId !== log.cardId),
+          schedule,
+        ];
+        return Promise.resolve(schedule);
       },
       listStudyCards(query) {
         const filteredCards =

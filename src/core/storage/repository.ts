@@ -2,6 +2,7 @@ import { deleteDB, openDB } from "idb";
 import type { IDBPDatabase, IDBPTransaction, StoreNames } from "idb";
 
 import { buildArticleReferenceKey } from "@/core/domain";
+import { fixedIntervalScheduler } from "@/core/study";
 import type {
   Annotation,
   Bookmark,
@@ -76,9 +77,12 @@ export interface StorageRepository {
   putAnnotation(annotation: Annotation): Promise<void>;
   listAnnotations(query?: LawScopedQuery): Promise<Annotation[]>;
   putStudyCard(card: StudyCard): Promise<void>;
+  getStudyCard(cardId: string): Promise<StudyCard | undefined>;
   listStudyCards(query?: LawScopedQuery): Promise<StudyCard[]>;
+  deleteStudyCard(cardId: string): Promise<void>;
   listDueStudyCards(dueAtOrBefore: ISODateString): Promise<DueStudyCard[]>;
   listReviewLogs(cardId?: string): Promise<ReviewLog[]>;
+  recordReview(log: ReviewLog): Promise<CardSchedule>;
   putStudySession(session: StudySession): Promise<void>;
   listStudySessions(): Promise<StudySession[]>;
   putOcrSession(session: OcrSession): Promise<void>;
@@ -291,6 +295,14 @@ export const createStorageRepository = (
       });
     },
 
+    async getStudyCard(cardId) {
+      return withDatabase(async (db) => {
+        const record = await db.get("studyCards", cardId);
+
+        return record === undefined ? undefined : stripTargetIndexes(record);
+      });
+    },
+
     async listStudyCards(query = {}) {
       return withDatabase(async (db) => {
         const records =
@@ -299,6 +311,23 @@ export const createStorageRepository = (
             : await db.getAllFromIndex("studyCards", "by-law-id", query.lawId);
 
         return records.map(stripTargetIndexes);
+      });
+    },
+
+    async deleteStudyCard(cardId) {
+      await withDatabase(async (db) => {
+        // カードに紐づくログとスケジュールも同一トランザクションで消す。
+        // 孤児ログは再計算先を失い、export しても import 先で整合しないため。
+        const tx = db.transaction(["studyCards", "reviewLogs", "cardSchedules"], "readwrite");
+        const logKeys = await tx.objectStore("reviewLogs").index("by-card-id").getAllKeys(cardId);
+
+        for (const key of logKeys) {
+          void tx.objectStore("reviewLogs").delete(key);
+        }
+
+        void tx.objectStore("cardSchedules").delete(cardId);
+        void tx.objectStore("studyCards").delete(cardId);
+        await tx.done;
       });
     },
 
@@ -331,6 +360,23 @@ export const createStorageRepository = (
           ? db.getAll("reviewLogs")
           : db.getAllFromIndex("reviewLogs", "by-card-id", cardId),
       );
+    },
+
+    async recordReview(log) {
+      return withDatabase(async (db) => {
+        // 追記と再計算を同一トランザクションで行い、ログとスケジュールのずれを防ぐ。
+        const tx = db.transaction(["reviewLogs", "cardSchedules"], "readwrite");
+
+        await tx.objectStore("reviewLogs").put(log);
+
+        const history = await tx.objectStore("reviewLogs").index("by-card-id").getAll(log.cardId);
+        const schedule = fixedIntervalScheduler(history, now());
+
+        await tx.objectStore("cardSchedules").put(schedule);
+        await tx.done;
+
+        return schedule;
+      });
     },
 
     async putStudySession(session) {
