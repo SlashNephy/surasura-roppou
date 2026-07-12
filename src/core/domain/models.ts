@@ -101,11 +101,8 @@ export interface StudyCard {
   answer: string;
   explanation?: string;
   tags: string[];
-  dueAt: ISODateString;
-  intervalDays: number;
-  ease: number;
-  mistakes: number;
-  lastReviewedAt?: ISODateString;
+  // 「試験直前に確認」の手動ピン。復習状態のラベルとは独立したユーザー意思。
+  examPinned: boolean;
   createdAt: ISODateString;
   updatedAt: ISODateString;
 }
@@ -139,20 +136,11 @@ export interface CardSchedule {
   derivedFrom: string;
 }
 
-export interface QuizResult {
-  cardId: string;
-  answeredAt: ISODateString;
-  rating: QuizRating;
-  elapsedMs: number;
-  wasCorrect: boolean;
-}
-
 export interface StudySession {
   id: string;
   startedAt: ISODateString;
   finishedAt?: ISODateString;
   cardIds: string[];
-  results: QuizResult[];
 }
 
 export interface OcrSession {

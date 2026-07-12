@@ -1,10 +1,11 @@
 import { deleteDB, openDB } from "idb";
-import type { IDBPDatabase } from "idb";
+import type { IDBPDatabase, IDBPTransaction, StoreNames } from "idb";
 
 import { buildArticleReferenceKey } from "@/core/domain";
 import type {
   Annotation,
   Bookmark,
+  CardSchedule,
   Collection,
   ISODateString,
   Law,
@@ -12,6 +13,7 @@ import type {
   LawReferenceTarget,
   LawRevision,
   OcrSession,
+  ReviewLog,
   StudyCard,
   StudySession,
 } from "@/core/domain";
@@ -56,6 +58,12 @@ export interface LawScopedQuery {
   lawId?: string;
 }
 
+// 出題キューの 1 項目。カード本文と導出スケジュールを結合して返す。
+export interface DueStudyCard {
+  card: StudyCard;
+  schedule: CardSchedule;
+}
+
 export interface StorageRepository {
   saveLawDocument(document: LawDocumentInput): Promise<void>;
   getLawDocument(lawId: string): Promise<SavedLawDocument | undefined>;
@@ -68,7 +76,9 @@ export interface StorageRepository {
   putAnnotation(annotation: Annotation): Promise<void>;
   listAnnotations(query?: LawScopedQuery): Promise<Annotation[]>;
   putStudyCard(card: StudyCard): Promise<void>;
-  listDueStudyCards(dueAtOrBefore: ISODateString): Promise<StudyCard[]>;
+  listStudyCards(query?: LawScopedQuery): Promise<StudyCard[]>;
+  listDueStudyCards(dueAtOrBefore: ISODateString): Promise<DueStudyCard[]>;
+  listReviewLogs(cardId?: string): Promise<ReviewLog[]>;
   putStudySession(session: StudySession): Promise<void>;
   listStudySessions(): Promise<StudySession[]>;
   putOcrSession(session: OcrSession): Promise<void>;
@@ -281,16 +291,46 @@ export const createStorageRepository = (
       });
     },
 
-    async listDueStudyCards(dueAtOrBefore) {
+    async listStudyCards(query = {}) {
       return withDatabase(async (db) => {
-        const records = await db.getAllFromIndex(
-          "studyCards",
-          "by-due-at",
-          IDBKeyRange.upperBound(dueAtOrBefore),
-        );
+        const records =
+          query.lawId === undefined
+            ? await db.getAll("studyCards")
+            : await db.getAllFromIndex("studyCards", "by-law-id", query.lawId);
 
         return records.map(stripTargetIndexes);
       });
+    },
+
+    async listDueStudyCards(dueAtOrBefore) {
+      return withDatabase(async (db) => {
+        // by-due-at インデックスはキー昇順で返るため、そのまま出題順（dueAt 昇順）になる。
+        const schedules = await db.getAllFromIndex(
+          "cardSchedules",
+          "by-due-at",
+          IDBKeyRange.upperBound(dueAtOrBefore),
+        );
+        const dueCards: DueStudyCard[] = [];
+
+        for (const schedule of schedules) {
+          const record = await db.get("studyCards", schedule.cardId);
+
+          // スケジュールだけが残った孤児（想定外の不整合）は出題キューから除く。
+          if (record !== undefined) {
+            dueCards.push({ card: stripTargetIndexes(record), schedule });
+          }
+        }
+
+        return dueCards;
+      });
+    },
+
+    async listReviewLogs(cardId) {
+      return withDatabase((db) =>
+        cardId === undefined
+          ? db.getAll("reviewLogs")
+          : db.getAllFromIndex("reviewLogs", "by-card-id", cardId),
+      );
     },
 
     async putStudySession(session) {
@@ -329,13 +369,17 @@ export const openSurasuraDatabase = async (
   databaseName = surasuraDatabaseName,
 ): Promise<IDBPDatabase<SurasuraDatabase>> =>
   openDB<SurasuraDatabase>(databaseName, surasuraDatabaseVersion, {
-    upgrade(database, oldVersion) {
+    upgrade(database, oldVersion, _newVersion, transaction) {
       if (oldVersion < 1) {
         createVersion1Stores(database);
       }
 
       if (oldVersion < 2) {
         createVersion2Stores(database);
+      }
+
+      if (oldVersion < 3) {
+        createVersion3Stores(database, transaction);
       }
     },
     blocked() {
@@ -384,7 +428,8 @@ const createVersion1Stores = (database: IDBPDatabase<SurasuraDatabase>) => {
   annotations.createIndex("by-updated-at", "updatedAt");
 
   const studyCards = database.createObjectStore("studyCards", { keyPath: "id" });
-  studyCards.createIndex("by-due-at", "dueAt");
+  // v1 では by-due-at インデックスを作成する。v3 マイグレーションで削除される。
+  (studyCards as unknown as IDBObjectStore).createIndex("by-due-at", "dueAt");
   studyCards.createIndex("by-law-id", "lawId");
   studyCards.createIndex("by-target-key", "targetKey");
   studyCards.createIndex("by-updated-at", "updatedAt");
@@ -407,6 +452,28 @@ const createVersion2Stores = (database: IDBPDatabase<SurasuraDatabase>) => {
   });
   searchPostings.createIndex("by-bigram", "bigram");
   searchPostings.createIndex("by-law-id", "lawId");
+};
+
+type VersionChangeTransaction = IDBPTransaction<
+  SurasuraDatabase,
+  ArrayLike<StoreNames<SurasuraDatabase>>,
+  "versionchange"
+>;
+
+const createVersion3Stores = (
+  database: IDBPDatabase<SurasuraDatabase>,
+  transaction: VersionChangeTransaction,
+) => {
+  const reviewLogs = database.createObjectStore("reviewLogs", { keyPath: "id" });
+  reviewLogs.createIndex("by-card-id", "cardId");
+  reviewLogs.createIndex("by-reviewed-at", "reviewedAt");
+
+  const cardSchedules = database.createObjectStore("cardSchedules", { keyPath: "cardId" });
+  cardSchedules.createIndex("by-due-at", "dueAt");
+
+  // 期限は cardSchedules に一本化するため、v1 で作った studyCards の by-due-at は捨てる。
+  // v3 スキーマからは除去済みなので、型チェックを回避して raw IDB を使う。
+  (transaction.objectStore("studyCards") as unknown as IDBObjectStore).deleteIndex("by-due-at");
 };
 
 const toOrderedNodes = (records: StoredLawNode[]): LawNode[] =>

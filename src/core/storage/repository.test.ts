@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type {
   Annotation,
   Bookmark,
+  CardSchedule,
   Collection,
   Law,
   LawNode,
@@ -184,28 +185,57 @@ describe("StorageRepository", () => {
     await expect(repository.listCollections()).resolves.toEqual([collection]);
     await expect(repository.listAnnotations({ lawId: law.lawId })).resolves.toEqual([annotation]);
     await expect(repository.listAnnotations({ lawId: "not-matching-law" })).resolves.toEqual([]);
-    await expect(repository.listDueStudyCards("2026-07-07T00:00:00.000Z")).resolves.toEqual([
-      studyCard,
-    ]);
+    await expect(repository.listStudyCards()).resolves.toEqual([studyCard]);
+    await expect(repository.listStudyCards({ lawId: law.lawId })).resolves.toEqual([studyCard]);
+    await expect(repository.listStudyCards({ lawId: "not-matching-law" })).resolves.toEqual([]);
+    // スケジュール（= 回答履歴）を持たない未学習カードは出題キューに現れない。
+    await expect(repository.listDueStudyCards("2026-07-07T00:00:00.000Z")).resolves.toEqual([]);
     await expect(repository.listStudySessions()).resolves.toEqual([studySession]);
   });
 
-  it("returns only due study cards at or before the requested timestamp", async () => {
+  it("returns due cards joined with their schedules in dueAt order", async () => {
+    const databaseName = createDatabaseName();
     const repository = createStorageRepository({
-      databaseName: createDatabaseName(),
+      databaseName,
       now: fixedNow,
     });
-    const futureStudyCard = {
+    const secondCard = {
       ...studyCard,
       id: "card-2",
-      dueAt: "2026-07-08T00:00:00.000Z",
     } satisfies StudyCard;
+    const dueSchedule = {
+      cardId: studyCard.id,
+      dueAt: "2026-07-05T00:00:00.000Z",
+      intervalDays: 1,
+      lapses: 0,
+      reviews: 1,
+      recentMistakeRate: 0,
+      derivedFrom: "log-1",
+    } satisfies CardSchedule;
+    const futureSchedule = {
+      ...dueSchedule,
+      cardId: secondCard.id,
+      dueAt: "2026-07-08T00:00:00.000Z",
+      derivedFrom: "log-2",
+    } satisfies CardSchedule;
 
     await repository.putStudyCard(studyCard);
-    await repository.putStudyCard(futureStudyCard);
+    await repository.putStudyCard(secondCard);
+
+    const database = await openSurasuraDatabase(databaseName);
+    try {
+      await database.put("cardSchedules", dueSchedule);
+      await database.put("cardSchedules", futureSchedule);
+    } finally {
+      database.close();
+    }
 
     await expect(repository.listDueStudyCards("2026-07-06T00:00:00.000Z")).resolves.toEqual([
-      studyCard,
+      { card: studyCard, schedule: dueSchedule },
+    ]);
+    await expect(repository.listDueStudyCards("2026-07-08T00:00:00.000Z")).resolves.toEqual([
+      { card: studyCard, schedule: dueSchedule },
+      { card: secondCard, schedule: futureSchedule },
     ]);
   });
 
@@ -247,8 +277,8 @@ describe("StorageRepository", () => {
     }
   });
 
-  it("exposes schema version 2 for the search index migration", () => {
-    expect(surasuraDatabaseVersion).toBe(2);
+  it("exposes schema version 3 for the study card data layer migration", () => {
+    expect(surasuraDatabaseVersion).toBe(3);
   });
 
   it("closes the cached connection and can reopen on later operations", async () => {
@@ -363,10 +393,7 @@ const studyCard = {
   question: "私権の公共の福祉適合性は何条か。",
   answer: "民法1条",
   tags: ["民法"],
-  dueAt: "2026-07-06T00:00:00.000Z",
-  intervalDays: 1,
-  ease: 2.5,
-  mistakes: 0,
+  examPinned: false,
   createdAt: "2026-07-06T00:00:00.000Z",
   updatedAt: "2026-07-06T00:00:00.000Z",
 } satisfies StudyCard;
@@ -376,15 +403,6 @@ const studySession = {
   startedAt: "2026-07-06T00:00:00.000Z",
   finishedAt: "2026-07-06T00:05:00.000Z",
   cardIds: [studyCard.id],
-  results: [
-    {
-      cardId: studyCard.id,
-      answeredAt: "2026-07-06T00:04:00.000Z",
-      rating: "good",
-      elapsedMs: 1200,
-      wasCorrect: true,
-    },
-  ],
 } satisfies StudySession;
 
 const ocrSession = {

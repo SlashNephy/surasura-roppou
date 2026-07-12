@@ -14,7 +14,6 @@ export type {
   LawRevision,
   OcrSession,
   QuizRating,
-  QuizResult,
   ReviewLog,
   StudyCard,
   StudyCardType,
