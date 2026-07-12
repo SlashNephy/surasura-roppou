@@ -299,6 +299,45 @@ describe("useOcr", () => {
     expect(signalA?.aborted).toBe(true);
   });
 
+  it("resolve 直後に cancel しても結果を反映せず idle を維持する", async () => {
+    // recognize の promise が resolve した後、フック側の継続（setResult/setPhase）が
+    // 実行される前に cancel() が同期で割り込む隙間を deferred promise で再現する。
+    let notifyStarted!: () => void;
+    const started = new Promise<void>((res) => {
+      notifyStarted = res;
+    });
+    let resolveRecognize!: (r: OcrResult) => void;
+    const recognize = (): Promise<OcrResult> => {
+      notifyStarted();
+      return new Promise<OcrResult>((res) => {
+        resolveRecognize = res;
+      });
+    };
+
+    const { result: hook } = renderHook(() => useOcr(fakeRecognizer(recognize)));
+
+    let mainPromise!: Promise<void>;
+    act(() => {
+      mainPromise = hook.current.grantConsentAndRecognize(new Blob(["x"]));
+    });
+
+    // recognize() 到達を待ってから resolve/cancel の競合を作る。
+    await act(async () => {
+      await started;
+    });
+
+    // resolve と cancel を同一同期区間で実行する。フックの継続はマイクロタスクで
+    // 後から走るため、cancel の参照破棄が先に効き、結果は反映されない。
+    await act(async () => {
+      resolveRecognize(ocrResult);
+      hook.current.cancel();
+      await mainPromise;
+    });
+
+    expect(hook.current.phase).toBe("idle");
+    expect(hook.current.result).toBeUndefined();
+  });
+
   // Finding 3: アンマウント時に recognizer.terminate が呼ばれることを確認する。
   it("アンマウント時に recognizer.terminate が呼ばれる", async () => {
     const terminate = vi.fn((): Promise<void> => Promise.resolve());

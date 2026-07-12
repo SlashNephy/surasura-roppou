@@ -67,8 +67,10 @@ export const useOcr = (recognizer: OcrRecognizer = defaultRecognizer): UseOcr =>
             setProgress(p.progress);
           },
         });
-        // recognizer.recognize は abort 時に AbortError を throw するため、正常 return の
-        // 時点で controller.signal.aborted は false と保証される。setResult/setPhase は安全。
+        // recognize の resolve 直後〜継続実行前に cancel() や新しいランが割り込んだ場合、
+        // idle へ戻した画面へ結果を出さないよう、反映前に自分が現行ランかを確認する。
+        // (signal.aborted の再確認は TS の narrowing で常に false と推論されるため参照比較で判定する)
+        if (abortRef.current !== controller) return;
         setResult(ocrResult);
         setPhase("done");
       } catch (error) {
@@ -123,6 +125,8 @@ export const useOcr = (recognizer: OcrRecognizer = defaultRecognizer): UseOcr =>
 
   const cancel = useCallback(() => {
     abortRef.current?.abort();
+    // 参照も破棄し、resolve 済みで継続待ちだった認識結果が後から反映されるのを防ぐ。
+    abortRef.current = undefined;
     setPhase("idle");
   }, []);
 
