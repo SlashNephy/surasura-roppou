@@ -21,6 +21,7 @@ const routes = [
   ["/saved/collections/missing", "コレクションが見つかりません"],
   ["/scanner", "問題集や資料から条文を開く"],
   ["/study", "復習"],
+  ["/study/cards", "条文カード"],
   ["/settings", "設定"],
 ] as const;
 
