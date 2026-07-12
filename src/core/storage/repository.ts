@@ -433,7 +433,15 @@ export const openSurasuraDatabase = async (
         // IDB のトランザクション自動コミットは未完了リクエストがある間は発生しないため、
         // 移行完了まで versionchange トランザクションは維持される。
         if (oldVersion > 0) {
-          void migrateRecordsToVersion3(transaction);
+          void migrateRecordsToVersion3(transaction).catch((error: unknown) => {
+            // 予期しない移行例外は versionchange トランザクションを abort して openDB の reject へ流す（スペック 8 章）。
+            console.error("study data migration failed", error);
+            try {
+              transaction.abort();
+            } catch {
+              // トランザクションが既に終了していると abort は InvalidStateError を投げるが、その場合は既に失敗経路にある。
+            }
+          });
         }
       }
     },
