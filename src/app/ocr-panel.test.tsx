@@ -66,7 +66,7 @@ it("idle フェーズで読み取るボタンを出す", () => {
       })}
     />,
   );
-  fireEvent.click(screen.getByRole("button", { name: /条文を読み取る/ }));
+  fireEvent.click(screen.getByRole("button", { name: /この画像から条文を読み取る/ }));
   expect(recognized).toBe(true);
 });
 

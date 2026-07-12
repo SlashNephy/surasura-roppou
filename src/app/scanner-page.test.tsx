@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CameraError, isCameraSupported } from "@/core/ocr";
 import type { CameraStreamProvider } from "@/core/ocr";
 
+import type { UseOcr } from "./use-ocr";
+
 import { ScannerPage } from "./scanner-page";
 
 // jsdom は navigator.mediaDevices を持たないため、テストごとに制御できるよう
@@ -145,5 +147,52 @@ describe("ScannerPage カメラ", () => {
     // 権限拒否時は OS カメラボタンとライブラリ選択の両方が提示される。
     expect(screen.getByLabelText("端末のカメラで撮影")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /画像を選ぶ/ })).toBeInTheDocument();
+  });
+});
+
+// OcrPanel.test.tsx の makeOcrStub をローカルで複製する。
+// 共有テストユーティリティは作らず、各テストファイル内で完結させる。
+const makeOcrStub = (overrides: Partial<UseOcr>): UseOcr => ({
+  phase: "idle",
+  progress: 0,
+  requestRecognize: () => Promise.resolve(),
+  grantConsentAndRecognize: () => Promise.resolve(),
+  cancel: () => {
+    // mock implementation
+  },
+  reset: () => {
+    // mock implementation
+  },
+  ...overrides,
+});
+
+// ファイル選択でプレビュー状態へ遷移する共通手順。
+const enterPreviewWithFile = () => {
+  const input = screen.getByLabelText("画像を選ぶ", { selector: "input" });
+  const file = new File([new Uint8Array([1, 2, 3])], "shot.png", { type: "image/png" });
+  fireEvent.change(input, { target: { files: [file] } });
+};
+
+describe("ScannerPage OCR 配線", () => {
+  it("注入した ocr スタブの phase が OcrPanel に反映される", () => {
+    // done フェーズのスタブを注入し、認識テキストがプレビュー画面に出ることを確認する。
+    // これにより ocr prop が useOcr() デフォルトより優先されていることを保証する。
+    const result = { text: "第一条 テスト", confidence: 90, words: [] };
+    render(<ScannerPage ocr={makeOcrStub({ phase: "done", result })} />);
+
+    enterPreviewWithFile();
+
+    expect(screen.getByText(/第一条 テスト/)).toBeInTheDocument();
+  });
+
+  it("選び直すボタンで ocr.reset() が呼ばれる", () => {
+    // reset に vi.fn() スパイを仕込み、handleDiscard 経路が reset を呼ぶことを確認する。
+    const resetSpy = vi.fn();
+    render(<ScannerPage ocr={makeOcrStub({ reset: resetSpy })} />);
+
+    enterPreviewWithFile();
+    fireEvent.click(screen.getByRole("button", { name: "選び直す" }));
+
+    expect(resetSpy).toHaveBeenCalledOnce();
   });
 });

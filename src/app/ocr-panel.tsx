@@ -46,7 +46,7 @@ export const OcrPanel = ({ blob, ocr, onDiscard }: OcrPanelProps) => {
         }}
         type="button"
       >
-        条文を読み取る
+        この画像から条文を読み取る
       </Button>
     );
   }
