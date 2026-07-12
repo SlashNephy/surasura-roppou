@@ -87,14 +87,13 @@ export const LawsPage = ({
 const formatSavedLawFetchedDate = (savedLaw: SavedLawSummary): string =>
   formatIsoDateLabel(savedLaw.revision.fetchedAt);
 
-export const StudyPage = ({ storageRepository }: { storageRepository?: StorageRepository }) => {
+export const StudyPage = ({
+  // 本番ルーターは createAppRouter() を引数なしで呼ぶため、DI がないときは既定のリポジトリへフォールバックする。
+  storageRepository = defaultStorageRepository,
+}: { storageRepository?: StorageRepository } = {}) => {
   const [cardCount, setCardCount] = useState<number>();
 
   useEffect(() => {
-    if (storageRepository === undefined) {
-      return;
-    }
-
     let isCurrent = true;
 
     void storageRepository

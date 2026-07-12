@@ -4,9 +4,10 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import type { StudyCard } from "@/core/domain";
-import { createMemoryStorageRepository } from "@/test/fixtures/storage";
+import { createMemoryStorageRepository, createSavedLawDocument } from "@/test/fixtures/storage";
 import { setupScrollMocks } from "@/test/scrollMocks";
 
+import { sampleLawViewerDocument } from "./law-viewer-sample";
 import { createAppRouter } from "./router";
 
 setupScrollMocks();
@@ -25,8 +26,24 @@ const card = {
   updatedAt: "2026-07-02T00:00:00.000Z",
 } satisfies StudyCard;
 
-const renderDetailPage = (path = `/study/cards/${card.id}`, studyCards: StudyCard[] = [card]) => {
-  const storage = createMemoryStorageRepository({ studyCards });
+const renderDetailPage = (
+  path = `/study/cards/${card.id}`,
+  studyCards: StudyCard[] = [card],
+  withSavedLaw = false,
+) => {
+  const storage = createMemoryStorageRepository({
+    studyCards,
+    // 法令名解決のテストでは savedLawDocument を注入する。
+    ...(withSavedLaw
+      ? {
+          savedLawDocument: createSavedLawDocument({
+            law: sampleLawViewerDocument.law,
+            revision: sampleLawViewerDocument.revision,
+            nodes: sampleLawViewerDocument.nodes,
+          }),
+        }
+      : {}),
+  });
   const history = createMemoryHistory({ initialEntries: [path] });
 
   render(
@@ -82,6 +99,14 @@ describe("StudyCardDetailPage", () => {
     renderDetailPage("/study/cards/missing-card", []);
 
     expect(await screen.findByText("カードが見つかりません。")).toBeInTheDocument();
+  });
+
+  it("resolves law title from saved laws in the basis link", async () => {
+    // card の target.lawId は 129AC0000000089 (民法) で sampleLawViewerDocument と一致する。
+    renderDetailPage(`/study/cards/${card.id}`, [card], true);
+
+    // 根拠リンクが「民法 第1条」と表示されることを検証する。
+    expect(await screen.findByText("民法 第1条")).toBeInTheDocument();
   });
 
   it("prevents double deletion while a delete is in flight", async () => {

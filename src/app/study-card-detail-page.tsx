@@ -26,7 +26,8 @@ type DetailState =
   | { status: "loading" }
   | { status: "error" }
   | { status: "not-found" }
-  | { status: "ready"; card: StudyCard };
+  // lawTitle: listSavedLaws() で lawId から解決した法令名。未保存の場合は lawId をそのまま使う。
+  | { status: "ready"; card: StudyCard; lawTitle: string };
 
 interface StudyCardDetailPageProps {
   storageRepository?: StorageRepository;
@@ -53,9 +54,8 @@ export const StudyCardDetailPage = ({
   useEffect(() => {
     let isCurrent = true;
 
-    void storageRepository
-      .getStudyCard(cardId)
-      .then((loadedCard) => {
+    void Promise.all([storageRepository.getStudyCard(cardId), storageRepository.listSavedLaws()])
+      .then(([loadedCard, savedLaws]) => {
         if (!isCurrent) {
           return;
         }
@@ -65,7 +65,11 @@ export const StudyCardDetailPage = ({
           return;
         }
 
-        setState({ status: "ready", card: loadedCard });
+        // 保存済み法令から lawId に対応する法令名を引く。未保存の場合は lawId をそのまま表示する。
+        const savedLaw = savedLaws.find((law) => law.law.lawId === loadedCard.target.lawId);
+        const lawTitle = savedLaw?.law.title ?? loadedCard.target.lawId;
+
+        setState({ status: "ready", card: loadedCard, lawTitle });
         setType(loadedCard.type);
         setQuestion(loadedCard.question);
         setAnswer(loadedCard.answer);
@@ -119,7 +123,7 @@ export const StudyCardDetailPage = ({
     );
   }
 
-  const { card } = state;
+  const { card, lawTitle } = state;
 
   // React 19 では FormEvent が deprecated になったため SyntheticEvent を使う。
   const handleSubmit = async (event: SyntheticEvent<HTMLFormElement, SubmitEvent>) => {
@@ -150,7 +154,8 @@ export const StudyCardDetailPage = ({
       };
 
       await storageRepository.putStudyCard(updated);
-      setState({ status: "ready", card: updated });
+      // 保存後も lawTitle は変わらないため現在の state から引き継ぐ。
+      setState({ status: "ready", card: updated, lawTitle });
       setMessage({ kind: "saved", text: "保存しました。" });
     } catch {
       setMessage({
@@ -192,7 +197,7 @@ export const StudyCardDetailPage = ({
             params={{ lawId: card.target.lawId, article: card.target.article ?? "" }}
             to="/laws/$lawId/articles/$article"
           >
-            {card.target.lawId} 第{card.target.article}条
+            {lawTitle} 第{card.target.article}条
           </Link>
         </p>
       </header>
