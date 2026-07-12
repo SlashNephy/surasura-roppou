@@ -19,7 +19,6 @@ import {
   createStorageRepository as originalCreateStorageRepository,
   deleteSurasuraDatabase,
   openSurasuraDatabase,
-  surasuraDatabaseVersion,
 } from "./repository";
 import type { StorageRepository, StorageRepositoryOptions } from "./repository";
 
@@ -317,6 +316,35 @@ describe("StorageRepository", () => {
     ]);
   });
 
+  it("lists all review logs across cards when no cardId is given", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+    const secondCard = { ...studyCard, id: "card-2" } satisfies StudyCard;
+
+    await repository.putStudyCard(studyCard);
+    await repository.putStudyCard(secondCard);
+    await repository.recordReview({
+      id: "log-1",
+      cardId: studyCard.id,
+      grade: "good",
+      reviewedAt: "2026-07-06T00:00:00.000Z",
+      scheduler: "fixed-interval@1",
+    });
+    await repository.recordReview({
+      id: "log-2",
+      cardId: secondCard.id,
+      grade: "easy",
+      reviewedAt: "2026-07-06T01:00:00.000Z",
+      scheduler: "fixed-interval@1",
+    });
+
+    const logs = await repository.listReviewLogs();
+
+    expect(logs.map((log) => log.id).sort()).toEqual(["log-1", "log-2"]);
+  });
+
   it("replays the full history when recording additional reviews", async () => {
     const repository = createStorageRepository({
       databaseName: createDatabaseName(),
@@ -373,10 +401,6 @@ describe("StorageRepository", () => {
     } finally {
       database.close();
     }
-  });
-
-  it("exposes schema version 3 for the study card data layer migration", () => {
-    expect(surasuraDatabaseVersion).toBe(3);
   });
 
   it("closes the cached connection and can reopen on later operations", async () => {

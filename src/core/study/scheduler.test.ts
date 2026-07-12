@@ -100,6 +100,11 @@ describe("fixedIntervalScheduler", () => {
       expected: { dueOffsetMs: dayMs, intervalDays: 1, lapses: 1 },
     },
     {
+      name: "再学習を easy で通過しても 1 日から再開する",
+      grades: ["good", "good", "again", "easy"],
+      expected: { dueOffsetMs: dayMs, intervalDays: 1, lapses: 1 },
+    },
+    {
       name: "再学習中の again も lapse に数える",
       grades: ["good", "good", "again", "again"],
       expected: { dueOffsetMs: 10 * minuteMs, intervalDays: 10 / 1440, lapses: 2 },

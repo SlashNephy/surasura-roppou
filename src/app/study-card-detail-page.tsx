@@ -172,6 +172,8 @@ export const StudyCardDetailPage = ({
 
     try {
       await storageRepository.deleteStudyCard(card.id);
+      // 遷移によるアンマウントより先にダイアログを閉じ、scroll lock の解放を確実にする。
+      setIsDeleteDialogOpen(false);
       await navigate({ to: "/study/cards" });
     } catch {
       setIsDeleteDialogOpen(false);
@@ -192,12 +194,20 @@ export const StudyCardDetailPage = ({
         <h1 className="font-serif text-2xl font-semibold text-foreground">条文カード</h1>
         <p className="text-sm text-muted-foreground">
           根拠:{" "}
+          {/* ビューア起点の作成フローでは article が必ず入るが、
+              データ不整合時に「第null条」がレンダリングされるのを防ぐため
+              article が空の場合は条番号部分を省略して法令名のみ表示する。 */}
           <Link
             className="text-primary underline-offset-4 hover:underline"
             params={{ lawId: card.target.lawId, article: card.target.article ?? "" }}
             to="/laws/$lawId/articles/$article"
           >
-            {lawTitle} 第{card.target.article}条
+            {lawTitle}
+            {card.target.article === null ||
+            card.target.article === undefined ||
+            card.target.article === ""
+              ? ""
+              : ` 第${card.target.article}条`}
           </Link>
         </p>
       </header>

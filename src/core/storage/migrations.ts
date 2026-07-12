@@ -115,4 +115,8 @@ export const migrateRecordsToVersion3 = async (
   for (const history of logsByCardId.values()) {
     void cardSchedules.put(fixedIntervalScheduler(history, new Date()));
   }
+
+  // put 群の完了（= versionchange トランザクションの完了）を待つ。
+  // 書き込み失敗をこの関数の reject として呼び出し元の abort 処理へ伝播させる。
+  await transaction.done;
 };
