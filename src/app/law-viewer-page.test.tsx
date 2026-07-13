@@ -850,6 +850,22 @@ describe("LawViewerPageContent", () => {
 
     expect(await screen.findByRole("heading", { name: "学習カードを作る" })).toBeInTheDocument();
   });
+
+  it("記事ルートに study=new で入ると学習カードダイアログを自動起動する", async () => {
+    const history = createMemoryHistory({
+      initialEntries: ["/laws/129AC0000000089/articles/1?study=new"],
+    });
+    const { fetcher } = createJsonFetchStub(lawDataFixture);
+    const lawRepository = createEgovLawRepository({ fetcher, now });
+    const storageRepository = createMemoryStorageRepository().repository;
+
+    render(
+      <RouterProvider router={createAppRouter({ history, lawRepository, storageRepository })} />,
+    );
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByText("学習カードを作る")).toBeInTheDocument();
+  });
 });
 
 const withClipboard = async (
