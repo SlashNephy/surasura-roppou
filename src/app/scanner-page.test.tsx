@@ -177,6 +177,26 @@ const enterPreviewWithFile = () => {
   fireEvent.change(input, { target: { files: [file] } });
 };
 
+// done フェーズの決定的な OCR スタブ。空アロー本体は no-empty-function で落ちるため
+// 既存 makeOcrStub と同じく Promise.resolve() / コメント本体で埋める。
+const makeDoneOcr = (text: string, confidence = 90): UseOcr => {
+  const result: OcrResult = { text, confidence, words: [] };
+
+  return {
+    phase: "done",
+    progress: 1,
+    result,
+    requestRecognize: () => Promise.resolve(),
+    grantConsentAndRecognize: () => Promise.resolve(),
+    cancel: () => {
+      // mock implementation
+    },
+    reset: () => {
+      // mock implementation
+    },
+  };
+};
+
 describe("ScannerPage OCR 配線", () => {
   it("注入した ocr スタブの phase が OcrPanel に反映される", () => {
     // done フェーズのスタブを注入し、再認識ボタンがプレビュー画面に出ることを確認する。
@@ -202,44 +222,17 @@ describe("ScannerPage OCR 配線", () => {
   });
 });
 
-// done フェーズの決定的な OCR スタブ。空アロー本体は no-empty-function で落ちるため
-// 既存 makeOcrStub と同じく Promise.resolve() / コメント本体で埋める。
-const makeDoneOcr = (text: string, confidence = 90): UseOcr => {
-  const result: OcrResult = { text, confidence, words: [] };
-
-  return {
-    phase: "done",
-    progress: 1,
-    result,
-    requestRecognize: () => Promise.resolve(),
-    grantConsentAndRecognize: () => Promise.resolve(),
-    cancel: () => {
-      // mock implementation
-    },
-    reset: () => {
-      // mock implementation
-    },
-  };
-};
-
-// プレビュー状態にするため画像を1枚選ばせるヘルパー。
-const selectImage = () => {
-  const input = screen.getByLabelText("画像を選ぶ", { selector: "input" });
-  const file = new File([new Uint8Array([1, 2, 3])], "shot.png", { type: "image/png" });
-  fireEvent.change(input, { target: { files: [file] } });
-};
-
 describe("ScannerPage 条文参照候補", () => {
   it("OCR done で検出した候補を表示する", () => {
     render(<ScannerPage ocr={makeDoneOcr("民法709条を参照")} />);
-    selectImage();
+    enterPreviewWithFile();
     expect(screen.getByText("民法 第709条")).toBeInTheDocument();
   });
 
   it("開くで onOpenCandidate を候補付きで呼ぶ", async () => {
     const onOpenCandidate = vi.fn<(candidate: LawReferenceCandidate) => void>();
     render(<ScannerPage ocr={makeDoneOcr("民法709条")} onOpenCandidate={onOpenCandidate} />);
-    selectImage();
+    enterPreviewWithFile();
 
     await userEvent.click(screen.getByRole("button", { name: "民法 第709条を開く" }));
     expect(onOpenCandidate).toHaveBeenCalledWith(
@@ -247,9 +240,20 @@ describe("ScannerPage 条文参照候補", () => {
     );
   });
 
+  it("復習に追加で onAddToReview を候補付きで呼ぶ", async () => {
+    const onAddToReview = vi.fn<(candidate: LawReferenceCandidate) => void>();
+    render(<ScannerPage ocr={makeDoneOcr("民法709条")} onAddToReview={onAddToReview} />);
+    enterPreviewWithFile();
+
+    await userEvent.click(screen.getByRole("button", { name: "民法 第709条を復習に追加" }));
+    expect(onAddToReview).toHaveBeenCalledWith(
+      expect.objectContaining({ lawId: "129AC0000000089", article: "709" }),
+    );
+  });
+
   it("検出0件では案内を表示する", () => {
     render(<ScannerPage ocr={makeDoneOcr("これはただの文章です")} />);
-    selectImage();
+    enterPreviewWithFile();
     expect(screen.getByText(/条文参照が見つかりませんでした/)).toBeInTheDocument();
   });
 });
