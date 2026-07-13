@@ -29,3 +29,5 @@ export type {
   QuickSearchOptions,
   QuickSearchOutcome,
 } from "./quick-search";
+export { detectLawReferences } from "./reference-detector";
+export type { DetectLawReferencesOptions } from "./reference-detector";
