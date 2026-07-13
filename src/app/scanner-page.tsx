@@ -217,7 +217,7 @@ export const ScannerPage = ({
           src={image.objectUrl}
         />
         <OcrPanel blob={image.blob} ocr={ocr} onDiscard={handleDiscard} />
-        {sessionSaveFailed ? (
+        {sessionSaveFailed && ocr.phase === "done" ? (
           <p
             className="rounded-md border border-destructive/50 px-4 py-2 text-sm text-destructive"
             role="alert"

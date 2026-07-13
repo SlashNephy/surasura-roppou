@@ -3,7 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { OcrResult } from "@/core/ocr";
-import type { LawReferenceCandidate } from "@/core/domain";
+import type { LawReferenceCandidate, OcrSession } from "@/core/domain";
+import type { StorageRepository } from "@/core/storage";
 
 import { CameraError, isCameraSupported } from "@/core/ocr";
 import type { CameraStreamProvider } from "@/core/ocr";
@@ -177,9 +178,6 @@ const enterPreviewWithFile = () => {
   fireEvent.change(input, { target: { files: [file] } });
 };
 
-// enterPreviewWithFile の別名。保存系テストでの可読性向上のため。
-const selectImage = enterPreviewWithFile;
-
 // done フェーズの決定的な OCR スタブ。空アロー本体は no-empty-function で落ちるため
 // 既存 makeOcrStub と同じく Promise.resolve() / コメント本体で埋める。
 const makeDoneOcr = (text: string, confidence = 90): UseOcr => {
@@ -261,14 +259,12 @@ describe("ScannerPage 条文参照候補", () => {
   });
 
   it("OCR done でセッションを保存する", async () => {
-    const putOcrSession = vi.fn<(session: import("@/core/domain").OcrSession) => Promise<void>>(
-      () => Promise.resolve(),
-    );
+    const putOcrSession = vi.fn<(session: OcrSession) => Promise<void>>(() => Promise.resolve());
     const storageRepository = {
       putOcrSession,
-    } as unknown as import("@/core/storage").StorageRepository;
+    } as unknown as StorageRepository;
     render(<ScannerPage ocr={makeDoneOcr("民法709条")} storageRepository={storageRepository} />);
-    selectImage();
+    enterPreviewWithFile();
 
     await waitFor(() => {
       expect(putOcrSession).toHaveBeenCalledTimes(1);
@@ -282,9 +278,9 @@ describe("ScannerPage 条文参照候補", () => {
     const putOcrSession = vi.fn(() => Promise.reject(new Error("quota exceeded")));
     const storageRepository = {
       putOcrSession,
-    } as unknown as import("@/core/storage").StorageRepository;
+    } as unknown as StorageRepository;
     render(<ScannerPage ocr={makeDoneOcr("民法709条")} storageRepository={storageRepository} />);
-    selectImage();
+    enterPreviewWithFile();
 
     expect(await screen.findByText(/セッションを保存できませんでした/)).toBeInTheDocument();
     expect(screen.getByText("民法 第709条")).toBeInTheDocument();
