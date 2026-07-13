@@ -126,6 +126,14 @@ describe("detectLawReferences", () => {
     expect(scaled.confidence).toBeCloseTo(full.confidence * 0.5, 5);
   });
 
+  it("ocrConfidence の境界（0 で 0、100 で無減衰）", () => {
+    const [base] = detectLawReferences("民法709条", {});
+    const [zero] = detectLawReferences("民法709条", { ocrConfidence: 0 });
+    const [full] = detectLawReferences("民法709条", { ocrConfidence: 100 });
+    expect(zero.confidence).toBe(0);
+    expect(full.confidence).toBeCloseTo(base.confidence, 5);
+  });
+
   it("決定的 ID を採番する（同入力で同 ID）", () => {
     const first = detectLawReferences("民法709条");
     const second = detectLawReferences("民法709条");
