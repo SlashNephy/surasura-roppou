@@ -91,7 +91,7 @@ export const detectLawReferences: (
   - `sourceText`: `result.text`。
   - `detectedReferences`: §3 の `DetectedLawReference[]`。
   - `createdAt` / `updatedAt`: 現在時刻の ISO 文字列。
-- 保存はベストエフォート。失敗しても候補表示は継続し、`sonner` のトースト警告に留める（保存できないことが致命でないため。復習カードやブックマークと違い、セッションは補助的な履歴）。
+- 保存はベストエフォート。失敗しても候補表示は継続し、警告に留める（保存できないことが致命でないため。復習カードやブックマークと違い、セッションは補助的な履歴）。警告はスキャナー画面内のインライン表示（`role="alert"`）とする。当初は `sonner` トーストを想定したが、AppShell に Toaster を未マウントのためインライン警告に確定した。
 - プライバシー: セッションは IndexedDB ローカルのみで送信しない。画像は保存しない（既存のスキャナーの不変条件を維持）。
 
 ## 5. 候補一覧 UI（app/OcrReferenceResults.tsx 新設）
@@ -131,7 +131,7 @@ export const detectLawReferences: (
 | 局面                       | 方針                                                                                   |
 | -------------------------- | -------------------------------------------------------------------------------------- |
 | 参照抽出                   | 純関数。例外を投げず、成立しなければ空配列。空配列は「見つからない」として UI 分岐する |
-| OCR セッション保存の失敗   | トースト警告に留め、候補表示は継続する（ベストエフォート）                             |
+| OCR セッション保存の失敗   | インライン警告（role="alert"）に留め、候補表示は継続する（ベストエフォート）           |
 | 開くの遷移失敗             | TanStack の navigate に委譲。既存導線と同じ扱い                                        |
 | カード化の対象条が版に無い | ダイアログを開かず、ビューアの既存「該当条なし」表示へフォールバック                   |
 | OCR 失敗・consent          | 既存 `use-ocr` / `OcrPanel` のフローを変更しない                                       |
@@ -140,6 +140,6 @@ export const detectLawReferences: (
 
 - `detectLawReferences`（table testing）: 単一参照 / 1 行複数参照（民法709条、710条）/ glued noise（"問題文は民法709条"→民法709）/ 相対参照（前条・同法）/ 辞書外法令 / 別表 / 漢数字・全角 / 枝番（709条の2）/ 条省略形（民709）/ 重複排除 / 検出順の決定性 / 空・空白入力 / `ocrConfidence` 減衰 を、入力テキスト → 期待 `DetectedLawReference[]` の表で検証する。
 - `OcrReferenceResults`（Testing Library）: 候補ありの表示とアクション、`開く` が注入 navigate を正しい target で呼ぶこと、`復習に追加` が `study=new` 付き記事ルートへ遷移すること、`無視` で参照が消えること、未解決の理由表示、検出 0 件の空表示と生テキスト fallback を、ユーザー視点の DOM で検証する。
-- OCR セッション保存（fake-indexeddb）: done 到達で `putOcrSession` が sourceText と検出参照を含むセッションを保存すること、保存失敗時にトースト警告が出て候補表示が継続することを検証する。
+- OCR セッション保存（fake-indexeddb）: done 到達で `putOcrSession` が sourceText と検出参照を含むセッションを保存すること、保存失敗時にインライン警告が出て候補表示が継続することを検証する。
 - `law-viewer-page`（Testing Library）: 記事ルートに `study=new` で入ると本文ロード後に `StudyCardCreateDialog` が開くこと、開いた後に param が除去されること、対象条が無い場合に開かないことを検証する。
 - 実画面確認: `playwright-cli open --headed` で、画像選択 → OCR → 候補一覧 → 開く（本文遷移）と、候補 → 復習に追加（カードダイアログ自動起動）の一連を確認し、スクリーンショットを PR に添付する。
