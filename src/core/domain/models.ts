@@ -99,6 +99,9 @@ export interface StudyCard {
   type: StudyCardType;
   question: string;
   answer: string;
+  // 多択の選択肢（条文番号当てなどの自動生成カードのみが持つ）。
+  // question 文字列へ焼き込まず構造化して持ち、復習画面が選択肢ボタンを描画できるようにする。
+  choices?: string[];
   explanation?: string;
   tags: string[];
   // 「試験直前に確認」の手動ピン。復習状態のラベルとは独立したユーザー意思。
