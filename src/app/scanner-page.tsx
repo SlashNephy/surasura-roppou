@@ -7,10 +7,11 @@ import {
   isCameraSupported,
   releaseCapturedImage,
 } from "@/core/ocr";
-import type { CameraErrorKind, CameraStreamProvider, CapturedImage } from "@/core/ocr";
+import type { CameraErrorKind, CameraStreamProvider, CapturedImage, OcrResult } from "@/core/ocr";
 import { detectLawReferences } from "@/core/jump";
-import type { LawReferenceCandidate } from "@/core/domain";
+import type { LawReferenceCandidate, OcrSession } from "@/core/domain";
 import type { StorageRepository } from "@/core/storage";
+import { generateStorageId } from "@/core/storage";
 import { Button } from "@/shared/ui/button";
 
 import { useCamera } from "./use-camera";
@@ -63,6 +64,7 @@ interface ScannerPageProps {
 export const ScannerPage = ({
   cameraStreamProvider = defaultCameraStreamProvider,
   ocr: ocrProp,
+  storageRepository,
   onOpenCandidate,
   onAddToReview,
 }: ScannerPageProps) => {
@@ -78,6 +80,40 @@ export const ScannerPage = ({
         : detectLawReferences(ocr.result.text, { ocrConfidence: ocr.result.confidence }),
     [ocr.result],
   );
+
+  const [sessionSaveFailed, setSessionSaveFailed] = useState(false);
+  // 同一 OCR result を二重保存しないよう、保存済み result を参照で覚える。
+  const savedResultRef = useRef<OcrResult | undefined>(undefined);
+
+  useEffect(() => {
+    const result = ocr.result;
+
+    // done でない・repository 未注入・保存済みの result はスキップする。
+    if (
+      ocr.phase !== "done" ||
+      result === undefined ||
+      storageRepository === undefined ||
+      savedResultRef.current === result
+    ) {
+      return;
+    }
+
+    savedResultRef.current = result;
+    setSessionSaveFailed(false);
+    const now = new Date().toISOString();
+    const session: OcrSession = {
+      id: generateStorageId(),
+      sourceText: result.text,
+      detectedReferences,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    // 保存はベストエフォート。失敗しても候補表示は継続し、警告のみ出す。
+    void storageRepository.putOcrSession(session).catch(() => {
+      setSessionSaveFailed(true);
+    });
+  }, [ocr.phase, ocr.result, detectedReferences, storageRepository]);
 
   const [image, setImage] = useState<CapturedImage | undefined>();
   // react-hooks/refs が camera オブジェクト全体をレンダー時 ref アクセスとして誤検知するため
@@ -181,6 +217,14 @@ export const ScannerPage = ({
           src={image.objectUrl}
         />
         <OcrPanel blob={image.blob} ocr={ocr} onDiscard={handleDiscard} />
+        {sessionSaveFailed ? (
+          <p
+            className="rounded-md border border-destructive/50 px-4 py-2 text-sm text-destructive"
+            role="alert"
+          >
+            セッションを保存できませんでした。候補の利用は続けられます。
+          </p>
+        ) : null}
         {ocr.phase === "done" && ocr.result !== undefined ? (
           <OcrReferenceResults
             references={detectedReferences}

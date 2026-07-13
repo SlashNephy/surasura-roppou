@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -177,6 +177,9 @@ const enterPreviewWithFile = () => {
   fireEvent.change(input, { target: { files: [file] } });
 };
 
+// enterPreviewWithFile の別名。保存系テストでの可読性向上のため。
+const selectImage = enterPreviewWithFile;
+
 // done フェーズの決定的な OCR スタブ。空アロー本体は no-empty-function で落ちるため
 // 既存 makeOcrStub と同じく Promise.resolve() / コメント本体で埋める。
 const makeDoneOcr = (text: string, confidence = 90): UseOcr => {
@@ -255,5 +258,35 @@ describe("ScannerPage 条文参照候補", () => {
     render(<ScannerPage ocr={makeDoneOcr("これはただの文章です")} />);
     enterPreviewWithFile();
     expect(screen.getByText(/条文参照が見つかりませんでした/)).toBeInTheDocument();
+  });
+
+  it("OCR done でセッションを保存する", async () => {
+    const putOcrSession = vi.fn<(session: import("@/core/domain").OcrSession) => Promise<void>>(
+      () => Promise.resolve(),
+    );
+    const storageRepository = {
+      putOcrSession,
+    } as unknown as import("@/core/storage").StorageRepository;
+    render(<ScannerPage ocr={makeDoneOcr("民法709条")} storageRepository={storageRepository} />);
+    selectImage();
+
+    await waitFor(() => {
+      expect(putOcrSession).toHaveBeenCalledTimes(1);
+    });
+    const session = putOcrSession.mock.calls[0][0];
+    expect(session.sourceText).toBe("民法709条");
+    expect(session.detectedReferences).toHaveLength(1);
+  });
+
+  it("セッション保存に失敗しても候補表示を続け、警告を出す", async () => {
+    const putOcrSession = vi.fn(() => Promise.reject(new Error("quota exceeded")));
+    const storageRepository = {
+      putOcrSession,
+    } as unknown as import("@/core/storage").StorageRepository;
+    render(<ScannerPage ocr={makeDoneOcr("民法709条")} storageRepository={storageRepository} />);
+    selectImage();
+
+    expect(await screen.findByText(/セッションを保存できませんでした/)).toBeInTheDocument();
+    expect(screen.getByText("民法 第709条")).toBeInTheDocument();
   });
 });
