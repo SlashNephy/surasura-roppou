@@ -864,7 +864,7 @@ describe("LawViewerPageContent", () => {
     );
 
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText("学習カードを作る")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "学習カードを作る" })).toBeInTheDocument();
   });
 });
 

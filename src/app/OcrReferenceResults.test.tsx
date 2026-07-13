@@ -81,6 +81,22 @@ describe("OcrReferenceResults", () => {
     expect(screen.queryByText("民法 第709条")).not.toBeInTheDocument();
   });
 
+  it("唯一の参照を無視すると空状態の案内と生テキストを表示する", async () => {
+    render(
+      <OcrReferenceResults
+        references={[resolvedReference]}
+        sourceText="民法709条"
+        onOpenCandidate={vi.fn()}
+        onAddToReview={vi.fn()}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "民法709条を無視" }));
+
+    expect(screen.getByText(/条文参照が見つかりませんでした/)).toBeInTheDocument();
+    expect(screen.getByText("民法709条")).toBeInTheDocument();
+  });
+
   it("未解決参照は理由を示しアクションを出さない", () => {
     render(
       <OcrReferenceResults
