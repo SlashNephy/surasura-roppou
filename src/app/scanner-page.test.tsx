@@ -286,6 +286,53 @@ describe("ScannerPage 条文参照候補", () => {
     expect(screen.getByText("民法 第709条")).toBeInTheDocument();
   });
 
+  it("古い result の遅延失敗が新しい保存の警告を誤表示しない（競合ガード）", async () => {
+    // 1 回目の putOcrSession は手動で reject できる Promise を返し、
+    // 2 回目は即座に resolve する。
+    let rejectFirst!: (reason: unknown) => void;
+    const firstPromise = new Promise<void>((_resolve, reject) => {
+      rejectFirst = reject;
+    });
+
+    let callCount = 0;
+    const putOcrSession = vi.fn<(session: OcrSession) => Promise<void>>(() => {
+      callCount += 1;
+      if (callCount === 1) {
+        return firstPromise;
+      }
+      return Promise.resolve();
+    });
+    const storageRepository = { putOcrSession } as unknown as StorageRepository;
+
+    // 1 つ目の OCR result でレンダリングしてプレビューへ遷移し、1 回目の保存を開始する。
+    const ocr1 = makeDoneOcr("民法709条");
+    const { rerender } = render(<ScannerPage ocr={ocr1} storageRepository={storageRepository} />);
+    enterPreviewWithFile();
+
+    // 1 回目の putOcrSession が呼ばれるまで待つ。
+    await waitFor(() => {
+      expect(putOcrSession).toHaveBeenCalledTimes(1);
+    });
+
+    // 2 つ目の OCR result に差し替えて再レンダリングし、2 回目の保存（即 resolve）を起動する。
+    // makeDoneOcr は呼ぶたびに新しい result オブジェクトを生成するため savedResultRef が進む。
+    const ocr2 = makeDoneOcr("憲法21条");
+    rerender(<ScannerPage ocr={ocr2} storageRepository={storageRepository} />);
+
+    // 2 回目の putOcrSession が呼ばれ、正常に完了するまで待つ。
+    await waitFor(() => {
+      expect(putOcrSession).toHaveBeenCalledTimes(2);
+    });
+
+    // 古い（1 回目の）保存を遅れて失敗させる。
+    rejectFirst(new Error("stale failure"));
+
+    // savedResultRef はすでに ocr2.result を指しているため、古い失敗は警告を出さない。
+    await waitFor(() => {
+      expect(screen.queryByText(/セッションを保存できませんでした/)).not.toBeInTheDocument();
+    });
+  });
+
   it("storageRepository を注入しなくても候補を表示してクラッシュしない（既定リポジトリ経路）", () => {
     // 本番ルーターは storageRepository を渡さないため、既定リポジトリへのフォールバックが
     // 機能することを確認する。保存の成否は IndexedDB 未実装の jsdom では検証できないため、

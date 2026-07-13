@@ -111,7 +111,10 @@ export const ScannerPage = ({
 
     // 保存はベストエフォート。失敗しても候補表示は継続し、警告のみ出す。
     void storageRepository.putOcrSession(session).catch(() => {
-      setSessionSaveFailed(true);
+      // より新しい result の保存が既に開始されていれば、古い失敗で新しい状態を上書きしない。
+      if (savedResultRef.current === result) {
+        setSessionSaveFailed(true);
+      }
     });
   }, [ocr.phase, ocr.result, detectedReferences, storageRepository]);
 

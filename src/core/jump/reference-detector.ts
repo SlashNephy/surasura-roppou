@@ -31,7 +31,7 @@ const positionPattern =
   `(?:第?${numberClass}号)?` +
   `(?:本文|ただし書|但書)?`;
 
-// 法令名部を後方から拾う窓幅。辞書の正規化キー最長長を使う。
+// 法令名部を後方から拾う窓幅。辞書の正規化キーの最大長を使う。
 const maxLawNameLength = Math.max(
   ...initialAliasDictionary.flatMap((entry) =>
     [entry.officialTitle, ...entry.aliases].map(
@@ -82,9 +82,13 @@ export const detectLawReferences = (
   const detected: DetectedLawReference[] = [];
   const seen = new Set<string>();
 
+  // グローバル正規表現を関数呼び出しごとに 1 度だけ生成し、行ごとに lastIndex をリセットして使い回す。
+  // 行をまたいで lastIndex を持ち回さないことで、各行を独立したマッチ対象として扱う。
+  const pattern = new RegExp(positionPattern, "g");
+
   text.split("\n").forEach((line, lineIndex) => {
-    // グローバル正規表現をこのスコープで使い切り、lastIndex を持ち回さない。
-    const pattern = new RegExp(positionPattern, "g");
+    // 行の先頭からマッチを開始するため lastIndex をリセットする。
+    pattern.lastIndex = 0;
     let match: RegExpExecArray | null;
 
     while ((match = pattern.exec(line)) !== null) {
