@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 
 import { computeArticleFingerprint } from "@/core/domain";
 import type { LawNode, StudyCardType } from "@/core/domain";
@@ -41,8 +41,28 @@ interface CandidateDraft {
   answer: string;
 }
 
+// effect での候補生成はアンマウント後の setState やレース条件を生むため、
+// open 中のみ内部コンポーネントをマウントし、useState 初期化子で同期生成する。
 export const QuizGenerateDialog = ({
   open,
+  onOpenChange,
+  ...contentProps
+}: QuizGenerateDialogProps) => {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {open ? <QuizGenerateDialogContent onOpenChange={onOpenChange} {...contentProps} /> : null}
+    </Dialog>
+  );
+};
+
+interface QuizGenerateDialogContentProps extends Omit<
+  QuizGenerateDialogProps,
+  "open" | "onOpenChange"
+> {
+  onOpenChange: (open: boolean) => void;
+}
+
+const QuizGenerateDialogContent = ({
   onOpenChange,
   lawId,
   lawTitle,
@@ -51,45 +71,21 @@ export const QuizGenerateDialog = ({
   node,
   nodes,
   storageRepository,
-}: QuizGenerateDialogProps) => {
-  const [drafts, setDrafts] = useState<CandidateDraft[]>([]);
+}: QuizGenerateDialogContentProps) => {
+  // 初期化子で同期生成することで、初回レンダリングから正しい候補が表示される（フラッシュなし）。
+  const [drafts, setDrafts] = useState<CandidateDraft[]>(() =>
+    generateQuizCandidates(node, { lawTitle, nodes }).map((candidate) => ({
+      candidate,
+      selected: true,
+      question: candidate.question,
+      answer: candidate.answer,
+    })),
+  );
   const [error, setError] = useState<string>();
   const [isSaving, setIsSaving] = useState(false);
   const formId = useId();
 
-  // 開くたびに対象条文から候補を生成し直す。
-  // 生成は純関数だが、setState はコールバック内で呼ぶ（react-hooks/set-state-in-effect 対応）。
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    const candidates = generateQuizCandidates(node, { lawTitle, nodes });
-    // マイクロタスクに逃がすことで、エフェクト本体での同期 setState を避ける。
-    void Promise.resolve().then(() => {
-      setDrafts(
-        candidates.map((candidate) => ({
-          candidate,
-          selected: true,
-          question: candidate.question,
-          answer: candidate.answer,
-        })),
-      );
-      setError(undefined);
-    });
-  }, [open, node, lawTitle, nodes]);
-
   const selectedCount = drafts.filter((draft) => draft.selected).length;
-
-  // 閉じるときは生成結果と編集内容を破棄する。別の条文で開き直したとき前回の候補が混ざるのを防ぐ。
-  const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) {
-      setDrafts([]);
-      setError(undefined);
-    }
-
-    onOpenChange(nextOpen);
-  };
 
   const updateDraft = (index: number, patch: Partial<CandidateDraft>) => {
     setDrafts((current) =>
@@ -137,7 +133,7 @@ export const QuizGenerateDialog = ({
         savedCount += 1;
       }
 
-      handleOpenChange(false);
+      onOpenChange(false);
     } catch {
       // 逐次保存のため途中失敗があり得る。保存済み分は残るので、件数を示して再操作の判断材料にする。
       setError(
@@ -162,138 +158,136 @@ export const QuizGenerateDialog = ({
   });
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>クイズカードを生成</DialogTitle>
-          <DialogDescription>
-            {lawTitle} {node.title ?? `第${articleNumber}条`} からの自動生成。候補を確認・編集して、
-            残すものだけ保存してください。
-          </DialogDescription>
-        </DialogHeader>
-        {drafts.length === 0 ? (
-          <p className="text-sm leading-6 text-muted-foreground">
-            この条文からクイズ候補が見つかりませんでした。「カードを作る」から手動で作成できます。
-          </p>
-        ) : (
-          <div className="grid gap-4">
-            <div className="flex flex-wrap gap-2">
-              <Button
-                className="h-8 px-3"
-                onClick={() => {
-                  setAllSelected(true);
-                }}
-                type="button"
-                variant="outline"
-              >
-                すべて選択
-              </Button>
-              <Button
-                className="h-8 px-3"
-                onClick={() => {
-                  setAllSelected(false);
-                }}
-                type="button"
-                variant="outline"
-              >
-                すべて解除
-              </Button>
-            </div>
-            {groups.map((group) => (
-              <fieldset className="grid gap-3" key={group.type}>
-                {/* legend が fieldset のアクセシブルネームになる。見出しとしても辿れるよう h3 を包む。 */}
-                <legend className="float-left w-full">
-                  <h3 className="text-sm font-semibold text-foreground">
-                    {studyCardTypeLabels[group.type]}
-                  </h3>
-                </legend>
-                {group.indexes.map((index) => {
-                  const draft = drafts[index];
-
-                  return (
-                    <div
-                      className="grid gap-2 rounded-md border bg-card p-3"
-                      key={`${draft.candidate.ruleId}:${String(index)}`}
-                    >
-                      <label className="flex items-center gap-2 text-sm font-medium text-foreground">
-                        <input
-                          checked={draft.selected}
-                          className="size-4 accent-primary"
-                          onChange={(event) => {
-                            updateDraft(index, { selected: event.target.checked });
-                          }}
-                          type="checkbox"
-                        />
-                        保存する
-                      </label>
-                      <label className="grid gap-1 text-sm font-medium text-foreground">
-                        問題文
-                        <Textarea
-                          onChange={(event) => {
-                            updateDraft(index, { question: event.target.value });
-                          }}
-                          value={draft.question}
-                        />
-                      </label>
-                      <label className="grid gap-1 text-sm font-medium text-foreground">
-                        答え
-                        <Textarea
-                          onChange={(event) => {
-                            updateDraft(index, { answer: event.target.value });
-                          }}
-                          value={draft.answer}
-                        />
-                      </label>
-                      {draft.candidate.choices === undefined ? null : (
-                        <div className="grid gap-1 text-sm">
-                          <span className="font-medium text-foreground">選択肢</span>
-                          <ul className="list-disc pl-5 text-muted-foreground">
-                            {draft.candidate.choices.map((choice) => (
-                              <li key={choice}>{choice}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </fieldset>
-            ))}
-          </div>
-        )}
-        {error === undefined ? null : (
-          <p
-            className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-6 text-destructive"
-            id={`${formId}-error`}
-            role="alert"
-          >
-            {error}
-          </p>
-        )}
-        <DialogFooter>
-          <Button
-            onClick={() => {
-              handleOpenChange(false);
-            }}
-            type="button"
-            variant="outline"
-          >
-            キャンセル
-          </Button>
-          {drafts.length === 0 ? null : (
+    <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-2xl">
+      <DialogHeader>
+        <DialogTitle>クイズカードを生成</DialogTitle>
+        <DialogDescription>
+          {lawTitle} {node.title ?? `第${articleNumber}条`} からの自動生成。候補を確認・編集して、
+          残すものだけ保存してください。
+        </DialogDescription>
+      </DialogHeader>
+      {drafts.length === 0 ? (
+        <p className="text-sm leading-6 text-muted-foreground">
+          この条文からクイズ候補が見つかりませんでした。「カードを作る」から手動で作成できます。
+        </p>
+      ) : (
+        <div className="grid gap-4">
+          <div className="flex flex-wrap gap-2">
             <Button
-              aria-describedby={error === undefined ? undefined : `${formId}-error`}
-              disabled={isSaving || selectedCount === 0}
+              className="h-8 px-3"
               onClick={() => {
-                void handleSave();
+                setAllSelected(true);
               }}
               type="button"
+              variant="outline"
             >
-              選択した {selectedCount} 件を保存
+              すべて選択
             </Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            <Button
+              className="h-8 px-3"
+              onClick={() => {
+                setAllSelected(false);
+              }}
+              type="button"
+              variant="outline"
+            >
+              すべて解除
+            </Button>
+          </div>
+          {groups.map((group) => (
+            <fieldset className="grid gap-3" key={group.type}>
+              {/* legend が fieldset のアクセシブルネームになる。見出しとしても辿れるよう h3 を包む。 */}
+              <legend className="float-left w-full">
+                <h3 className="text-sm font-semibold text-foreground">
+                  {studyCardTypeLabels[group.type]}
+                </h3>
+              </legend>
+              {group.indexes.map((index) => {
+                const draft = drafts[index];
+
+                return (
+                  <div
+                    className="grid gap-2 rounded-md border bg-card p-3"
+                    key={`${draft.candidate.ruleId}:${String(index)}`}
+                  >
+                    <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+                      <input
+                        checked={draft.selected}
+                        className="size-4 accent-primary"
+                        onChange={(event) => {
+                          updateDraft(index, { selected: event.target.checked });
+                        }}
+                        type="checkbox"
+                      />
+                      保存する
+                    </label>
+                    <label className="grid gap-1 text-sm font-medium text-foreground">
+                      問題文
+                      <Textarea
+                        onChange={(event) => {
+                          updateDraft(index, { question: event.target.value });
+                        }}
+                        value={draft.question}
+                      />
+                    </label>
+                    <label className="grid gap-1 text-sm font-medium text-foreground">
+                      答え
+                      <Textarea
+                        onChange={(event) => {
+                          updateDraft(index, { answer: event.target.value });
+                        }}
+                        value={draft.answer}
+                      />
+                    </label>
+                    {draft.candidate.choices === undefined ? null : (
+                      <div className="grid gap-1 text-sm">
+                        <span className="font-medium text-foreground">選択肢</span>
+                        <ul className="list-disc pl-5 text-muted-foreground">
+                          {draft.candidate.choices.map((choice) => (
+                            <li key={choice}>{choice}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </fieldset>
+          ))}
+        </div>
+      )}
+      {error === undefined ? null : (
+        <p
+          className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-6 text-destructive"
+          id={`${formId}-error`}
+          role="alert"
+        >
+          {error}
+        </p>
+      )}
+      <DialogFooter>
+        <Button
+          onClick={() => {
+            onOpenChange(false);
+          }}
+          type="button"
+          variant="outline"
+        >
+          キャンセル
+        </Button>
+        {drafts.length === 0 ? null : (
+          <Button
+            aria-describedby={error === undefined ? undefined : `${formId}-error`}
+            disabled={isSaving || selectedCount === 0}
+            onClick={() => {
+              void handleSave();
+            }}
+            type="button"
+          >
+            選択した {selectedCount} 件を保存
+          </Button>
+        )}
+      </DialogFooter>
+    </DialogContent>
   );
 };
