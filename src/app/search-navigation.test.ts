@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { navigateToCandidate, toNavigationTarget } from "./search-navigation";
+import {
+  navigateToCandidate,
+  navigateToReviewCandidate,
+  toNavigationTarget,
+} from "./search-navigation";
 
 describe("toNavigationTarget", () => {
   it("条番号があれば条文ルートへ写像する", () => {
@@ -26,5 +30,25 @@ describe("toNavigationTarget", () => {
       params: { lawId: "129AC0000000089", article: "709" },
       replace: true,
     });
+  });
+});
+
+describe("navigateToReviewCandidate", () => {
+  it("条番号があれば study=new 付きで記事ルートへ navigate する", () => {
+    const navigate = vi.fn();
+    navigateToReviewCandidate(navigate, { lawId: "129AC0000000089", article: "709" });
+
+    expect(navigate).toHaveBeenCalledWith({
+      to: "/laws/$lawId/articles/$article",
+      params: { lawId: "129AC0000000089", article: "709" },
+      search: { study: "new" },
+    });
+  });
+
+  it("条番号がなければ navigate しない", () => {
+    const navigate = vi.fn();
+    navigateToReviewCandidate(navigate, { lawId: "129AC0000000089" });
+
+    expect(navigate).not.toHaveBeenCalled();
   });
 });
