@@ -285,4 +285,14 @@ describe("ScannerPage 条文参照候補", () => {
     expect(await screen.findByText(/セッションを保存できませんでした/)).toBeInTheDocument();
     expect(screen.getByText("民法 第709条")).toBeInTheDocument();
   });
+
+  it("storageRepository を注入しなくても候補を表示してクラッシュしない（既定リポジトリ経路）", () => {
+    // 本番ルーターは storageRepository を渡さないため、既定リポジトリへのフォールバックが
+    // 機能することを確認する。保存の成否は IndexedDB 未実装の jsdom では検証できないため、
+    // クラッシュなしに候補が表示されることのみ確認する。
+    render(<ScannerPage ocr={makeDoneOcr("民法709条")} />);
+    enterPreviewWithFile();
+
+    expect(screen.getByText("民法 第709条")).toBeInTheDocument();
+  });
 });
