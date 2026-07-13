@@ -251,6 +251,17 @@ export const StudyCardDetailPage = ({
             value={answer}
           />
         </label>
+        {card.choices === undefined || card.choices.length === 0 ? null : (
+          <div className="grid gap-1 text-sm">
+            <span className="font-medium text-foreground">選択肢</span>
+            {/* 自動生成カードの選択肢。編集は対象外（確定済み設計 6.3）のため読み取り専用で表示する。 */}
+            <ul className="list-disc pl-5 leading-6 text-muted-foreground">
+              {card.choices.map((choice) => (
+                <li key={choice}>{choice}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         <label className="grid gap-1 text-sm font-medium text-foreground">
           解説（任意）
           <Textarea
