@@ -1,4 +1,4 @@
-import { createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
+import { createRootRoute, createRoute, createRouter, useNavigate } from "@tanstack/react-router";
 import type { RouterHistory } from "@tanstack/react-router";
 
 import type { LawRepository } from "@/core/egov";
@@ -15,6 +15,7 @@ import {
   SettingsPage,
   StudyPage,
 } from "./pages";
+import { navigateToCandidate, navigateToReviewCandidate } from "./search-navigation";
 import { SavedCollectionPage, SavedPage } from "./saved-page";
 import { StudyCardDetailPage } from "./study-card-detail-page";
 import { StudyCardsPage } from "./study-cards-page";
@@ -86,10 +87,27 @@ const createRouteTree = ({
     component: SavedCollectionRoute,
   });
 
+  // ScannerPage を route 非依存に保つため、遷移写像と repository を closure で注入する。
+  const ScannerRoute = () => {
+    const navigate = useNavigate();
+
+    return (
+      <ScannerPage
+        storageRepository={storageRepository}
+        onOpenCandidate={(candidate) => {
+          navigateToCandidate(navigate, candidate);
+        }}
+        onAddToReview={(candidate) => {
+          navigateToReviewCandidate(navigate, candidate);
+        }}
+      />
+    );
+  };
+
   const scannerRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "scanner",
-    component: ScannerPage,
+    component: ScannerRoute,
   });
 
   // StudyPage に storageRepository を DI するため closure で包む。

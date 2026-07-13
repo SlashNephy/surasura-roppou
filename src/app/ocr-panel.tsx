@@ -93,27 +93,19 @@ export const OcrPanel = ({ blob, ocr, onDiscard }: OcrPanelProps) => {
 
   if (phase === "done" && result !== undefined) {
     return (
-      <div className="grid gap-3">
-        {/* whitespace-pre-wrap + break-words で長文が max-w-md 内に収まる */}
-        <pre className="max-h-48 overflow-y-auto rounded-md border bg-muted p-3 text-left text-sm whitespace-pre-wrap break-words">
-          {/* 空白のみの text は認識できなかったと見なしてプレースホルダーを表示する。
-              空の <pre> だとユーザーに何が起きたか伝わらないため。 */}
-          {result.text.trim() !== "" ? result.text : "テキストが検出されませんでした。"}
-        </pre>
-        {/* 「選び直す」は ScannerPage が常時表示するプレビュー外ボタンで担うため、
-            ここに同じラベルを置くと二重になる。再認識専用ボタンのみ残す。 */}
-        <Button
-          className="w-full"
-          onClick={() => {
-            ocr.reset();
-            void ocr.requestRecognize(blob);
-          }}
-          type="button"
-          variant="outline"
-        >
-          もう一度読み取る
-        </Button>
-      </div>
+      // 認識テキストと候補一覧の表示は ScannerPage 側の OcrReferenceResults が担う。
+      // ここでは再認識の操作だけを残す。
+      <Button
+        className="w-full"
+        onClick={() => {
+          ocr.reset();
+          void ocr.requestRecognize(blob);
+        }}
+        type="button"
+        variant="outline"
+      >
+        もう一度読み取る
+      </Button>
     );
   }
 

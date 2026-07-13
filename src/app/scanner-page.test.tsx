@@ -1,5 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { OcrResult } from "@/core/ocr";
+import type { LawReferenceCandidate } from "@/core/domain";
 
 import { CameraError, isCameraSupported } from "@/core/ocr";
 import type { CameraStreamProvider } from "@/core/ocr";
@@ -175,14 +179,15 @@ const enterPreviewWithFile = () => {
 
 describe("ScannerPage OCR 配線", () => {
   it("注入した ocr スタブの phase が OcrPanel に反映される", () => {
-    // done フェーズのスタブを注入し、認識テキストがプレビュー画面に出ることを確認する。
-    // これにより ocr prop が useOcr() デフォルトより優先されていることを保証する。
+    // done フェーズのスタブを注入し、再認識ボタンがプレビュー画面に出ることを確認する。
+    // 生テキスト表示は OcrReferenceResults へ移ったため、OcrPanel の done 反映は
+    // 「もう一度読み取る」ボタンの存在で確認する。
     const result = { text: "第一条 テスト", confidence: 90, words: [] };
     render(<ScannerPage ocr={makeOcrStub({ phase: "done", result })} />);
 
     enterPreviewWithFile();
 
-    expect(screen.getByText(/第一条 テスト/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "もう一度読み取る" })).toBeInTheDocument();
   });
 
   it("選び直すボタンで ocr.reset() が呼ばれる", () => {
@@ -194,5 +199,57 @@ describe("ScannerPage OCR 配線", () => {
     fireEvent.click(screen.getByRole("button", { name: "選び直す" }));
 
     expect(resetSpy).toHaveBeenCalledOnce();
+  });
+});
+
+// done フェーズの決定的な OCR スタブ。空アロー本体は no-empty-function で落ちるため
+// 既存 makeOcrStub と同じく Promise.resolve() / コメント本体で埋める。
+const makeDoneOcr = (text: string, confidence = 90): UseOcr => {
+  const result: OcrResult = { text, confidence, words: [] };
+
+  return {
+    phase: "done",
+    progress: 1,
+    result,
+    requestRecognize: () => Promise.resolve(),
+    grantConsentAndRecognize: () => Promise.resolve(),
+    cancel: () => {
+      // mock implementation
+    },
+    reset: () => {
+      // mock implementation
+    },
+  };
+};
+
+// プレビュー状態にするため画像を1枚選ばせるヘルパー。
+const selectImage = () => {
+  const input = screen.getByLabelText("画像を選ぶ", { selector: "input" });
+  const file = new File([new Uint8Array([1, 2, 3])], "shot.png", { type: "image/png" });
+  fireEvent.change(input, { target: { files: [file] } });
+};
+
+describe("ScannerPage 条文参照候補", () => {
+  it("OCR done で検出した候補を表示する", () => {
+    render(<ScannerPage ocr={makeDoneOcr("民法709条を参照")} />);
+    selectImage();
+    expect(screen.getByText("民法 第709条")).toBeInTheDocument();
+  });
+
+  it("開くで onOpenCandidate を候補付きで呼ぶ", async () => {
+    const onOpenCandidate = vi.fn<(candidate: LawReferenceCandidate) => void>();
+    render(<ScannerPage ocr={makeDoneOcr("民法709条")} onOpenCandidate={onOpenCandidate} />);
+    selectImage();
+
+    await userEvent.click(screen.getByRole("button", { name: "民法 第709条を開く" }));
+    expect(onOpenCandidate).toHaveBeenCalledWith(
+      expect.objectContaining({ lawId: "129AC0000000089", article: "709" }),
+    );
+  });
+
+  it("検出0件では案内を表示する", () => {
+    render(<ScannerPage ocr={makeDoneOcr("これはただの文章です")} />);
+    selectImage();
+    expect(screen.getByText(/条文参照が見つかりませんでした/)).toBeInTheDocument();
   });
 });

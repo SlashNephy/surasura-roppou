@@ -1,4 +1,4 @@
-import { type ChangeEvent, useEffect, useId, useRef, useState } from "react";
+import { type ChangeEvent, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Camera, ImageUp, RotateCcw, X } from "lucide-react";
 
 import {
@@ -8,10 +8,14 @@ import {
   releaseCapturedImage,
 } from "@/core/ocr";
 import type { CameraErrorKind, CameraStreamProvider, CapturedImage } from "@/core/ocr";
+import { detectLawReferences } from "@/core/jump";
+import type { LawReferenceCandidate } from "@/core/domain";
+import type { StorageRepository } from "@/core/storage";
 import { Button } from "@/shared/ui/button";
 
 import { useCamera } from "./use-camera";
 import { OcrPanel } from "./ocr-panel";
+import { OcrReferenceResults } from "./OcrReferenceResults";
 import { useOcr } from "./use-ocr";
 import type { UseOcr } from "./use-ocr";
 
@@ -24,6 +28,12 @@ const PrivacyNote = () => (
     画像は端末内で処理され、保存・送信されません
   </p>
 );
+
+// router から遷移写像が注入されない場合（テスト・スタンドアロン埋め込み）の no-op ハンドラ。
+// TypeScript の関数パラメータ双対性により LawReferenceCandidate => void に代入可能。
+const noopCandidateHandler: (candidate: LawReferenceCandidate) => void = () => {
+  // 呼び出し元が遷移を必要としない文脈（テスト・スタンドアロン）のフォールバック。
+};
 
 // 権限エラーの種類ごとの説明文。fallback で必ず画像選択に逃がす。
 const cameraErrorMessage = (kind: CameraErrorKind): string => {
@@ -39,17 +49,35 @@ const cameraErrorMessage = (kind: CameraErrorKind): string => {
   }
 };
 
-export const ScannerPage = ({
-  cameraStreamProvider = defaultCameraStreamProvider,
-  ocr: ocrProp,
-}: {
+interface ScannerPageProps {
   cameraStreamProvider?: CameraStreamProvider;
   // テストから決定的な OCR スタブを注入できるようにする。省略時は useOcr() を使う。
   ocr?: UseOcr;
-}) => {
+  // OCR セッション保存に使う。router から注入。省略時は保存しない（Task 5 で実装）。
+  storageRepository?: StorageRepository;
+  // 候補の遷移写像。core を route 非依存に保つため app/router から注入する。
+  onOpenCandidate?: (candidate: LawReferenceCandidate) => void;
+  onAddToReview?: (candidate: LawReferenceCandidate) => void;
+}
+
+export const ScannerPage = ({
+  cameraStreamProvider = defaultCameraStreamProvider,
+  ocr: ocrProp,
+  onOpenCandidate,
+  onAddToReview,
+}: ScannerPageProps) => {
   // Hook は無条件で呼ぶ必要があるため、prop が渡されても useOcr() 自体は常に呼ぶ。
   const ocrDefault = useOcr();
   const ocr = ocrProp ?? ocrDefault;
+
+  // OCR 完了テキストから条文参照候補を抽出する。result の同一性で再計算する。
+  const detectedReferences = useMemo(
+    () =>
+      ocr.result === undefined
+        ? []
+        : detectLawReferences(ocr.result.text, { ocrConfidence: ocr.result.confidence }),
+    [ocr.result],
+  );
 
   const [image, setImage] = useState<CapturedImage | undefined>();
   // react-hooks/refs が camera オブジェクト全体をレンダー時 ref アクセスとして誤検知するため
@@ -153,6 +181,14 @@ export const ScannerPage = ({
           src={image.objectUrl}
         />
         <OcrPanel blob={image.blob} ocr={ocr} onDiscard={handleDiscard} />
+        {ocr.phase === "done" && ocr.result !== undefined ? (
+          <OcrReferenceResults
+            references={detectedReferences}
+            sourceText={ocr.result.text}
+            onOpenCandidate={onOpenCandidate ?? noopCandidateHandler}
+            onAddToReview={onAddToReview ?? noopCandidateHandler}
+          />
+        ) : null}
         <Button className="w-full" onClick={handleDiscard} type="button" variant="outline">
           <RotateCcw className="size-4" aria-hidden="true" />
           {image.source === "camera" ? "撮り直す" : "選び直す"}
