@@ -470,12 +470,18 @@ const LawViewerReadyState = ({
 
   // OCR 候補の「復習に追加」由来。study=new かつ対象条ノードが確定したら、
   // 一度だけカード作成ダイアログを自動起動し、リロード時の再起動を防ぐため param を消す。
+  // study=new でなければガードを解除し、同一法令内の別条への再遷移でも
+  // 自動起動できるようにする（param 消去後・別条遷移後に false へ戻る）。
   const articleSearch = useSearch({ from: "/laws/$lawId/articles/$article", shouldThrow: false });
   const cardAutoOpenedRef = useRef(false);
 
   useEffect(() => {
+    if (articleSearch?.study !== "new") {
+      cardAutoOpenedRef.current = false;
+      return;
+    }
+
     if (
-      articleSearch?.study !== "new" ||
       activeNode === undefined ||
       activeArticleNumber === undefined ||
       cardAutoOpenedRef.current
