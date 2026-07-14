@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 
 import type { QuickSearch, QuickSearchCandidate, QuickSearchOutcome } from "@/core/jump";
+import { findSubject, gyoseishoshiSubjects, isLawInSubject } from "@/core/study";
+import type { SubjectId } from "@/core/study";
+import { Select } from "@/shared/ui/select";
 import { Skeleton } from "@/shared/ui/skeleton";
 
 import { defaultQuickSearch } from "./quick-search";
@@ -85,6 +88,16 @@ export const SearchPage = ({ quickSearch = defaultQuickSearch }: { quickSearch?:
     navigateToCandidate(navigate, outcome.candidates[0], { replace: true });
   }, [outcome, navigate]);
 
+  // 科目フィルタは表示中の候補リストにのみ作用する一時的な状態。URL には載せない。
+  const [subjectFilter, setSubjectFilter] = useState<SubjectId | "all">("all");
+
+  const visibleCandidates =
+    outcome.status === "candidates"
+      ? outcome.candidates.filter(
+          (candidate) => subjectFilter === "all" || isLawInSubject(subjectFilter, candidate.lawId),
+        )
+      : [];
+
   const trimmedQ = q.trim();
   // settledQuery が現在の q に追いつくまでは検索中（通信待ち）とみなす。
   const isSearching = trimmedQ !== "" && settledQuery !== q;
@@ -126,8 +139,31 @@ export const SearchPage = ({ quickSearch = defaultQuickSearch }: { quickSearch?:
       trimmedQ !== "" &&
       outcome.status === "candidates" &&
       outcome.candidates.length > 0 ? (
+        <label className="grid w-full max-w-60 gap-1 text-sm font-medium text-foreground">
+          科目で絞り込む
+          <Select
+            onChange={(event) => {
+              // findSubject で検証し、不明値は「すべての科目」に倒す。
+              setSubjectFilter(findSubject(event.target.value)?.id ?? "all");
+            }}
+            value={subjectFilter}
+          >
+            <option value="all">すべての科目</option>
+            {gyoseishoshiSubjects.map((subject) => (
+              <option key={subject.id} value={subject.id}>
+                {subject.label}
+              </option>
+            ))}
+          </Select>
+        </label>
+      ) : null}
+
+      {!isSearching &&
+      trimmedQ !== "" &&
+      outcome.status === "candidates" &&
+      visibleCandidates.length > 0 ? (
         <ul className="grid gap-3">
-          {outcome.candidates.map((candidate) => (
+          {visibleCandidates.map((candidate) => (
             <li key={`${candidate.kind}:${candidate.lawId}:${candidate.article ?? ""}`}>
               <CandidateLink candidate={candidate} />
             </li>
@@ -140,6 +176,14 @@ export const SearchPage = ({ quickSearch = defaultQuickSearch }: { quickSearch?:
       outcome.status === "candidates" &&
       outcome.candidates.length === 0 ? (
         <p className="text-sm text-muted-foreground">該当する候補がありません。</p>
+      ) : null}
+
+      {!isSearching &&
+      trimmedQ !== "" &&
+      outcome.status === "candidates" &&
+      outcome.candidates.length > 0 &&
+      visibleCandidates.length === 0 ? (
+        <p className="text-sm text-muted-foreground">この科目に該当する候補がありません。</p>
       ) : null}
     </section>
   );
