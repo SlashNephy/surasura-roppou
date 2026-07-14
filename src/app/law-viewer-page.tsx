@@ -1,5 +1,13 @@
-import { type SyntheticEvent, useCallback, useEffect, useId, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "@tanstack/react-router";
+import {
+  type SyntheticEvent,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { Clipboard, Download, LinkIcon, ListTree, Trash2 } from "lucide-react";
 
 import type { LawNode, LawRevision } from "@/core/domain";
@@ -461,6 +469,37 @@ const LawViewerReadyState = ({
     activeArticleNumber !== undefined
       ? findArticleNode(state.nodes, activeArticleNumber)
       : undefined;
+
+  // OCR 候補の「復習に追加」由来。study=new かつ対象条ノードが確定したら、
+  // 一度だけカード作成ダイアログを自動起動し、リロード時の再起動を防ぐため param を消す。
+  // study=new でなければガードを解除し、同一法令内の別条への再遷移でも
+  // 自動起動できるようにする（param 消去後・別条遷移後に false へ戻る）。
+  const articleSearch = useSearch({ from: "/laws/$lawId/articles/$article", shouldThrow: false });
+  const cardAutoOpenedRef = useRef(false);
+
+  useEffect(() => {
+    if (articleSearch?.study !== "new") {
+      cardAutoOpenedRef.current = false;
+      return;
+    }
+
+    if (
+      activeNode === undefined ||
+      activeArticleNumber === undefined ||
+      cardAutoOpenedRef.current
+    ) {
+      return;
+    }
+
+    cardAutoOpenedRef.current = true;
+    setIsCardDialogOpen(true);
+    void navigate({
+      to: "/laws/$lawId/articles/$article",
+      params: { lawId, article: activeArticleNumber },
+      search: {},
+      replace: true,
+    });
+  }, [articleSearch?.study, activeNode, activeArticleNumber, lawId, navigate]);
 
   const notFoundAlert = (
     <p

@@ -860,6 +860,55 @@ describe("LawViewerPageContent", () => {
 
     expect(await screen.findByRole("heading", { name: "クイズカードを生成" })).toBeInTheDocument();
   });
+
+  it("記事ルートに study=new で入ると学習カードダイアログを自動起動する", async () => {
+    const history = createMemoryHistory({
+      initialEntries: ["/laws/129AC0000000089/articles/1?study=new"],
+    });
+    const { fetcher } = createJsonFetchStub(lawDataFixture);
+    const lawRepository = createEgovLawRepository({ fetcher, now });
+    const storageRepository = createMemoryStorageRepository().repository;
+
+    render(
+      <RouterProvider router={createAppRouter({ history, lawRepository, storageRepository })} />,
+    );
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "学習カードを作る" })).toBeInTheDocument();
+  });
+
+  it("同一法令内の別条へ study=new で再遷移すると再度ダイアログを自動起動する", async () => {
+    const history = createMemoryHistory({
+      initialEntries: ["/laws/129AC0000000089/articles/1?study=new"],
+    });
+    const { fetcher } = createJsonFetchStub(lawDataFixture);
+    const lawRepository = createEgovLawRepository({ fetcher, now });
+    const storageRepository = createMemoryStorageRepository().repository;
+    const router = createAppRouter({ history, lawRepository, storageRepository });
+
+    render(<RouterProvider router={router} />);
+
+    // 1条目: 自動起動を確認 → キャンセルで閉じる
+    expect(await screen.findByRole("heading", { name: "学習カードを作る" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "キャンセル" }));
+
+    // ダイアログが閉じたことを確認（同一法令内で remount なし）
+    await waitFor(() => {
+      expect(screen.queryByRole("heading", { name: "学習カードを作る" })).not.toBeInTheDocument();
+    });
+
+    // 2条目へ study=new で遷移（同一法令、LawViewerReadyState の remount なし）
+    await act(async () => {
+      await router.navigate({
+        to: "/laws/$lawId/articles/$article",
+        params: { lawId: "129AC0000000089", article: "2" },
+        search: { study: "new" },
+      });
+    });
+
+    // cardAutoOpenedRef がリセットされているため、再度ダイアログが自動起動する
+    expect(await screen.findByRole("heading", { name: "学習カードを作る" })).toBeInTheDocument();
+  });
 });
 
 const withClipboard = async (
