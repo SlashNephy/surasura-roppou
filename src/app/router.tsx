@@ -136,7 +136,8 @@ const createRouteTree = ({
   // StudyReviewPage に storageRepository と lawRepository を DI するため closure で包む。
   // mode が変わったら key で作り直し、進行中のセッション状態を初期化する。
   const StudyReviewRoute = () => {
-    const { mode } = useSearch({ from: "/study/review" });
+    // mode 未指定時は "due"(期限カード復習)を既定とする。
+    const { mode = "due" } = useSearch({ from: "/study/review" });
 
     return (
       <StudyReviewPage
@@ -152,10 +153,10 @@ const createRouteTree = ({
     getParentRoute: () => rootRoute,
     path: "study/review",
     component: StudyReviewRoute,
-    validateSearch: (search: Record<string, unknown>): { mode: ReviewMode } => ({
-      // 不正な mode は "due" に丸める(スペック 10 章)。
-      mode: search.mode === "new" ? "new" : "due",
-    }),
+    // 既定の due は URL に出さず、new のときだけ key を含める(lawViewerArticleRoute の study と同じ形)。
+    // 不正な mode は既定(due)に丸める(スペック 10 章)。
+    validateSearch: (search: Record<string, unknown>): { mode?: ReviewMode } =>
+      search.mode === "new" ? { mode: "new" } : {},
   });
 
   // StudyCardsPage に storageRepository を DI するため closure で包む。

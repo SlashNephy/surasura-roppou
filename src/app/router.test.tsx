@@ -164,4 +164,66 @@ describe("app router", () => {
       "/study/cards",
     );
   });
+
+  it("shows due and unscheduled counts with review links on the study page", async () => {
+    const history = createMemoryHistory({ initialEntries: ["/study"] });
+    const baseCard = {
+      id: "card-due",
+      source: "manual" as const,
+      target: { lawId: "129AC0000000089", revisionId: "rev-1", article: "1" },
+      type: "fill_blank" as const,
+      question: "Q",
+      answer: "A",
+      tags: [] as string[],
+      examPinned: false,
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-01T00:00:00.000Z",
+    };
+    const storage = createMemoryStorageRepository({
+      studyCards: [baseCard, { ...baseCard, id: "card-fresh" }],
+      cardSchedules: [
+        {
+          cardId: "card-due",
+          // 過去日時なので出題対象。
+          dueAt: "2026-07-01T00:00:00.000Z",
+          intervalDays: 1,
+          lapses: 0,
+          reviews: 1,
+          recentMistakeRate: 0,
+          derivedFrom: "log-1",
+        },
+      ],
+    });
+
+    render(
+      <RouterProvider
+        router={createAppRouter({ history, storageRepository: storage.repository })}
+      />,
+    );
+
+    expect(await screen.findByText("1 件のカードが復習期限です")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "復習を始める" })).toHaveAttribute(
+      "href",
+      "/study/review",
+    );
+    expect(screen.getByText("1 件の未学習カード")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "新しく覚える" })).toHaveAttribute(
+      "href",
+      "/study/review?mode=new",
+    );
+  });
+
+  it("shows the no-review message when nothing is due on the study page", async () => {
+    const history = createMemoryHistory({ initialEntries: ["/study"] });
+    const storage = createMemoryStorageRepository();
+
+    render(
+      <RouterProvider
+        router={createAppRouter({ history, storageRepository: storage.repository })}
+      />,
+    );
+
+    expect(await screen.findByText("今日の復習はありません")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "復習を始める" })).not.toBeInTheDocument();
+  });
 });
