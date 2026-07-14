@@ -7,6 +7,8 @@ export const definitionRuleId = "definition@1";
 
 // 法令の定義規定の定型「「X」とは、Y をいう」。
 // かぎ括弧なしの形式は主語の切り出しを誤りやすいため対象外とする（spec 3.2）。
+// g フラグ付きのモジュールシングルトンだが、lastIndex に依存しない String#matchAll 経由で
+// のみ使うこと（exec/test を使うと走査位置が呼び出し間で持ち越される）。
 const definitionPattern = /「([^「」]+)」とは、(.+?)をいう/g;
 
 export const generateDefinitionCandidates = (
