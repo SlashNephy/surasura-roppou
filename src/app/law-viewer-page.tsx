@@ -1,5 +1,13 @@
-import { type SyntheticEvent, useCallback, useEffect, useId, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "@tanstack/react-router";
+import {
+  type SyntheticEvent,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { Clipboard, Download, LinkIcon, ListTree, Trash2 } from "lucide-react";
 
 import type { LawNode, LawRevision } from "@/core/domain";
@@ -25,6 +33,7 @@ import { Skeleton } from "@/shared/ui/skeleton";
 import { formatIsoDateLabel } from "@/shared/utils/dates";
 
 import { AnchorCompareDialog } from "./AnchorCompareDialog";
+import { QuizGenerateDialog } from "./QuizGenerateDialog";
 import { StudyCardCreateDialog } from "./StudyCardCreateDialog";
 import { AnchorDriftBadge } from "./AnchorDriftBadge";
 import { loadLawViewerDocument } from "./law-viewer-loader";
@@ -186,6 +195,7 @@ const LawViewerReadyState = ({
   const [hasJumpError, setHasJumpError] = useState(false);
   const [isCompareOpen, setIsCompareOpen] = useState(false);
   const [isCardDialogOpen, setIsCardDialogOpen] = useState(false);
+  const [isQuizDialogOpen, setIsQuizDialogOpen] = useState(false);
   // 修復（付け替え・固定）後に加算し、アンカー検証を同一セッション内で再実行させるトークン。
   // putBookmark はフックの deps を変化させないため、このトークンで再読込を明示的に促す。
   const [anchorRefreshToken, setAnchorRefreshToken] = useState(0);
@@ -460,6 +470,37 @@ const LawViewerReadyState = ({
       ? findArticleNode(state.nodes, activeArticleNumber)
       : undefined;
 
+  // OCR 候補の「復習に追加」由来。study=new かつ対象条ノードが確定したら、
+  // 一度だけカード作成ダイアログを自動起動し、リロード時の再起動を防ぐため param を消す。
+  // study=new でなければガードを解除し、同一法令内の別条への再遷移でも
+  // 自動起動できるようにする（param 消去後・別条遷移後に false へ戻る）。
+  const articleSearch = useSearch({ from: "/laws/$lawId/articles/$article", shouldThrow: false });
+  const cardAutoOpenedRef = useRef(false);
+
+  useEffect(() => {
+    if (articleSearch?.study !== "new") {
+      cardAutoOpenedRef.current = false;
+      return;
+    }
+
+    if (
+      activeNode === undefined ||
+      activeArticleNumber === undefined ||
+      cardAutoOpenedRef.current
+    ) {
+      return;
+    }
+
+    cardAutoOpenedRef.current = true;
+    setIsCardDialogOpen(true);
+    void navigate({
+      to: "/laws/$lawId/articles/$article",
+      params: { lawId, article: activeArticleNumber },
+      search: {},
+      replace: true,
+    });
+  }, [articleSearch?.study, activeNode, activeArticleNumber, lawId, navigate]);
+
   const notFoundAlert = (
     <p
       id={articleJumpErrorId}
@@ -614,16 +655,28 @@ const LawViewerReadyState = ({
                   {/* activeNode が undefined（条番号は分かるがノードが見つからない）ときは
                       ダイアログを開けないためボタンを非表示にする */}
                   {activeNode !== undefined ? (
-                    <Button
-                      className="w-fit"
-                      onClick={() => {
-                        setIsCardDialogOpen(true);
-                      }}
-                      type="button"
-                      variant="ghost"
-                    >
-                      カードを作る
-                    </Button>
+                    <>
+                      <Button
+                        className="w-fit"
+                        onClick={() => {
+                          setIsCardDialogOpen(true);
+                        }}
+                        type="button"
+                        variant="ghost"
+                      >
+                        カードを作る
+                      </Button>
+                      <Button
+                        className="w-fit"
+                        onClick={() => {
+                          setIsQuizDialogOpen(true);
+                        }}
+                        type="button"
+                        variant="ghost"
+                      >
+                        クイズを生成
+                      </Button>
+                    </>
                   ) : null}
                   {verification !== undefined &&
                   (verification.status !== "match" ||
@@ -776,6 +829,19 @@ const LawViewerReadyState = ({
           node={activeNode}
           onOpenChange={setIsCardDialogOpen}
           open={isCardDialogOpen}
+          revisionId={state.revision.revisionId}
+          storageRepository={storageRepository}
+        />
+      ) : null}
+      {activeNode !== undefined && activeArticleNumber !== undefined ? (
+        <QuizGenerateDialog
+          articleNumber={activeArticleNumber}
+          lawId={lawId}
+          lawTitle={state.law.title}
+          node={activeNode}
+          nodes={state.nodes}
+          onOpenChange={setIsQuizDialogOpen}
+          open={isQuizDialogOpen}
           revisionId={state.revision.revisionId}
           storageRepository={storageRepository}
         />

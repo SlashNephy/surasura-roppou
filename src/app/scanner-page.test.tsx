@@ -1,5 +1,10 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { OcrResult } from "@/core/ocr";
+import type { LawReferenceCandidate, OcrSession } from "@/core/domain";
+import type { StorageRepository } from "@/core/storage";
 
 import { CameraError, isCameraSupported } from "@/core/ocr";
 import type { CameraStreamProvider } from "@/core/ocr";
@@ -173,16 +178,37 @@ const enterPreviewWithFile = () => {
   fireEvent.change(input, { target: { files: [file] } });
 };
 
+// done フェーズの決定的な OCR スタブ。空アロー本体は no-empty-function で落ちるため
+// 既存 makeOcrStub と同じく Promise.resolve() / コメント本体で埋める。
+const makeDoneOcr = (text: string, confidence = 90): UseOcr => {
+  const result: OcrResult = { text, confidence, words: [] };
+
+  return {
+    phase: "done",
+    progress: 1,
+    result,
+    requestRecognize: () => Promise.resolve(),
+    grantConsentAndRecognize: () => Promise.resolve(),
+    cancel: () => {
+      // mock implementation
+    },
+    reset: () => {
+      // mock implementation
+    },
+  };
+};
+
 describe("ScannerPage OCR 配線", () => {
   it("注入した ocr スタブの phase が OcrPanel に反映される", () => {
-    // done フェーズのスタブを注入し、認識テキストがプレビュー画面に出ることを確認する。
-    // これにより ocr prop が useOcr() デフォルトより優先されていることを保証する。
+    // done フェーズのスタブを注入し、再認識ボタンがプレビュー画面に出ることを確認する。
+    // 生テキスト表示は OcrReferenceResults へ移ったため、OcrPanel の done 反映は
+    // 「もう一度読み取る」ボタンの存在で確認する。
     const result = { text: "第一条 テスト", confidence: 90, words: [] };
     render(<ScannerPage ocr={makeOcrStub({ phase: "done", result })} />);
 
     enterPreviewWithFile();
 
-    expect(screen.getByText(/第一条 テスト/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "もう一度読み取る" })).toBeInTheDocument();
   });
 
   it("選び直すボタンで ocr.reset() が呼ばれる", () => {
@@ -194,5 +220,126 @@ describe("ScannerPage OCR 配線", () => {
     fireEvent.click(screen.getByRole("button", { name: "選び直す" }));
 
     expect(resetSpy).toHaveBeenCalledOnce();
+  });
+});
+
+describe("ScannerPage 条文参照候補", () => {
+  it("OCR done で検出した候補を表示する", () => {
+    render(<ScannerPage ocr={makeDoneOcr("民法709条を参照")} />);
+    enterPreviewWithFile();
+    expect(screen.getByText("民法 第709条")).toBeInTheDocument();
+  });
+
+  it("開くで onOpenCandidate を候補付きで呼ぶ", async () => {
+    const onOpenCandidate = vi.fn<(candidate: LawReferenceCandidate) => void>();
+    render(<ScannerPage ocr={makeDoneOcr("民法709条")} onOpenCandidate={onOpenCandidate} />);
+    enterPreviewWithFile();
+
+    await userEvent.click(screen.getByRole("button", { name: "民法 第709条を開く" }));
+    expect(onOpenCandidate).toHaveBeenCalledWith(
+      expect.objectContaining({ lawId: "129AC0000000089", article: "709" }),
+    );
+  });
+
+  it("復習に追加で onAddToReview を候補付きで呼ぶ", async () => {
+    const onAddToReview = vi.fn<(candidate: LawReferenceCandidate) => void>();
+    render(<ScannerPage ocr={makeDoneOcr("民法709条")} onAddToReview={onAddToReview} />);
+    enterPreviewWithFile();
+
+    await userEvent.click(screen.getByRole("button", { name: "民法 第709条を復習に追加" }));
+    expect(onAddToReview).toHaveBeenCalledWith(
+      expect.objectContaining({ lawId: "129AC0000000089", article: "709" }),
+    );
+  });
+
+  it("検出0件では案内を表示する", () => {
+    render(<ScannerPage ocr={makeDoneOcr("これはただの文章です")} />);
+    enterPreviewWithFile();
+    expect(screen.getByText(/条文参照が見つかりませんでした/)).toBeInTheDocument();
+  });
+
+  it("OCR done でセッションを保存する", async () => {
+    const putOcrSession = vi.fn<(session: OcrSession) => Promise<void>>(() => Promise.resolve());
+    const storageRepository = {
+      putOcrSession,
+    } as unknown as StorageRepository;
+    render(<ScannerPage ocr={makeDoneOcr("民法709条")} storageRepository={storageRepository} />);
+    enterPreviewWithFile();
+
+    await waitFor(() => {
+      expect(putOcrSession).toHaveBeenCalledTimes(1);
+    });
+    const session = putOcrSession.mock.calls[0][0];
+    expect(session.sourceText).toBe("民法709条");
+    expect(session.detectedReferences).toHaveLength(1);
+  });
+
+  it("セッション保存に失敗しても候補表示を続け、警告を出す", async () => {
+    const putOcrSession = vi.fn(() => Promise.reject(new Error("quota exceeded")));
+    const storageRepository = {
+      putOcrSession,
+    } as unknown as StorageRepository;
+    render(<ScannerPage ocr={makeDoneOcr("民法709条")} storageRepository={storageRepository} />);
+    enterPreviewWithFile();
+
+    expect(await screen.findByText(/セッションを保存できませんでした/)).toBeInTheDocument();
+    expect(screen.getByText("民法 第709条")).toBeInTheDocument();
+  });
+
+  it("古い result の遅延失敗が新しい保存の警告を誤表示しない（競合ガード）", async () => {
+    // 1 回目の putOcrSession は手動で reject できる Promise を返し、
+    // 2 回目は即座に resolve する。
+    let rejectFirst!: (reason: unknown) => void;
+    const firstPromise = new Promise<void>((_resolve, reject) => {
+      rejectFirst = reject;
+    });
+
+    let callCount = 0;
+    const putOcrSession = vi.fn<(session: OcrSession) => Promise<void>>(() => {
+      callCount += 1;
+      if (callCount === 1) {
+        return firstPromise;
+      }
+      return Promise.resolve();
+    });
+    const storageRepository = { putOcrSession } as unknown as StorageRepository;
+
+    // 1 つ目の OCR result でレンダリングしてプレビューへ遷移し、1 回目の保存を開始する。
+    const ocr1 = makeDoneOcr("民法709条");
+    const { rerender } = render(<ScannerPage ocr={ocr1} storageRepository={storageRepository} />);
+    enterPreviewWithFile();
+
+    // 1 回目の putOcrSession が呼ばれるまで待つ。
+    await waitFor(() => {
+      expect(putOcrSession).toHaveBeenCalledTimes(1);
+    });
+
+    // 2 つ目の OCR result に差し替えて再レンダリングし、2 回目の保存（即 resolve）を起動する。
+    // makeDoneOcr は呼ぶたびに新しい result オブジェクトを生成するため savedResultRef が進む。
+    const ocr2 = makeDoneOcr("憲法21条");
+    rerender(<ScannerPage ocr={ocr2} storageRepository={storageRepository} />);
+
+    // 2 回目の putOcrSession が呼ばれ、正常に完了するまで待つ。
+    await waitFor(() => {
+      expect(putOcrSession).toHaveBeenCalledTimes(2);
+    });
+
+    // 古い（1 回目の）保存を遅れて失敗させる。
+    rejectFirst(new Error("stale failure"));
+
+    // savedResultRef はすでに ocr2.result を指しているため、古い失敗は警告を出さない。
+    await waitFor(() => {
+      expect(screen.queryByText(/セッションを保存できませんでした/)).not.toBeInTheDocument();
+    });
+  });
+
+  it("storageRepository を注入しなくても候補を表示してクラッシュしない（既定リポジトリ経路）", () => {
+    // 本番ルーターは storageRepository を渡さないため、既定リポジトリへのフォールバックが
+    // 機能することを確認する。保存の成否は IndexedDB 未実装の jsdom では検証できないため、
+    // クラッシュなしに候補が表示されることのみ確認する。
+    render(<ScannerPage ocr={makeDoneOcr("民法709条")} />);
+    enterPreviewWithFile();
+
+    expect(screen.getByText("民法 第709条")).toBeInTheDocument();
   });
 });
