@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { Pin } from "lucide-react";
 
 import type { StudyCard } from "@/core/domain";
@@ -29,10 +29,12 @@ export const StudyCardsPage = ({
   storageRepository = defaultStorageRepository,
 }: StudyCardsPageProps = {}) => {
   const { subject } = useSearch({ from: "/study/cards" });
+  const navigate = useNavigate({ from: "/study/cards" });
   const [state, setState] = useState<StudyCardsState>({ status: "loading" });
   const [lawFilter, setLawFilter] = useState("all");
-  // 科目別導線（/study）からの遷移時は URL の subject を初期フィルタにする。
-  const [subjectFilter, setSubjectFilter] = useState<SubjectId | "all">(subject ?? "all");
+  // 科目フィルタは URL の subject を Source of Truth とする。ローカル state と二重管理せず、
+  // リロード・URL 共有・ブラウザの戻る進むでも選択が保持される。
+  const subjectFilter: SubjectId | "all" = subject ?? "all";
 
   useEffect(() => {
     let isCurrent = true;
@@ -101,8 +103,13 @@ export const StudyCardsPage = ({
           科目で絞り込む
           <Select
             onChange={(event) => {
-              // findSubject で検証し、不明値は「すべての科目」に倒す。
-              setSubjectFilter(findSubject(event.target.value)?.id ?? "all");
+              // findSubject で検証し、不明値は「すべての科目」（= パラメータ削除）に倒す。
+              // フィルタ操作で履歴を汚さないよう replace で URL を更新する。
+              const nextSubject = findSubject(event.target.value)?.id;
+              void navigate({
+                search: (previous) => ({ ...previous, subject: nextSubject }),
+                replace: true,
+              });
             }}
             value={subjectFilter}
           >

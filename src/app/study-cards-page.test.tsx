@@ -68,7 +68,7 @@ const renderStudyCardsPage = (studyCards: StudyCard[], initialEntry = "/study/ca
     <RouterProvider router={createAppRouter({ history, storageRepository: storage.repository })} />,
   );
 
-  return storage;
+  return { storage, history };
 };
 
 describe("StudyCardsPage", () => {
@@ -133,7 +133,7 @@ describe("StudyCardsPage", () => {
 
   it("filters cards by subject", async () => {
     const user = userEvent.setup();
-    renderStudyCardsPage([minpoCard, kenpoCard, gyoseiCard]);
+    const { history } = renderStudyCardsPage([minpoCard, kenpoCard, gyoseiCard]);
 
     await screen.findByText("3 件");
     await user.selectOptions(screen.getByLabelText("科目で絞り込む"), "administrative");
@@ -142,6 +142,15 @@ describe("StudyCardsPage", () => {
       expect(screen.getAllByRole("listitem")).toHaveLength(1);
     });
     expect(screen.getByText("審査基準の設定は努力義務である。")).toBeInTheDocument();
+    // フィルタ変更は URL に反映される（リロード・共有で選択が保持される）。
+    expect(history.location.search).toContain("subject=administrative");
+
+    // 「すべての科目」に戻すと URL からも subject が外れる。
+    await user.selectOptions(screen.getByLabelText("科目で絞り込む"), "all");
+    await waitFor(() => {
+      expect(screen.getAllByRole("listitem")).toHaveLength(3);
+    });
+    expect(history.location.search).not.toContain("subject=");
   });
 
   it("combines subject and law filters with AND", async () => {
