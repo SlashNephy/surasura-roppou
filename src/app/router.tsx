@@ -1,4 +1,10 @@
-import { createRootRoute, createRoute, createRouter, useNavigate } from "@tanstack/react-router";
+import {
+  createRootRoute,
+  createRoute,
+  createRouter,
+  useNavigate,
+  useSearch,
+} from "@tanstack/react-router";
 import type { RouterHistory } from "@tanstack/react-router";
 
 import type { LawRepository } from "@/core/egov";
@@ -21,6 +27,8 @@ import { navigateToCandidate, navigateToReviewCandidate } from "./search-navigat
 import { SavedCollectionPage, SavedPage } from "./saved-page";
 import { StudyCardDetailPage } from "./study-card-detail-page";
 import { StudyCardsPage } from "./study-cards-page";
+import { StudyReviewPage } from "./study-review-page";
+import type { ReviewMode } from "./study-review-page";
 
 interface CreateAppRouterOptions {
   history?: RouterHistory;
@@ -125,6 +133,32 @@ const createRouteTree = ({
     component: StudyRoute,
   });
 
+  // StudyReviewPage に storageRepository と lawRepository を DI するため closure で包む。
+  // mode が変わったら key で作り直し、進行中のセッション状態を初期化する。
+  const StudyReviewRoute = () => {
+    // mode 未指定時は "due"(期限カード復習)を既定とする。
+    const { mode = "due" } = useSearch({ from: "/study/review" });
+
+    return (
+      <StudyReviewPage
+        key={mode}
+        lawRepository={lawRepository}
+        mode={mode}
+        storageRepository={storageRepository}
+      />
+    );
+  };
+
+  const studyReviewRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "study/review",
+    component: StudyReviewRoute,
+    // 既定の due は URL に出さず、new のときだけ key を含める(lawViewerArticleRoute の study と同じ形)。
+    // 不正な mode は既定(due)に丸める(スペック 10 章)。
+    validateSearch: (search: Record<string, unknown>): { mode?: ReviewMode } =>
+      search.mode === "new" ? { mode: "new" } : {},
+  });
+
   // StudyCardsPage に storageRepository を DI するため closure で包む。
   const StudyCardsRoute = () => <StudyCardsPage storageRepository={storageRepository} />;
 
@@ -173,6 +207,7 @@ const createRouteTree = ({
     savedCollectionRoute,
     scannerRoute,
     studyRoute,
+    studyReviewRoute,
     studyCardsRoute,
     studyCardDetailRoute,
     settingsRoute,

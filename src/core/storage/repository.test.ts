@@ -238,6 +238,44 @@ describe("StorageRepository", () => {
     ]);
   });
 
+  it("lists unscheduled cards oldest-created first", async () => {
+    const databaseName = createDatabaseName();
+    const repository = createStorageRepository({ databaseName, now: fixedNow });
+    // createdAt が新しい未学習カード。並び順検証のため既存フィクスチャより後の日時にする。
+    const newerCard = {
+      ...studyCard,
+      id: "card-newer",
+      createdAt: "2026-07-07T00:00:00.000Z",
+    } satisfies StudyCard;
+    // スケジュール済み(= 学習済み)のカード。結果に含まれないことを検証する。
+    const scheduledCard = {
+      ...studyCard,
+      id: "card-scheduled",
+    } satisfies StudyCard;
+    const schedule = {
+      cardId: scheduledCard.id,
+      dueAt: "2026-07-07T00:00:00.000Z",
+      intervalDays: 1,
+      lapses: 0,
+      reviews: 1,
+      recentMistakeRate: 0,
+      derivedFrom: "log-1",
+    } satisfies CardSchedule;
+
+    await repository.putStudyCard(newerCard);
+    await repository.putStudyCard(studyCard);
+    await repository.putStudyCard(scheduledCard);
+
+    const database = await openSurasuraDatabase(databaseName);
+    try {
+      await database.put("cardSchedules", schedule);
+    } finally {
+      database.close();
+    }
+
+    await expect(repository.listUnscheduledStudyCards()).resolves.toEqual([studyCard, newerCard]);
+  });
+
   it("records OCR sessions without requiring image blob persistence", async () => {
     const repository = createStorageRepository({
       databaseName: createDatabaseName(),

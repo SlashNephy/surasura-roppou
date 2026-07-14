@@ -194,6 +194,19 @@ export const createMemoryStorageRepository = (
 
         return Promise.resolve(dueCards);
       },
+      listUnscheduledStudyCards() {
+        const scheduled = new Set(cardSchedules.map((schedule) => schedule.cardId));
+
+        return Promise.resolve(
+          studyCards
+            .filter((card) => !scheduled.has(card.id))
+            .sort((left, right) =>
+              left.createdAt === right.createdAt
+                ? left.id.localeCompare(right.id)
+                : left.createdAt.localeCompare(right.createdAt),
+            ),
+        );
+      },
       listReviewLogs(cardId) {
         const filteredLogs =
           cardId === undefined ? reviewLogs : reviewLogs.filter((log) => log.cardId === cardId);
