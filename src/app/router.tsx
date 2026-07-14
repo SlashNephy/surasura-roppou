@@ -3,6 +3,8 @@ import type { RouterHistory } from "@tanstack/react-router";
 
 import type { LawRepository } from "@/core/egov";
 import type { QuickSearch } from "@/core/jump";
+import { findSubject } from "@/core/study";
+import type { SubjectId } from "@/core/study";
 import type { StorageRepository } from "@/core/storage";
 
 import { AppShell } from "./AppShell";
@@ -130,6 +132,10 @@ const createRouteTree = ({
     getParentRoute: () => rootRoute,
     path: "study/cards",
     component: StudyCardsRoute,
+    validateSearch: (search: Record<string, unknown>): { subject?: SubjectId } => ({
+      // 科目別導線からの初期フィルタ。不明値は undefined（すべての科目）へフォールバックする。
+      subject: typeof search.subject === "string" ? findSubject(search.subject)?.id : undefined,
+    }),
   });
 
   // StudyCardDetailPage に storageRepository を DI するため closure で包む。

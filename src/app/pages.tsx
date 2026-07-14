@@ -2,8 +2,10 @@ import { Link } from "@tanstack/react-router";
 import { BookOpenCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import type { StudyCard } from "@/core/domain";
 import { createStorageRepository } from "@/core/storage";
 import type { SavedLawSummary, StorageRepository } from "@/core/storage";
+import { gyoseishoshiSubjects, isLawInSubject } from "@/core/study";
 import { Badge } from "@/shared/ui/badge";
 import { formatIsoDateLabel } from "@/shared/utils/dates";
 
@@ -91,22 +93,23 @@ export const StudyPage = ({
   // 本番ルーターは createAppRouter() を引数なしで呼ぶため、DI がないときは既定のリポジトリへフォールバックする。
   storageRepository = defaultStorageRepository,
 }: { storageRepository?: StorageRepository } = {}) => {
-  const [cardCount, setCardCount] = useState<number>();
+  // undefined = 読み込み前または失敗。件数表示を省略して導線だけ出す。
+  const [cards, setCards] = useState<StudyCard[]>();
 
   useEffect(() => {
     let isCurrent = true;
 
     void storageRepository
       .listStudyCards()
-      .then((cards) => {
+      .then((loaded) => {
         if (isCurrent) {
-          setCardCount(cards.length);
+          setCards(loaded);
         }
       })
       .catch(() => {
         // 読み込み失敗時は件数を出さないだけに留め、ページ全体は表示する。
         if (isCurrent) {
-          setCardCount(undefined);
+          setCards(undefined);
         }
       });
 
@@ -126,9 +129,9 @@ export const StudyPage = ({
         <section className="rounded-md border bg-card p-4">
           <h2 className="text-sm font-medium text-foreground">条文カード</h2>
           <p className="mt-2 text-xs leading-5 text-muted-foreground">
-            {cardCount === undefined
+            {cards === undefined
               ? "保存したカードを一覧できます"
-              : `${String(cardCount)} 件のカード`}
+              : `${cards.length.toLocaleString("ja-JP")} 件のカード`}
           </p>
           <Link
             className="mt-2 inline-block text-sm text-primary underline-offset-4 hover:underline"
@@ -137,12 +140,36 @@ export const StudyPage = ({
             カード一覧を開く
           </Link>
         </section>
-        {(["苦手な条文", "科目別プリセット"] as const).map((title) => (
-          <section key={title} className="rounded-md border bg-card p-4">
-            <h2 className="text-sm font-medium text-foreground">{title}</h2>
-            <p className="mt-2 text-xs leading-5 text-muted-foreground">準備中</p>
-          </section>
-        ))}
+        <section className="rounded-md border bg-card p-4">
+          <h2 className="text-sm font-medium text-foreground">苦手な条文</h2>
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">準備中</p>
+        </section>
+        <section className="rounded-md border bg-card p-4">
+          <h2 id="subject-presets-heading" className="text-sm font-medium text-foreground">
+            科目別プリセット
+          </h2>
+          <ul aria-labelledby="subject-presets-heading" className="mt-2 grid gap-1.5">
+            {gyoseishoshiSubjects.map((subject) => (
+              <li key={subject.id} className="flex items-center justify-between gap-2 text-sm">
+                <Link
+                  className="text-primary underline-offset-4 hover:underline"
+                  search={{ subject: subject.id }}
+                  to="/study/cards"
+                >
+                  {subject.label}
+                </Link>
+                {cards === undefined ? null : (
+                  <span className="text-xs text-muted-foreground">
+                    {cards
+                      .filter((card) => isLawInSubject(subject.id, card.target.lawId))
+                      .length.toLocaleString("ja-JP")}{" "}
+                    件
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
       </div>
     </section>
   );
