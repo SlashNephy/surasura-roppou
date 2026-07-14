@@ -182,4 +182,37 @@ describe("QuizGenerateDialog", () => {
     );
     expect(openChanges).toEqual([]);
   });
+
+  it("does not duplicate already saved cards when retrying after a failure", async () => {
+    const user = userEvent.setup();
+    const storage = createMemoryStorageRepository();
+    let callCount = 0;
+    const failingOnceRepository = {
+      ...storage.repository,
+      // 2 件目だけ失敗させ、部分保存後の再試行を検証する。
+      putStudyCard: (card: Parameters<typeof storage.repository.putStudyCard>[0]) => {
+        callCount += 1;
+        return callCount === 2
+          ? Promise.reject(new Error("quota exceeded"))
+          : storage.repository.putStudyCard(card);
+      },
+    };
+    renderDialog(failingOnceRepository);
+
+    await screen.findByRole("heading", { name: "クイズカードを生成" });
+    const candidateCount = screen.getAllByRole("checkbox").length;
+    await user.click(screen.getByRole("button", { name: /選択した \d+ 件を保存/ }));
+    await screen.findByRole("alert");
+
+    // 保存済みの候補は一覧から取り除かれる。
+    expect(screen.getAllByRole("checkbox")).toHaveLength(candidateCount - 1);
+
+    // 再試行すると残りだけが保存され、保存済みカードは重複しない。
+    await user.click(screen.getByRole("button", { name: /選択した \d+ 件を保存/ }));
+    await waitFor(() => {
+      expect(storage.getStudyCards()).toHaveLength(candidateCount);
+    });
+    const questions = storage.getStudyCards().map((card) => card.question);
+    expect(new Set(questions).size).toBe(questions.length);
+  });
 });

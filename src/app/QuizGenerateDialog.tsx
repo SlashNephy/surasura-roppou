@@ -113,7 +113,7 @@ const QuizGenerateDialogContent = ({
     // 全カードが同じ条にアンカーされるため、指紋は 1 回だけ計算して使い回す。
     const fingerprint = await computeArticleFingerprint(node.plainText);
     const now = new Date().toISOString();
-    let savedCount = 0;
+    const savedDrafts = new Set<CandidateDraft>();
 
     try {
       for (const draft of selectedDrafts) {
@@ -130,14 +130,16 @@ const QuizGenerateDialogContent = ({
           createdAt: now,
           updatedAt: now,
         });
-        savedCount += 1;
+        savedDrafts.add(draft);
       }
 
       onOpenChange(false);
     } catch {
-      // 逐次保存のため途中失敗があり得る。保存済み分は残るので、件数を示して再操作の判断材料にする。
+      // 逐次保存のため途中失敗があり得る。保存済みの候補は一覧から取り除き、
+      // 再試行したときに同じカードが二重保存されないようにする。
+      setDrafts((current) => current.filter((draft) => !savedDrafts.has(draft)));
       setError(
-        `${String(savedCount)} 件を保存した時点で保存に失敗しました。端末の保存領域を確認してください。`,
+        `${String(savedDrafts.size)} 件を保存した時点で保存に失敗しました。端末の保存領域を確認してください。`,
       );
     } finally {
       setIsSaving(false);
