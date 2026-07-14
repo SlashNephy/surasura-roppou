@@ -1,4 +1,10 @@
-import { createRootRoute, createRoute, createRouter, useNavigate } from "@tanstack/react-router";
+import {
+  createRootRoute,
+  createRoute,
+  createRouter,
+  useNavigate,
+  useSearch,
+} from "@tanstack/react-router";
 import type { RouterHistory } from "@tanstack/react-router";
 
 import type { LawRepository } from "@/core/egov";
@@ -21,6 +27,8 @@ import { navigateToCandidate, navigateToReviewCandidate } from "./search-navigat
 import { SavedCollectionPage, SavedPage } from "./saved-page";
 import { StudyCardDetailPage } from "./study-card-detail-page";
 import { StudyCardsPage } from "./study-cards-page";
+import { StudyReviewPage } from "./study-review-page";
+import type { ReviewMode } from "./study-review-page";
 
 interface CreateAppRouterOptions {
   history?: RouterHistory;
@@ -125,6 +133,24 @@ const createRouteTree = ({
     component: StudyRoute,
   });
 
+  // StudyReviewPage に storageRepository を DI するため closure で包む。
+  // mode が変わったら key で作り直し、進行中のセッション状態を初期化する。
+  const StudyReviewRoute = () => {
+    const { mode } = useSearch({ from: "/study/review" });
+
+    return <StudyReviewPage key={mode} mode={mode} storageRepository={storageRepository} />;
+  };
+
+  const studyReviewRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "study/review",
+    component: StudyReviewRoute,
+    validateSearch: (search: Record<string, unknown>): { mode: ReviewMode } => ({
+      // 不正な mode は "due" に丸める(スペック 10 章)。
+      mode: search.mode === "new" ? "new" : "due",
+    }),
+  });
+
   // StudyCardsPage に storageRepository を DI するため closure で包む。
   const StudyCardsRoute = () => <StudyCardsPage storageRepository={storageRepository} />;
 
@@ -173,6 +199,7 @@ const createRouteTree = ({
     savedCollectionRoute,
     scannerRoute,
     studyRoute,
+    studyReviewRoute,
     studyCardsRoute,
     studyCardDetailRoute,
     settingsRoute,
