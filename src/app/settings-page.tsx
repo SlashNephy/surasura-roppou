@@ -1,7 +1,14 @@
 import { type ChangeEvent, useId, useState } from "react";
 
-import { earliestBaseDate, isValidBaseDate } from "@/core/settings";
+import {
+  baseDateToStudyYear,
+  earliestBaseDate,
+  isValidBaseDate,
+  listSelectableStudyYears,
+  studyYearToBaseDate,
+} from "@/core/settings";
 import { Input } from "@/shared/ui/input";
+import { Select } from "@/shared/ui/select";
 
 import { useBaseDate } from "./use-base-date";
 
@@ -54,6 +61,7 @@ export const SettingsPage = () => {
   const { baseDate, setBaseDate } = useBaseDate();
   const baseDateInputId = useId();
   const baseDateErrorId = useId();
+  const studyYearSelectId = useId();
   const [error, setError] = useState<string | undefined>();
   // 入力欄はローカル状態でバッファする。範囲外など無効な値でもユーザーの入力を
   // 保持し、有効な値のときだけグローバル state を更新する（値の巻き戻りを防ぐ）。
@@ -65,6 +73,30 @@ export const SettingsPage = () => {
     setSyncedBaseDate(baseDate);
     setInputValue(baseDate ?? "");
   }
+
+  // 年度セレクタの表示値は基準日から毎レンダー導出する（年度自体は永続化しない）。
+  // 未設定 → "none"、有効な YYYY-04-01 → その年、それ以外の日付 → "custom"。
+  const studyYear = baseDateToStudyYear(baseDate);
+  const studyYearValue = baseDate === undefined ? "none" : (studyYear?.toString() ?? "custom");
+
+  const handleStudyYearChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const value = event.target.value;
+
+    // 「カスタム」は手動の日付入力への誘導ラベルであり、基準日は変更しない。
+    if (value === "custom") {
+      return;
+    }
+
+    if (value === "none") {
+      setBaseDate(undefined);
+      setError(undefined);
+      return;
+    }
+
+    // 年度から導出した基準日は常に有効な日付なのでそのまま保存できる。
+    setBaseDate(studyYearToBaseDate(Number(value)));
+    setError(undefined);
+  };
 
   const handleBaseDateChange = (event: ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
@@ -95,6 +127,28 @@ export const SettingsPage = () => {
         <h2 className="text-xs font-medium tracking-widest text-muted-foreground">学習</h2>
         <div className="divide-y rounded-md border bg-card">
           <div className="grid gap-2 px-4 py-3 text-sm">
+            <label htmlFor={studyYearSelectId} className="font-medium text-foreground">
+              学習年度
+            </label>
+            <Select
+              className="w-fit"
+              id={studyYearSelectId}
+              onChange={handleStudyYearChange}
+              value={studyYearValue}
+            >
+              <option value="none">未設定（現行法）</option>
+              {listSelectableStudyYears(new Date()).map((year) => (
+                <option key={year} value={String(year)}>
+                  {year} 年度
+                </option>
+              ))}
+              <option value="custom">カスタム</option>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              行政書士試験は例年、試験年の 4 月 1 日現在で施行されている法令が出題基準です。
+            </p>
+          </div>
+          <div className="grid gap-2 px-4 py-3 text-sm">
             <label htmlFor={baseDateInputId} className="font-medium text-foreground">
               学習年度の基準日
             </label>
@@ -119,7 +173,7 @@ export const SettingsPage = () => {
           </div>
           <div className="flex items-center justify-between px-4 py-3 text-sm">
             <span className="text-foreground">科目プリセット</span>
-            <span className="text-muted-foreground">未設定</span>
+            <span className="text-muted-foreground">行政書士（4 科目）</span>
           </div>
         </div>
       </section>

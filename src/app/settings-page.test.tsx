@@ -54,3 +54,58 @@ describe("SettingsPage 基準日", () => {
     expect(getBaseDate()).toBeUndefined();
   });
 });
+
+describe("SettingsPage 学習年度", () => {
+  it("年度を選ぶと基準日がその年の 4/1 になり日付入力も追従する", () => {
+    render(<SettingsPage />);
+
+    fireEvent.change(screen.getByLabelText("学習年度"), { target: { value: "2026" } });
+
+    expect(getBaseDate()).toBe("2026-04-01");
+    expect(screen.getByLabelText("学習年度の基準日")).toHaveValue("2026-04-01");
+  });
+
+  it("基準日が未設定のときは「未設定（現行法）」を表示する", () => {
+    render(<SettingsPage />);
+
+    expect(screen.getByLabelText("学習年度")).toHaveValue("none");
+  });
+
+  it("「未設定（現行法）」を選ぶと基準日をクリアする", () => {
+    setBaseDate("2026-04-01");
+    render(<SettingsPage />);
+
+    fireEvent.change(screen.getByLabelText("学習年度"), { target: { value: "none" } });
+
+    expect(getBaseDate()).toBeUndefined();
+    expect(screen.getByLabelText("学習年度の基準日")).toHaveValue("");
+  });
+
+  it("基準日を手動編集すると年度セレクタは「カスタム」表示になる", () => {
+    setBaseDate("2026-04-01");
+    render(<SettingsPage />);
+
+    expect(screen.getByLabelText("学習年度")).toHaveValue("2026");
+
+    fireEvent.change(screen.getByLabelText("学習年度の基準日"), {
+      target: { value: "2026-05-01" },
+    });
+
+    expect(screen.getByLabelText("学習年度")).toHaveValue("custom");
+  });
+
+  it("「カスタム」の選択は基準日を変更しない", () => {
+    setBaseDate("2026-04-01");
+    render(<SettingsPage />);
+
+    fireEvent.change(screen.getByLabelText("学習年度"), { target: { value: "custom" } });
+
+    expect(getBaseDate()).toBe("2026-04-01");
+  });
+
+  it("科目プリセットに行政書士プリセットを表示する", () => {
+    render(<SettingsPage />);
+
+    expect(screen.getByText("行政書士（4 科目）")).toBeInTheDocument();
+  });
+});
