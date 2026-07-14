@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useSearch } from "@tanstack/react-router";
 import { Pin } from "lucide-react";
 
 import type { StudyCard } from "@/core/domain";
 import { createStorageRepository } from "@/core/storage";
 import type { StorageRepository } from "@/core/storage";
+import { findSubject, gyoseishoshiSubjects, isLawInSubject } from "@/core/study";
+import type { SubjectId } from "@/core/study";
 import { Badge } from "@/shared/ui/badge";
 import { Select } from "@/shared/ui/select";
 import { Skeleton } from "@/shared/ui/skeleton";
@@ -26,8 +28,11 @@ interface StudyCardsPageProps {
 export const StudyCardsPage = ({
   storageRepository = defaultStorageRepository,
 }: StudyCardsPageProps = {}) => {
+  const { subject } = useSearch({ from: "/study/cards" });
   const [state, setState] = useState<StudyCardsState>({ status: "loading" });
   const [lawFilter, setLawFilter] = useState("all");
+  // 科目別導線（/study）からの遷移時は URL の subject を初期フィルタにする。
+  const [subjectFilter, setSubjectFilter] = useState<SubjectId | "all">(subject ?? "all");
 
   useEffect(() => {
     let isCurrent = true;
@@ -74,7 +79,11 @@ export const StudyCardsPage = ({
 
   const visibleCards =
     state.status === "ready"
-      ? state.cards.filter((card) => lawFilter === "all" || card.target.lawId === lawFilter)
+      ? state.cards.filter(
+          (card) =>
+            (lawFilter === "all" || card.target.lawId === lawFilter) &&
+            (subjectFilter === "all" || isLawInSubject(subjectFilter, card.target.lawId)),
+        )
       : [];
 
   return (
@@ -88,6 +97,23 @@ export const StudyCardsPage = ({
             </p>
           ) : null}
         </div>
+        <label className="grid w-full max-w-60 gap-1 text-sm font-medium text-foreground">
+          科目で絞り込む
+          <Select
+            onChange={(event) => {
+              // findSubject で検証し、不明値は「すべての科目」に倒す。
+              setSubjectFilter(findSubject(event.target.value)?.id ?? "all");
+            }}
+            value={subjectFilter}
+          >
+            <option value="all">すべての科目</option>
+            {gyoseishoshiSubjects.map((subject) => (
+              <option key={subject.id} value={subject.id}>
+                {subject.label}
+              </option>
+            ))}
+          </Select>
+        </label>
         <label className="grid w-full max-w-60 gap-1 text-sm font-medium text-foreground">
           法令で絞り込む
           <Select
@@ -128,9 +154,8 @@ export const StudyCardsPage = ({
             {state.cards.length === 0
               ? // 真の空状態: カードが 1 件も存在しない
                 "カードはまだありません。法令ビューアの条文から作成できます。"
-              : // フィルタ選択肢はカードのある法令から生成されるため通常操作では到達しないが、
-                // 防御として文言を区別する
-                "この法令のカードはありません。"}
+              : // 科目・法令フィルタの組み合わせで 0 件になった状態
+                "絞り込み条件に一致するカードはありません。"}
           </p>
         ) : (
           <ul className="grid gap-2">

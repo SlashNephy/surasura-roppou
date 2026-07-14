@@ -38,7 +38,21 @@ const kenpoCard = {
   updatedAt: "2026-07-04T00:00:00.000Z",
 } satisfies StudyCard;
 
-const renderStudyCardsPage = (studyCards: StudyCard[]) => {
+// 行政手続法のカード。科目フィルタ（行政法）のテストに使う。
+const gyoseiCard = {
+  id: "card-gyosei",
+  source: "manual",
+  target: { lawId: "405AC0000000088", revisionId: "rev-3", article: "5" },
+  type: "true_false",
+  question: "審査基準の設定は努力義務である。",
+  answer: "誤り。設定は法的義務（行手法5条1項）。",
+  tags: [],
+  examPinned: false,
+  createdAt: "2026-07-05T00:00:00.000Z",
+  updatedAt: "2026-07-06T00:00:00.000Z",
+} satisfies StudyCard;
+
+const renderStudyCardsPage = (studyCards: StudyCard[], initialEntry = "/study/cards") => {
   const storage = createMemoryStorageRepository({
     // 民法の保存本文があるので lawId → 法令名の解決対象になる。
     savedLawDocument: createSavedLawDocument({
@@ -48,7 +62,7 @@ const renderStudyCardsPage = (studyCards: StudyCard[]) => {
     }),
     studyCards,
   });
-  const history = createMemoryHistory({ initialEntries: ["/study/cards"] });
+  const history = createMemoryHistory({ initialEntries: [initialEntry] });
 
   render(
     <RouterProvider router={createAppRouter({ history, storageRepository: storage.repository })} />,
@@ -115,5 +129,47 @@ describe("StudyCardsPage", () => {
       (link) => link.getAttribute("href") === `/study/cards/${minpoCard.id}`,
     );
     expect(questionLink).toBeInTheDocument();
+  });
+
+  it("filters cards by subject", async () => {
+    const user = userEvent.setup();
+    renderStudyCardsPage([minpoCard, kenpoCard, gyoseiCard]);
+
+    await screen.findByText("3 件");
+    await user.selectOptions(screen.getByLabelText("科目で絞り込む"), "administrative");
+
+    await waitFor(() => {
+      expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    });
+    expect(screen.getByText("審査基準の設定は努力義務である。")).toBeInTheDocument();
+  });
+
+  it("combines subject and law filters with AND", async () => {
+    const user = userEvent.setup();
+    renderStudyCardsPage([minpoCard, kenpoCard, gyoseiCard]);
+
+    await screen.findByText("3 件");
+    // 科目 = 民法、法令 = 憲法 → 積集合は空。
+    await user.selectOptions(screen.getByLabelText("科目で絞り込む"), "civil");
+    await user.selectOptions(screen.getByLabelText("法令で絞り込む"), "321CONSTITUTION");
+
+    expect(
+      await screen.findByText("絞り込み条件に一致するカードはありません。"),
+    ).toBeInTheDocument();
+  });
+
+  it("initializes the subject filter from the ?subject= search param", async () => {
+    renderStudyCardsPage([minpoCard, kenpoCard, gyoseiCard], "/study/cards?subject=administrative");
+
+    await screen.findByText("1 件");
+    expect(screen.getByLabelText("科目で絞り込む")).toHaveValue("administrative");
+    expect(screen.getByText("審査基準の設定は努力義務である。")).toBeInTheDocument();
+  });
+
+  it("falls back to all subjects for an unknown ?subject= value", async () => {
+    renderStudyCardsPage([minpoCard, kenpoCard], "/study/cards?subject=unknown");
+
+    await screen.findByText("2 件");
+    expect(screen.getByLabelText("科目で絞り込む")).toHaveValue("all");
   });
 });
