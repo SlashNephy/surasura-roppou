@@ -109,6 +109,34 @@ describe("StudyCardDetailPage", () => {
     expect(await screen.findByText("民法 第1条")).toBeInTheDocument();
   });
 
+  it("shows the choices of an auto-generated card and keeps them after saving", async () => {
+    const user = userEvent.setup();
+    const cardWithChoices = {
+      ...card,
+      id: "card-choices",
+      source: "auto",
+      type: "article_number",
+      question: "次の条文は民法の第何条か？\n「私権は、公共の福祉に適合しなければならない。」",
+      answer: "第一条",
+      choices: ["第一条", "第二条", "第三条", "第六条"],
+    } satisfies StudyCard;
+    const { storage } = renderDetailPage(`/study/cards/${cardWithChoices.id}`, [cardWithChoices]);
+
+    // 選択肢が読み取り専用で表示される。根拠リンクは「第1条」（算用数字）表示のため
+    // 「第一条」等の選択肢文言と衝突しない。answer 欄（textarea）に同じ文字列が入る
+    // 場合も考慮し、li 要素に絞って検索する。
+    expect(await screen.findByText("選択肢")).toBeInTheDocument();
+    for (const choice of cardWithChoices.choices) {
+      expect(screen.getByText(choice, { selector: "li" })).toBeInTheDocument();
+    }
+
+    // 編集して保存しても choices は保持される（スプレッドで引き継がれる契約の検証）。
+    await user.click(screen.getByRole("button", { name: "変更を保存" }));
+    await waitFor(() => {
+      expect(storage.getStudyCards()[0].choices).toEqual(cardWithChoices.choices);
+    });
+  });
+
   it("prevents double deletion while a delete is in flight", async () => {
     const user = userEvent.setup();
     const storage = createMemoryStorageRepository({ studyCards: [card] });

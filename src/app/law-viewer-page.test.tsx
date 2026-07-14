@@ -851,6 +851,16 @@ describe("LawViewerPageContent", () => {
     expect(await screen.findByRole("heading", { name: "学習カードを作る" })).toBeInTheDocument();
   });
 
+  it("opens the quiz generation dialog from the active article actions", async () => {
+    const user = userEvent.setup();
+    renderLawViewerRoute("/laws/129AC0000000089/articles/1");
+
+    const generateButton = await screen.findByRole("button", { name: "クイズを生成" });
+    await user.click(generateButton);
+
+    expect(await screen.findByRole("heading", { name: "クイズカードを生成" })).toBeInTheDocument();
+  });
+
   it("記事ルートに study=new で入ると学習カードダイアログを自動起動する", async () => {
     const history = createMemoryHistory({
       initialEntries: ["/laws/129AC0000000089/articles/1?study=new"],
