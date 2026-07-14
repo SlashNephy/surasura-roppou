@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 
 import type { QuizRating, ReviewLog, StudyCard, StudySession } from "@/core/domain";
@@ -70,14 +70,16 @@ export const StudyReviewPage = ({
   // 読み込み失敗時の「再試行」で加算し、読み込み effect を再実行させる。
   const [reloadToken, setReloadToken] = useState(0);
   // gradeCard の二重呼び出し防止用フラグ。
-  // isGrading state はボタンの disabled 表示用。gradingRef はキーボードショートカット連打防止用。
-  // ref はキーボードイベントハンドラ(useEffect 内)でのみ読み、render スコープでは触らない。
+  // isGrading state はクリック経路のガード(ボタンの disabled)用。
+  // gradingRef はキーボード経路のガード用で、keydown ハンドラ(useEffect 内)でのみ読む。
   const gradingRef = useRef(false);
   const [isGrading, setIsGrading] = useState(false);
   // isGrading state の変化に合わせて gradingRef を同期する。
-  // gradeCard の useCallback クロージャが gradingRef を直接触れると ESLint(react-hooks/refs)が
-  // render 中の ref アクセスと誤検出するため、このエフェクトで間接的に同期する。
-  useEffect(() => {
+  // gradeCard 内で gradingRef を直接読み書きすると ESLint(react-hooks/refs)が error にするため、
+  // この間接同期を採っている。キーボードリスナーは React イベントシステム外の素の window リスナーで、
+  // passive effect(useEffect)は paint 後まで遅延しうるため、同期前に届く keydown に間に合わない可能性がある。
+  // layout effect なら commit と同じフラッシュ内で同期実行され、次のイベントディスパッチ前に必ず反映される。
+  useLayoutEffect(() => {
     gradingRef.current = isGrading;
   }, [isGrading]);
   const { baseDate } = useBaseDate();

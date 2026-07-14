@@ -248,8 +248,10 @@ describe("StudyReviewPage", () => {
     await user.click(await screen.findByRole("button", { name: "答えを見る" }));
     const easyButton = await screen.findByRole("button", { name: /簡単/ });
     await user.click(easyButton);
-    // 保存中の 2 回目の評価は無視される。
+    // 保存中の 2 回目のクリックは無視される。
     await user.click(easyButton);
+    // 保存中のキーボード連打も同様に無視される。
+    await user.keyboard("3");
     release?.();
 
     expect(await screen.findByText("復習が完了しました")).toBeInTheDocument();
@@ -410,6 +412,11 @@ describe("StudyReviewPage", () => {
     // パネルは法令名リンクだけを出し、改正バッジは出さない。
     expect(await screen.findByRole("link", { name: "民法" })).toBeInTheDocument();
     expect(screen.queryByText("改正の可能性")).not.toBeInTheDocument();
+    // 条番号なしカードのリンクは条文ルートではなく法令トップ(/laws/$lawId)に飛ばす。
+    expect(screen.getByRole("link", { name: "民法" })).toHaveAttribute(
+      "href",
+      "/laws/129AC0000000089",
+    );
   });
 
   it("falls back to a viewer link when the law cannot be loaded", async () => {

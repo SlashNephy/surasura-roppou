@@ -91,6 +91,16 @@ export const StudyReviewEvidencePanel = ({ card, loadDocument }: StudyReviewEvid
       ? ""
       : ` 第${card.target.article}条`;
 
+  const article = card.target.article ?? "";
+  // 条番号を持たないカードは条文ルートではなく法令トップへ飛ばす(空パラメータの不正 URL を防ぐ)。
+  const viewerLinkProps =
+    article === ""
+      ? ({ params: { lawId: card.target.lawId }, to: "/laws/$lawId" } as const)
+      : ({
+          params: { article, lawId: card.target.lawId },
+          to: "/laws/$lawId/articles/$article",
+        } as const);
+
   return (
     <section aria-label="根拠条文" className="grid gap-2 rounded-md border p-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -104,7 +114,8 @@ export const StudyReviewEvidencePanel = ({ card, loadDocument }: StudyReviewEvid
               改正の可能性
             </Badge>
             {/* 作り直しはビューアの「カードを作る」で行う。question / answer は自動で書き換えない(スペック 8 章)。
-                study=new はビューアが本文ロード後にカード作成ダイアログを自動起動する既存パラメータ。 */}
+                study=new はビューアが本文ロード後にカード作成ダイアログを自動起動する既存パラメータ。
+                article が空のとき anchorStatus は undefined のため、このブロックは article が空のカードでは表示されない。 */}
             <Link
               className="text-sm text-primary underline-offset-4 hover:underline"
               params={{ article: card.target.article ?? "", lawId: card.target.lawId }}
@@ -122,11 +133,7 @@ export const StudyReviewEvidencePanel = ({ card, loadDocument }: StudyReviewEvid
       {state.status === "fallback" ? (
         <p className="text-sm leading-6 text-muted-foreground">
           条文を取得できませんでした。{" "}
-          <Link
-            className="text-primary underline-offset-4 hover:underline"
-            params={{ article: card.target.article ?? "", lawId: card.target.lawId }}
-            to="/laws/$lawId/articles/$article"
-          >
+          <Link className="text-primary underline-offset-4 hover:underline" {...viewerLinkProps}>
             ビューアで開く
           </Link>
         </p>
@@ -136,8 +143,7 @@ export const StudyReviewEvidencePanel = ({ card, loadDocument }: StudyReviewEvid
         <>
           <Link
             className="text-sm text-primary underline-offset-4 hover:underline"
-            params={{ article: card.target.article ?? "", lawId: card.target.lawId }}
-            to="/laws/$lawId/articles/$article"
+            {...viewerLinkProps}
           >
             {state.lawTitle}
             {articleLabel}
