@@ -4,3 +4,5 @@ export { generateQuizCandidates } from "./quiz/generate";
 export type { GenerationContext, QuizCandidate } from "./quiz/types";
 export { findSubject, gyoseishoshiSubjects, isLawInSubject } from "./subjects";
 export type { Subject, SubjectId } from "./subjects";
+export { computeReviewStats, selectWeakCards } from "./stats";
+export type { ReviewStats, WeakCard } from "./stats";
