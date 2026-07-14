@@ -91,11 +91,20 @@ const formatSavedLawFetchedDate = (savedLaw: SavedLawSummary): string =>
 export const StudyPage = ({
   storageRepository,
 }: { storageRepository?: StorageRepository } = {}) => {
-  const { dashboard } = useStudyDashboard(storageRepository);
+  const { dashboard, error } = useStudyDashboard(storageRepository);
 
   return (
     <section className="mx-auto grid w-full max-w-2xl gap-4 px-5 py-10">
       <h1 className="font-serif text-2xl font-semibold text-foreground">復習</h1>
+      {error !== undefined ? (
+        // 読み込み失敗時は savedLawsError と同型のバナーでエラーを明示する
+        <p
+          role="status"
+          className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground"
+        >
+          {error}
+        </p>
+      ) : null}
       <div className="rounded-md bg-primary p-4 text-primary-foreground">
         <p className="font-semibold">今日の復習</p>
         <p className="mt-1 text-xs opacity-75">

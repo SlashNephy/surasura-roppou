@@ -31,7 +31,7 @@ export const HomePage = ({
   storageRepository?: StorageRepository;
 }) => {
   const { savedLaws, savedLawsError } = useSavedLaws(storageRepository);
-  const { dashboard } = useStudyDashboard(storageRepository);
+  const { dashboard, error } = useStudyDashboard(storageRepository);
   const hasSavedLaws = savedLaws.length > 0;
   const { open } = useSearchPalette();
 
@@ -69,10 +69,18 @@ export const HomePage = ({
         </div>
       </div>
 
-      {dashboard !== undefined &&
-      (dashboard.dueCount > 0 ||
-        dashboard.cardCount > 0 ||
-        dashboard.stats.accuracy !== undefined) ? (
+      {error !== undefined ? (
+        // 読み込み失敗時は savedLawsError と同型のバナーでエラーを明示する
+        <p
+          role="status"
+          className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground"
+        >
+          {error}
+        </p>
+      ) : dashboard !== undefined &&
+        (dashboard.dueCount > 0 ||
+          dashboard.cardCount > 0 ||
+          dashboard.stats.accuracy !== undefined) ? (
         <section aria-labelledby="home-study-heading" className="grid gap-4">
           <h2 id="home-study-heading" className="sr-only">
             学習

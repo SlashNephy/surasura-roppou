@@ -65,9 +65,12 @@ describe("HomePage", () => {
     expect(
       await screen.findByRole("heading", { name: "撮って、開いて、すらすら読める。" }),
     ).toBeInTheDocument();
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "保存済み法令を読み込めませんでした。",
-    );
+    // listSavedLaws の失敗で useSavedLaws と useStudyDashboard の両方がエラーになるため、
+    // role="status" が複数出る。保存済み法令のエラーバナーが存在することだけを確認する。
+    const statusElements = await screen.findAllByRole("status");
+    expect(
+      statusElements.some((el) => el.textContent === "保存済み法令を読み込めませんでした。"),
+    ).toBe(true);
     expect(screen.queryByRole("link", { name: "日本国憲法" })).not.toBeInTheDocument();
   });
 });
@@ -87,6 +90,20 @@ vi.stubGlobal(
     }
   },
 );
+
+it("学習データの読み込みに失敗するとエラーメッセージを表示する", async () => {
+  const failing = {
+    listDueStudyCards: () => Promise.reject(new Error("boom")),
+    listUnscheduledStudyCards: () => Promise.resolve([]),
+    listStudyCards: () => Promise.resolve([]),
+    listReviewLogs: () => Promise.resolve([]),
+    listSavedLaws: () => Promise.resolve([]),
+  } as unknown as Parameters<typeof renderHome>[0];
+
+  renderHome(failing);
+
+  expect(await screen.findByText("学習データの読み込みに失敗しました")).toBeInTheDocument();
+});
 
 it("学習データがあると今日の復習・苦手条文・最近開いた項目を表示する", async () => {
   const { repository } = createMemoryStorageRepository({

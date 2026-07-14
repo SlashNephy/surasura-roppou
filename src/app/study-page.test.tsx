@@ -75,6 +75,20 @@ describe("StudyPage 科目別プリセット", () => {
   });
 });
 
+it("学習データの読み込みに失敗するとエラーメッセージを表示する", async () => {
+  const failing = {
+    listDueStudyCards: () => Promise.reject(new Error("boom")),
+    listUnscheduledStudyCards: () => Promise.resolve([]),
+    listStudyCards: () => Promise.resolve([]),
+    listReviewLogs: () => Promise.resolve([]),
+    listSavedLaws: () => Promise.resolve([]),
+  } as unknown as StorageRepository;
+
+  renderStudy(failing);
+
+  expect(await screen.findByText("学習データの読み込みに失敗しました")).toBeInTheDocument();
+});
+
 it("復習ログがあると苦手条文と正答率を表示する", async () => {
   const { repository } = createMemoryStorageRepository({
     studyCards: [
