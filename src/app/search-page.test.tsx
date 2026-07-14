@@ -196,4 +196,23 @@ describe("SearchPage 科目フィルタ", () => {
 
     expect(await screen.findByText("この科目に該当する候補がありません。")).toBeInTheDocument();
   });
+
+  it("クエリが変わったら科目フィルタをリセットする", async () => {
+    const user = userEvent.setup();
+    const { router } = renderSearch("法", crossSubjectQuickSearch);
+
+    // 科目フィルタの option にも「民法」があるため link で絞る。
+    await screen.findByRole("link", { name: /民法/ });
+    await user.selectOptions(screen.getByLabelText("科目で絞り込む"), "constitution");
+    expect(await screen.findByText("この科目に該当する候補がありません。")).toBeInTheDocument();
+
+    // 同一マウントのまま別のクエリへ遷移する。前の検索語向けの絞り込みが
+    // 新しい候補に残ると即「0 件」表示になるため、フィルタはリセットされる。
+    await act(async () => {
+      await router.navigate({ to: "/search", search: { q: "民" } });
+    });
+
+    expect(await screen.findByRole("link", { name: /民法/ })).toBeInTheDocument();
+    expect(screen.getByLabelText("科目で絞り込む")).toHaveValue("all");
+  });
 });

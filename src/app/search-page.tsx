@@ -90,6 +90,14 @@ export const SearchPage = ({ quickSearch = defaultQuickSearch }: { quickSearch?:
 
   // 科目フィルタは表示中の候補リストにのみ作用する一時的な状態。URL には載せない。
   const [subjectFilter, setSubjectFilter] = useState<SubjectId | "all">("all");
+  // クエリが変わったら科目フィルタをリセットする。前の検索語向けの絞り込みが新しい候補に
+  // 残って即「0 件」表示になるのを防ぐ。effect での setState を避けるため、前回同期した
+  // 値と比較してレンダー中に同期する（settings-page と同じ React 公式の推奨形）。
+  const [syncedQuery, setSyncedQuery] = useState(q);
+  if (q !== syncedQuery) {
+    setSyncedQuery(q);
+    setSubjectFilter("all");
+  }
 
   const visibleCandidates =
     outcome.status === "candidates"
