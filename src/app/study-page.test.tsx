@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import type { StudyCard } from "@/core/domain";
+import type { StorageRepository } from "@/core/storage";
 import { createMemoryStorageRepository } from "@/test/fixtures/storage";
 import { setupScrollMocks } from "@/test/scrollMocks";
 
@@ -23,6 +24,12 @@ const cardOf = (id: string, lawId: string) =>
     createdAt: "2026-07-01T00:00:00.000Z",
     updatedAt: "2026-07-01T00:00:00.000Z",
   }) satisfies StudyCard;
+
+const renderStudy = (repository: StorageRepository) => {
+  const history = createMemoryHistory({ initialEntries: ["/study"] });
+
+  render(<RouterProvider router={createAppRouter({ history, storageRepository: repository })} />);
+};
 
 const renderStudyPage = (studyCards: StudyCard[]) => {
   const storage = createMemoryStorageRepository({ studyCards });
@@ -66,4 +73,53 @@ describe("StudyPage 科目別プリセット", () => {
     expect(screen.getByRole("link", { name: /行政法/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "商法/会社法" })).toBeInTheDocument();
   });
+});
+
+it("復習ログがあると苦手条文と正答率を表示する", async () => {
+  const { repository } = createMemoryStorageRepository({
+    studyCards: [
+      {
+        id: "weak",
+        source: "manual",
+        target: { lawId: "129AC0000000089", article: "709" },
+        type: "fill_blank",
+        question: "不法行為の要件",
+        answer: "故意過失",
+        tags: [],
+        examPinned: false,
+        createdAt: "2026-07-01T00:00:00.000Z",
+        updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+    ],
+    reviewLogs: [
+      {
+        id: "l1",
+        cardId: "weak",
+        grade: "again",
+        reviewedAt: "2026-07-10T00:00:00.000Z",
+        scheduler: "fixed-interval@1",
+      },
+      {
+        id: "l2",
+        cardId: "weak",
+        grade: "again",
+        reviewedAt: "2026-07-11T00:00:00.000Z",
+        scheduler: "fixed-interval@1",
+      },
+      {
+        id: "l3",
+        cardId: "weak",
+        grade: "good",
+        reviewedAt: "2026-07-12T00:00:00.000Z",
+        scheduler: "fixed-interval@1",
+      },
+    ],
+  });
+
+  renderStudy(repository);
+
+  expect(await screen.findByRole("link", { name: /不法行為の要件/ })).toBeInTheDocument();
+  // 通算正答率 1/3 ≒ 33%（全体正答率の <p> とカード個別正答率の <span> の両方が表示される）
+  expect(screen.getAllByText(/33%/)).toHaveLength(2);
+  expect(screen.queryByText("準備中")).not.toBeInTheDocument();
 });
