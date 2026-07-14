@@ -6,3 +6,5 @@ export { findSubject, gyoseishoshiSubjects, isLawInSubject } from "./subjects";
 export type { Subject, SubjectId } from "./subjects";
 export { computeReviewStats, selectWeakCards } from "./stats";
 export type { ReviewStats, WeakCard } from "./stats";
+export { mergeRecentItems } from "./recent";
+export type { RecentInputs, RecentItem } from "./recent";
