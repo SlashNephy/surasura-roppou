@@ -82,6 +82,8 @@ export interface StorageRepository {
   listStudyCards(query?: LawScopedQuery): Promise<StudyCard[]>;
   deleteStudyCard(cardId: string): Promise<void>;
   listDueStudyCards(dueAtOrBefore: ISODateString): Promise<DueStudyCard[]>;
+  // 未学習カード(= cardSchedules に行がないカード)を createdAt 昇順で返す。
+  listUnscheduledStudyCards(): Promise<StudyCard[]>;
   listReviewLogs(cardId?: string): Promise<ReviewLog[]>;
   recordReview(log: ReviewLog): Promise<CardSchedule>;
   putStudySession(session: StudySession): Promise<void>;
@@ -352,6 +354,28 @@ export const createStorageRepository = (
         }
 
         return dueCards;
+      });
+    },
+
+    async listUnscheduledStudyCards() {
+      return withDatabase(async (db) => {
+        // カード総数は個人利用で高々数千件の想定のため、メモリ内の差集合で賄う
+        // (examPinned フィルタと同じ整理。boolean は IndexedDB のインデックスにできない)。
+        const [records, scheduledIds] = await Promise.all([
+          db.getAll("studyCards"),
+          db.getAllKeys("cardSchedules"),
+        ]);
+        const scheduled = new Set<string>(scheduledIds);
+
+        return records
+          .filter((record) => !scheduled.has(record.id))
+          .map(stripTargetIndexes)
+          .sort((left, right) =>
+            // 古く作ったカードから覚える。同時刻でも順序が決定的になるよう id を第 2 キーにする。
+            left.createdAt === right.createdAt
+              ? left.id.localeCompare(right.id)
+              : left.createdAt.localeCompare(right.createdAt),
+          );
       });
     },
 
