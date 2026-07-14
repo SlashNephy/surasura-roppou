@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
-import type { CardSchedule, StudyCard } from "@/core/domain";
+import type { CardSchedule, ReviewLog, StudyCard } from "@/core/domain";
 import { computeArticleFingerprint } from "@/core/domain";
 import type { LawRepository } from "@/core/egov";
 import type { StorageRepository } from "@/core/storage";
@@ -222,6 +222,38 @@ describe("StudyReviewPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("回答を保存できませんでした");
     // 回答段階に留まり、再度評価できる。
     expect(screen.getByRole("button", { name: /できた/ })).toBeEnabled();
+  });
+
+  it("ignores duplicate grading while a review is being recorded", async () => {
+    const user = userEvent.setup();
+    const storage = createMemoryStorageRepository({
+      studyCards: [makeCard("card-1")],
+      cardSchedules: [dueSchedule("card-1")],
+    });
+    // recordReview を保留させて、保存中の二重評価を再現する。
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const delayedRepository = {
+      ...storage.repository,
+      recordReview: async (log: ReviewLog) => {
+        await gate;
+        return storage.repository.recordReview(log);
+      },
+    };
+
+    renderReviewPage("/study/review", delayedRepository);
+
+    await user.click(await screen.findByRole("button", { name: "答えを見る" }));
+    const easyButton = await screen.findByRole("button", { name: /簡単/ });
+    await user.click(easyButton);
+    // 保存中の 2 回目の評価は無視される。
+    await user.click(easyButton);
+    release?.();
+
+    expect(await screen.findByText("復習が完了しました")).toBeInTheDocument();
+    await expect(storage.repository.listReviewLogs("card-1")).resolves.toHaveLength(1);
   });
 
   it("shows an error with retry when the queue cannot be loaded", async () => {

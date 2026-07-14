@@ -69,6 +69,17 @@ export const StudyReviewPage = ({
   const [state, setState] = useState<SessionState>({ status: "loading" });
   // 読み込み失敗時の「再試行」で加算し、読み込み effect を再実行させる。
   const [reloadToken, setReloadToken] = useState(0);
+  // gradeCard の二重呼び出し防止用フラグ。
+  // isGrading state はボタンの disabled 表示用。gradingRef はキーボードショートカット連打防止用。
+  // ref はキーボードイベントハンドラ(useEffect 内)でのみ読み、render スコープでは触らない。
+  const gradingRef = useRef(false);
+  const [isGrading, setIsGrading] = useState(false);
+  // isGrading state の変化に合わせて gradingRef を同期する。
+  // gradeCard の useCallback クロージャが gradingRef を直接触れると ESLint(react-hooks/refs)が
+  // render 中の ref アクセスと誤検出するため、このエフェクトで間接的に同期する。
+  useEffect(() => {
+    gradingRef.current = isGrading;
+  }, [isGrading]);
   const { baseDate } = useBaseDate();
   const asOf = resolveAsOf(baseDate);
   // 同一法令のカードが続いても 1 回しか取得しないためのセッション内キャッシュ。
@@ -248,9 +259,13 @@ export const StudyReviewPage = ({
         scheduler: fixedIntervalSchedulerId,
       };
 
+      setIsGrading(true);
+
       storageRepository
         .recordReview(log)
         .then((schedule) => {
+          setIsGrading(false);
+
           const gradeCounts = { ...session.gradeCounts, [grade]: session.gradeCounts[grade] + 1 };
           const queue = advanceQueue(session.queue, schedule.intervalDays);
 
@@ -271,6 +286,8 @@ export const StudyReviewPage = ({
           });
         })
         .catch(() => {
+          setIsGrading(false);
+
           // ログは保存されていないので、同じ回答段階に留まれば二重記録にならない。
           setState({ status: "active", session: { ...session, recordFailed: true } });
         });
@@ -306,7 +323,11 @@ export const StudyReviewPage = ({
 
         if (index >= 0) {
           event.preventDefault();
-          gradeCard(session, quizRatings[index]);
+          // gradingRef.current を effect 内で読み、保存中のキー連打を防ぐ。
+          // ボタンの disabled はキーボード入力を止められないため、ref で直接ガードする。
+          if (!gradingRef.current) {
+            gradeCard(session, quizRatings[index]);
+          }
         }
       }
     };
@@ -316,7 +337,7 @@ export const StudyReviewPage = ({
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [gradeCard, revealAnswer, state]);
+  }, [gradingRef, gradeCard, revealAnswer, state]);
 
   const title = mode === "new" ? "新しく覚える" : "今日の復習";
 
@@ -441,6 +462,7 @@ export const StudyReviewPage = ({
                     {quizRatings.map((grade) => (
                       <Button
                         className="h-auto flex-col gap-0.5 py-2"
+                        disabled={isGrading}
                         key={grade}
                         onClick={() => {
                           gradeCard(state.session, grade);
