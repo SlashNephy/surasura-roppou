@@ -131,7 +131,7 @@ export const StudyPage = ({
           <p className="mt-2 text-xs leading-5 text-muted-foreground">
             {cards === undefined
               ? "保存したカードを一覧できます"
-              : `${String(cards.length)} 件のカード`}
+              : `${cards.length.toLocaleString("ja-JP")} 件のカード`}
           </p>
           <Link
             className="mt-2 inline-block text-sm text-primary underline-offset-4 hover:underline"
