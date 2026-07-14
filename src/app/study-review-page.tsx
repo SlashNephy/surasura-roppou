@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 
 import type { QuizRating, ReviewLog, StudyCard, StudySession } from "@/core/domain";
+import type { LawRepository } from "@/core/egov";
+import { resolveAsOf } from "@/core/settings";
 import { createStorageRepository, generateStorageId } from "@/core/storage";
 import type { StorageRepository } from "@/core/storage";
 import { fixedIntervalSchedulerId } from "@/core/study";
@@ -10,6 +12,9 @@ import { Button } from "@/shared/ui/button";
 import { Skeleton } from "@/shared/ui/skeleton";
 
 import { studyCardTypeLabels } from "./study-card-form";
+import { loadLawViewerDocument } from "./law-viewer-loader";
+import type { LawViewerState } from "./law-viewer-page";
+import { StudyReviewEvidencePanel } from "./study-review-evidence";
 import {
   advanceQueue,
   formatIntervalLabel,
@@ -18,6 +23,7 @@ import {
   quizRatingLabels,
   quizRatings,
 } from "./study-review-queue";
+import { useBaseDate } from "./use-base-date";
 
 const defaultStorageRepository = createStorageRepository();
 
@@ -50,17 +56,54 @@ type SessionState =
 
 interface StudyReviewPageProps {
   mode?: ReviewMode;
+  lawRepository?: LawRepository;
   storageRepository?: StorageRepository;
 }
 
 export const StudyReviewPage = ({
   mode = "due",
+  lawRepository,
   // 本番ルーターは createAppRouter() を引数なしで呼ぶため、DI がないときは既定のリポジトリへフォールバックする。
   storageRepository = defaultStorageRepository,
 }: StudyReviewPageProps = {}) => {
   const [state, setState] = useState<SessionState>({ status: "loading" });
   // 読み込み失敗時の「再試行」で加算し、読み込み effect を再実行させる。
   const [reloadToken, setReloadToken] = useState(0);
+  const { baseDate } = useBaseDate();
+  const asOf = resolveAsOf(baseDate);
+  // 同一法令のカードが続いても 1 回しか取得しないためのセッション内キャッシュ。
+  // 取得に失敗した結果はキャッシュから外し、次のカードで再試行できるようにする。
+  const documentCacheRef = useRef(new Map<string, Promise<LawViewerState>>());
+  const loadDocument = useCallback(
+    (lawId: string) => {
+      const key = `${lawId}@${asOf ?? "current"}`;
+      const cache = documentCacheRef.current;
+      const cached = cache.get(key);
+
+      if (cached !== undefined) {
+        return cached;
+      }
+
+      const promise = loadLawViewerDocument(lawId, lawRepository, storageRepository, asOf)
+        .then((document) => {
+          if (document.status !== "ready") {
+            cache.delete(key);
+          }
+
+          return document;
+        })
+        .catch((error: unknown) => {
+          // ローダーは通常 reject しない設計だが、想定外の失敗をキャッシュに残さない。
+          cache.delete(key);
+          throw error;
+        });
+
+      cache.set(key, promise);
+
+      return promise;
+    },
+    [asOf, lawRepository, storageRepository],
+  );
 
   useEffect(() => {
     let isCurrent = true;
@@ -381,6 +424,11 @@ export const StudyReviewPage = ({
                       </p>
                     )}
                   </div>
+                  <StudyReviewEvidencePanel
+                    key={state.session.queue[0].id}
+                    card={state.session.queue[0]}
+                    loadDocument={loadDocument}
+                  />
                   {state.session.recordFailed ? (
                     <p
                       className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-6 text-destructive"

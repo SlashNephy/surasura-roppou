@@ -4,10 +4,13 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import type { CardSchedule, StudyCard } from "@/core/domain";
+import { computeArticleFingerprint } from "@/core/domain";
+import type { LawRepository } from "@/core/egov";
 import type { StorageRepository } from "@/core/storage";
 import { createMemoryStorageRepository } from "@/test/fixtures/storage";
 import { setupScrollMocks } from "@/test/scrollMocks";
 
+import { sampleLawViewerDocument } from "./law-viewer-sample";
 import { createAppRouter } from "./router";
 
 setupScrollMocks();
@@ -36,10 +39,35 @@ const dueSchedule = (cardId: string): CardSchedule => ({
   derivedFrom: `log-${cardId}`,
 });
 
+// e-Gov を叩かずに sampleLawViewerDocument(民法 第1条・第2条)を返す法令リポジトリ。
+const lawRepositoryStub: LawRepository = {
+  listLaws: () => Promise.reject(new Error("not used in tests")),
+  getLawMetadata: () => Promise.reject(new Error("not used in tests")),
+  getLaw: () =>
+    Promise.resolve({
+      law: sampleLawViewerDocument.law,
+      revision: sampleLawViewerDocument.revision,
+      nodes: sampleLawViewerDocument.nodes,
+      raw: {},
+    }),
+};
+
 const renderReviewPage = (path: string, storageRepository: StorageRepository) => {
   const history = createMemoryHistory({ initialEntries: [path] });
 
   render(<RouterProvider router={createAppRouter({ history, storageRepository })} />);
+};
+
+const renderReviewPageWithLaw = (
+  path: string,
+  storageRepository: StorageRepository,
+  lawRepository: LawRepository,
+) => {
+  const history = createMemoryHistory({ initialEntries: [path] });
+
+  render(
+    <RouterProvider router={createAppRouter({ history, lawRepository, storageRepository })} />,
+  );
 };
 
 describe("StudyReviewPage", () => {
@@ -243,5 +271,136 @@ describe("StudyReviewPage", () => {
     const logs = await storage.repository.listReviewLogs("card-1");
     expect(logs).toHaveLength(1);
     expect(logs[0].grade).toBe("good");
+  });
+
+  it("shows the resolved article with its base date after revealing the answer", async () => {
+    const user = userEvent.setup();
+    // sampleLawViewerDocument の第 1 条と同じ本文から指紋を作ると verifyAnchor が match になる。
+    const fingerprint = await computeArticleFingerprint(
+      "第一条 私権は、公共の福祉（公共の利益を含む。）に適合しなければならない。",
+    );
+    const card = {
+      ...makeCard("card-1"),
+      target: { lawId: "129AC0000000089", revisionId: "rev-1", article: "1", fingerprint },
+    } satisfies StudyCard;
+    const storage = createMemoryStorageRepository({
+      studyCards: [card],
+      cardSchedules: [dueSchedule("card-1")],
+    });
+
+    renderReviewPageWithLaw("/study/review", storage.repository, lawRepositoryStub);
+
+    await user.click(await screen.findByRole("button", { name: "答えを見る" }));
+
+    expect(await screen.findByText(/私権は、公共の福祉/)).toBeInTheDocument();
+    expect(screen.getByText("表示基準日: 未設定（現行法）")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "民法 第1条" })).toHaveAttribute(
+      "href",
+      "/laws/129AC0000000089/articles/1",
+    );
+    // 指紋が一致しているので改正バッジは出ない。
+    expect(screen.queryByText("改正の可能性")).not.toBeInTheDocument();
+  });
+
+  it("flags a possible revision and offers rebuilding when the fingerprint drifts", async () => {
+    const user = userEvent.setup();
+    const card = {
+      ...makeCard("card-1"),
+      target: {
+        lawId: "129AC0000000089",
+        revisionId: "rev-1",
+        article: "1",
+        fingerprint: "stale-fingerprint",
+      },
+    } satisfies StudyCard;
+    const storage = createMemoryStorageRepository({
+      studyCards: [card],
+      cardSchedules: [dueSchedule("card-1")],
+    });
+
+    renderReviewPageWithLaw("/study/review", storage.repository, lawRepositoryStub);
+
+    await user.click(await screen.findByRole("button", { name: "答えを見る" }));
+
+    expect(await screen.findByText("改正の可能性")).toBeInTheDocument();
+    // study=new はビューアが本文ロード後にカード作成ダイアログを自動起動する既存パラメータ。
+    expect(screen.getByRole("link", { name: "カードを作り直す" })).toHaveAttribute(
+      "href",
+      "/laws/129AC0000000089/articles/1?study=new",
+    );
+  });
+
+  it("shows a missing-article notice when the anchored article is gone", async () => {
+    const user = userEvent.setup();
+    const card = {
+      ...makeCard("card-1"),
+      target: {
+        lawId: "129AC0000000089",
+        revisionId: "rev-1",
+        article: "99",
+        fingerprint: "any-fingerprint",
+      },
+    } satisfies StudyCard;
+    const storage = createMemoryStorageRepository({
+      studyCards: [card],
+      cardSchedules: [dueSchedule("card-1")],
+    });
+
+    renderReviewPageWithLaw("/study/review", storage.repository, lawRepositoryStub);
+
+    await user.click(await screen.findByRole("button", { name: "答えを見る" }));
+
+    expect(await screen.findByText("この条は現在の版に見つかりません。")).toBeInTheDocument();
+    expect(screen.getByText("改正の可能性")).toBeInTheDocument();
+  });
+
+  it("keeps the revision badge hidden for a card without an article number", async () => {
+    const user = userEvent.setup();
+    // 条番号を持たないカード(型上 article は nullable)。指紋があっても検証対象外とする。
+    const card = {
+      ...makeCard("card-1"),
+      target: {
+        lawId: "129AC0000000089",
+        revisionId: "rev-1",
+        article: undefined,
+        fingerprint: "any-fingerprint",
+      },
+    } satisfies StudyCard;
+    const storage = createMemoryStorageRepository({
+      studyCards: [card],
+      cardSchedules: [dueSchedule("card-1")],
+    });
+
+    renderReviewPageWithLaw("/study/review", storage.repository, lawRepositoryStub);
+
+    await user.click(await screen.findByRole("button", { name: "答えを見る" }));
+
+    // パネルは法令名リンクだけを出し、改正バッジは出さない。
+    expect(await screen.findByRole("link", { name: "民法" })).toBeInTheDocument();
+    expect(screen.queryByText("改正の可能性")).not.toBeInTheDocument();
+  });
+
+  it("falls back to a viewer link when the law cannot be loaded", async () => {
+    const user = userEvent.setup();
+    const failingLawRepository: LawRepository = {
+      ...lawRepositoryStub,
+      getLaw: () => Promise.reject(new Error("network unavailable")),
+    };
+    const storage = createMemoryStorageRepository({
+      studyCards: [makeCard("card-1")],
+      cardSchedules: [dueSchedule("card-1")],
+    });
+
+    renderReviewPageWithLaw("/study/review", storage.repository, failingLawRepository);
+
+    await user.click(await screen.findByRole("button", { name: "答えを見る" }));
+
+    expect(await screen.findByText("条文を取得できませんでした。")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "ビューアで開く" })).toHaveAttribute(
+      "href",
+      "/laws/129AC0000000089/articles/1",
+    );
+    // 縮退しても評価は続行できる。
+    expect(screen.getByRole("button", { name: /できた/ })).toBeEnabled();
   });
 });

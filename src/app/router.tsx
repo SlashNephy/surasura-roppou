@@ -133,12 +133,19 @@ const createRouteTree = ({
     component: StudyRoute,
   });
 
-  // StudyReviewPage に storageRepository を DI するため closure で包む。
+  // StudyReviewPage に storageRepository と lawRepository を DI するため closure で包む。
   // mode が変わったら key で作り直し、進行中のセッション状態を初期化する。
   const StudyReviewRoute = () => {
     const { mode } = useSearch({ from: "/study/review" });
 
-    return <StudyReviewPage key={mode} mode={mode} storageRepository={storageRepository} />;
+    return (
+      <StudyReviewPage
+        key={mode}
+        lawRepository={lawRepository}
+        mode={mode}
+        storageRepository={storageRepository}
+      />
+    );
   };
 
   const studyReviewRoute = createRoute({
