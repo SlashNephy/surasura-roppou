@@ -111,10 +111,7 @@ export interface RecentInputs {
   reviewedCards: readonly { card: StudyCard; at: ISODateString }[];
 }
 
-export const mergeRecentItems: (
-  inputs: RecentInputs,
-  options?: { limit?: number },
-) => RecentItem[];
+export const mergeRecentItems: (inputs: RecentInputs, options?: { limit?: number }) => RecentItem[];
 ```
 
 - 2 種の入力を `at` 降順でマージし、`limit`（既定 5）件返す。
