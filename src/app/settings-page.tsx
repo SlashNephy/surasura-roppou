@@ -1,4 +1,5 @@
 import { type ChangeEvent, useId, useState } from "react";
+import { Link } from "@tanstack/react-router";
 
 import {
   baseDateToStudyYear,
@@ -14,6 +15,7 @@ import { useBaseDate } from "./use-base-date";
 
 interface SettingsRow {
   label: string;
+  route?: "/settings/data-transfer";
   value: string;
 }
 
@@ -37,7 +39,11 @@ const staticGroups: SettingsGroup[] = [
     heading: "データ",
     rows: [
       { label: "オフライン保存の管理", value: "準備中" },
-      { label: "エクスポート / インポート", value: "準備中" },
+      {
+        label: "エクスポート / インポート",
+        route: "/settings/data-transfer",
+        value: "JSON ›",
+      },
       { label: "ときどき六法と連携", value: "未接続" },
     ],
   },
@@ -47,12 +53,23 @@ const StaticSettingsGroup = ({ group }: { group: SettingsGroup }) => (
   <section className="grid gap-2">
     <h2 className="text-xs font-medium tracking-widest text-muted-foreground">{group.heading}</h2>
     <div className="divide-y rounded-md border bg-card">
-      {group.rows.map((row) => (
-        <div key={row.label} className="flex items-center justify-between px-4 py-3 text-sm">
-          <span className="text-foreground">{row.label}</span>
-          <span className="text-muted-foreground">{row.value}</span>
-        </div>
-      ))}
+      {group.rows.map((row) =>
+        row.route === undefined ? (
+          <div key={row.label} className="flex items-center justify-between px-4 py-3 text-sm">
+            <span className="text-foreground">{row.label}</span>
+            <span className="text-muted-foreground">{row.value}</span>
+          </div>
+        ) : (
+          <Link
+            className="flex items-center justify-between gap-4 px-4 py-3 text-sm outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/50"
+            key={row.label}
+            to={row.route}
+          >
+            <span className="text-foreground">{row.label}</span>
+            <span className="shrink-0 text-muted-foreground">{row.value}</span>
+          </Link>
+        ),
+      )}
     </div>
   </section>
 );

@@ -227,6 +227,7 @@ export const StudyPage = ({
 };
 
 export { HomePage } from "./home-page";
+export { DataTransferPage } from "./data-transfer-page";
 export { LawViewerPage } from "./law-viewer-page";
 export { ScannerPage } from "./scanner-page";
 export { SearchPage } from "./search-page";

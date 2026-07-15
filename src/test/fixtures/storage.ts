@@ -11,7 +11,10 @@ import type {
   StudySession,
 } from "@/core/domain";
 import { fixedIntervalScheduler } from "@/core/study";
-import type {
+import {
+  countSavedData,
+  type SavedDataExport,
+  type SavedDataImportResult,
   DueStudyCard,
   LawDocumentInput,
   SavedLawDocument,
@@ -223,11 +226,81 @@ export const createMemoryStorageRepository = (
       listStudySessions() {
         return Promise.resolve(studySessions);
       },
+      importSavedData(data: SavedDataExport) {
+        const nextAnnotations = mergeById(annotations, data.annotations);
+        const nextBookmarks = mergeById(bookmarks, data.bookmarks);
+        const nextCollections = mergeById(collections, data.collections);
+        const nextStudyCards = mergeById(studyCards, data.studyCards);
+        const nextStudySessions = mergeById(studySessions, data.studySessions);
+        const previousLogsById = new Map(reviewLogs.map((log) => [log.id, log]));
+        const affectedCardIds = new Set(data.studyCards.map((card) => card.id));
+
+        for (const log of data.reviewLogs) {
+          const previous = previousLogsById.get(log.id);
+
+          if (previous !== undefined) {
+            affectedCardIds.add(previous.cardId);
+          }
+
+          affectedCardIds.add(log.cardId);
+        }
+
+        const nextReviewLogs = mergeById(reviewLogs, data.reviewLogs);
+        const rebuiltSchedules = [...affectedCardIds].flatMap((cardId) => {
+          const history = nextReviewLogs.filter((log) => log.cardId === cardId);
+
+          return history.length === 0
+            ? []
+            : [fixedIntervalScheduler(history, new Date(data.exportedAt))];
+        });
+        const nextCardSchedules = [
+          ...cardSchedules.filter((schedule) => !affectedCardIds.has(schedule.cardId)),
+          ...rebuiltSchedules,
+        ];
+        let nextSavedDocument = savedDocument;
+        let nextSavedAt = savedAt;
+        let nextUpdatedAt = updatedAt;
+
+        if (data.savedLaws.length > 0) {
+          const importedDocument = data.savedLaws[0];
+          nextSavedDocument = importedDocument;
+          nextSavedAt = importedDocument.savedAt;
+          nextUpdatedAt = data.exportedAt;
+        }
+
+        const result = {
+          importedAt: data.exportedAt,
+          counts: countSavedData(data),
+        } satisfies SavedDataImportResult;
+
+        annotations = nextAnnotations;
+        bookmarks = nextBookmarks;
+        collections = nextCollections;
+        studyCards = nextStudyCards;
+        studySessions = nextStudySessions;
+        reviewLogs = nextReviewLogs;
+        cardSchedules = nextCardSchedules;
+        savedDocument = nextSavedDocument;
+        savedAt = nextSavedAt;
+        updatedAt = nextUpdatedAt;
+
+        return Promise.resolve(result);
+      },
       putOcrSession: vi.fn<(session: OcrSession) => Promise<void>>(),
       listOcrSessions: vi.fn<() => Promise<OcrSession[]>>(() => Promise.resolve([])),
       close: vi.fn<() => Promise<void>>(),
     },
   };
+};
+
+const mergeById = <T extends { id: string }>(existing: T[], incoming: T[]): T[] => {
+  const merged = new Map(existing.map((record) => [record.id, record]));
+
+  for (const record of incoming) {
+    merged.set(record.id, record);
+  }
+
+  return [...merged.values()];
 };
 
 interface MemoryStorageRepositoryOptions {

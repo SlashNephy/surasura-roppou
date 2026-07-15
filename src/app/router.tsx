@@ -15,6 +15,7 @@ import type { StorageRepository } from "@/core/storage";
 
 import { AppShell } from "./AppShell";
 import {
+  DataTransferPage,
   HomePage,
   LawsPage,
   LawViewerPage,
@@ -187,6 +188,15 @@ const createRouteTree = ({
     component: SettingsPage,
   });
 
+  // DataTransferPage に storageRepository を DI するため closure で包む。
+  const DataTransferRoute = () => <DataTransferPage storageRepository={storageRepository} />;
+
+  const dataTransferRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "settings/data-transfer",
+    component: DataTransferRoute,
+  });
+
   // SearchPage に quickSearch を DI するため closure で包む。
   const SearchRoute = () => <SearchPage quickSearch={quickSearch} />;
 
@@ -211,6 +221,7 @@ const createRouteTree = ({
     studyCardsRoute,
     studyCardDetailRoute,
     settingsRoute,
+    dataTransferRoute,
     searchRoute,
   ]);
 };

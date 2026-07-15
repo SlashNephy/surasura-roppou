@@ -1,7 +1,6 @@
 import { deleteDB, openDB } from "idb";
 import type { IDBPDatabase, IDBPTransaction, StoreNames } from "idb";
 
-import { buildArticleReferenceKey } from "@/core/domain";
 import { fixedIntervalScheduler } from "@/core/study";
 import { migrateRecordsToVersion3 } from "./migrations";
 import type {
@@ -12,7 +11,6 @@ import type {
   ISODateString,
   Law,
   LawNode,
-  LawReferenceTarget,
   LawRevision,
   OcrSession,
   ReviewLog,
@@ -20,13 +18,16 @@ import type {
   StudySession,
 } from "@/core/domain";
 
+import type { SavedDataExport } from "./export-data";
+import { importSavedDataIntoDatabase } from "./import-saved-data";
+import type { SavedDataImportResult } from "./import-data";
 import {
   surasuraDatabaseName,
   surasuraDatabaseVersion,
   type StoredLawNode,
   type SurasuraDatabase,
-  type TargetIndexes,
 } from "./schema";
+import { stripTargetIndexes, withTargetIndexes } from "./stored-record";
 
 export { surasuraDatabaseName, surasuraDatabaseVersion } from "./schema";
 export type { SavedLawRecord, SurasuraDatabase } from "./schema";
@@ -88,6 +89,7 @@ export interface StorageRepository {
   recordReview(log: ReviewLog): Promise<CardSchedule>;
   putStudySession(session: StudySession): Promise<void>;
   listStudySessions(): Promise<StudySession[]>;
+  importSavedData(data: SavedDataExport): Promise<SavedDataImportResult>;
   putOcrSession(session: OcrSession): Promise<void>;
   listOcrSessions(): Promise<OcrSession[]>;
   close(): Promise<void>;
@@ -414,6 +416,10 @@ export const createStorageRepository = (
       return withDatabase((db) => db.getAll("studySessions"));
     },
 
+    async importSavedData(data) {
+      return withDatabase((db) => importSavedDataIntoDatabase(db, data, now().toISOString()));
+    },
+
     async putOcrSession(session) {
       await withDatabase(async (db) => {
         await db.put("ocrSessions", session);
@@ -565,18 +571,3 @@ const createVersion3Stores = (
 
 const toOrderedNodes = (records: StoredLawNode[]): LawNode[] =>
   records.sort((left, right) => left.sortOrder - right.sortOrder).map((record) => record.node);
-
-const withTargetIndexes = <T extends { id: string; target: LawReferenceTarget }>(
-  record: T,
-): T & TargetIndexes => ({
-  ...record,
-  lawId: record.target.lawId,
-  targetKey: buildArticleReferenceKey(record.target),
-});
-
-const stripTargetIndexes = <T extends { id: string }>(record: T & TargetIndexes): T => {
-  const { lawId, targetKey, ...publicRecord } = record;
-  void lawId;
-  void targetKey;
-  return publicRecord as unknown as T;
-};

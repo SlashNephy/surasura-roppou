@@ -1,0 +1,283 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "すらすら六法 保存データ export version 2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "exportedAt",
+    "savedLaws",
+    "bookmarks",
+    "collections",
+    "annotations",
+    "studyCards",
+    "reviewLogs",
+    "studySessions"
+  ],
+  "properties": {
+    "version": { "const": 2 },
+    "exportedAt": { "type": "string" },
+    "savedLaws": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/savedLaw" }
+    },
+    "bookmarks": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/bookmark" }
+    },
+    "collections": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/collection" }
+    },
+    "annotations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/annotation" }
+    },
+    "studyCards": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/studyCard" }
+    },
+    "reviewLogs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/reviewLog" }
+    },
+    "studySessions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/studySession" }
+    }
+  },
+  "$defs": {
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lawId"],
+      "properties": {
+        "lawId": { "type": "string" },
+        "revisionId": { "type": ["string", "null"] },
+        "article": { "type": ["string", "null"] },
+        "paragraph": { "type": ["string", "null"] },
+        "item": { "type": ["string", "null"] },
+        "path": { "type": ["string", "null"] },
+        "fingerprint": { "type": ["string", "null"] },
+        "pinned": { "type": ["boolean", "null"] }
+      }
+    },
+    "law": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lawId", "title", "aliases", "source"],
+      "properties": {
+        "lawId": { "type": "string" },
+        "title": { "type": "string" },
+        "lawNumber": { "type": "string" },
+        "lawType": { "type": "string" },
+        "aliases": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "source": { "type": "string", "const": "egov" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "lawRevision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lawId", "revisionId", "fetchedAt"],
+      "properties": {
+        "lawId": { "type": "string" },
+        "revisionId": { "type": "string" },
+        "asOf": { "type": "string" },
+        "effectiveDate": { "type": "string" },
+        "fetchedAt": { "type": "string" },
+        "sourceUrl": { "type": "string" }
+      }
+    },
+    "lawNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "lawId", "revisionId", "type", "path", "rawText", "plainText", "children"],
+      "properties": {
+        "id": { "type": "string" },
+        "lawId": { "type": "string" },
+        "revisionId": { "type": "string" },
+        "type": {
+          "type": "string",
+          "enum": [
+            "Part",
+            "Chapter",
+            "Section",
+            "Subsection",
+            "Division",
+            "Article",
+            "Paragraph",
+            "Item",
+            "Subitem",
+            "SupplementaryProvision",
+            "AppdxTable",
+            "AppdxStyle"
+          ]
+        },
+        "path": { "type": "string" },
+        "number": { "type": "string" },
+        "title": { "type": "string" },
+        "caption": { "type": "string" },
+        "rawText": { "type": "string" },
+        "plainText": { "type": "string" },
+        "normalizedText": { "type": "string" },
+        "children": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "parentId": { "type": "string" }
+      }
+    },
+    "savedLaw": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["law", "revision", "nodes", "savedAt"],
+      "properties": {
+        "law": { "$ref": "#/$defs/law" },
+        "revision": { "$ref": "#/$defs/lawRevision" },
+        "nodes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/lawNode" }
+        },
+        "savedAt": { "type": "string" }
+      }
+    },
+    "bookmark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "target", "title", "tags", "createdAt", "updatedAt"],
+      "properties": {
+        "id": { "type": "string" },
+        "target": { "$ref": "#/$defs/target" },
+        "title": { "type": "string" },
+        "note": { "type": "string" },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "color": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "collection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "bookmarkIds", "createdAt", "updatedAt"],
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "bookmarkIds": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "annotation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "target", "note", "tags", "createdAt", "updatedAt"],
+      "properties": {
+        "id": { "type": "string" },
+        "target": { "$ref": "#/$defs/target" },
+        "targetText": { "type": "string" },
+        "prefixText": { "type": "string" },
+        "suffixText": { "type": "string" },
+        "note": { "type": "string" },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "studyCard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "source",
+        "target",
+        "type",
+        "question",
+        "answer",
+        "tags",
+        "examPinned",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "id": { "type": "string" },
+        "source": {
+          "type": "string",
+          "enum": ["manual", "ocr", "bookmark", "auto"]
+        },
+        "target": { "$ref": "#/$defs/target" },
+        "type": {
+          "type": "string",
+          "enum": [
+            "fill_blank",
+            "true_false",
+            "article_number",
+            "law_name",
+            "definition",
+            "requirements_effects",
+            "compare"
+          ]
+        },
+        "question": { "type": "string" },
+        "answer": { "type": "string" },
+        "choices": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "explanation": { "type": "string" },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "examPinned": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "reviewLog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "cardId", "grade", "reviewedAt", "scheduler"],
+      "properties": {
+        "id": { "type": "string" },
+        "cardId": { "type": "string" },
+        "sessionId": { "type": "string" },
+        "grade": {
+          "type": "string",
+          "enum": ["again", "hard", "good", "easy"]
+        },
+        "reviewedAt": { "type": "string" },
+        "durationMs": { "type": "number" },
+        "scheduler": { "type": "string" }
+      }
+    },
+    "studySession": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "startedAt", "cardIds"],
+      "properties": {
+        "id": { "type": "string" },
+        "startedAt": { "type": "string" },
+        "finishedAt": { "type": "string" },
+        "cardIds": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

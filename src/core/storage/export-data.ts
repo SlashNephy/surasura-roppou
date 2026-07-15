@@ -47,15 +47,13 @@ export const createSavedDataExport = async (
   ]);
   const savedLawDocuments: SavedLawDocument[] = [];
   for (const savedLaw of savedLawSummaries) {
-    try {
-      const document = await repository.getLawDocument(savedLaw.law.lawId);
+    const document = await repository.getLawDocument(savedLaw.law.lawId);
 
-      if (document !== undefined) {
-        savedLawDocuments.push(document);
-      }
-    } catch {
-      // 壊れた保存本文はスキップし、ブックマークなど他の利用者データを優先して出力する。
+    if (document === undefined) {
+      throw new Error(`Saved law document is unavailable: ${savedLaw.law.lawId}`);
     }
+
+    savedLawDocuments.push(document);
   }
 
   return {
