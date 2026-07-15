@@ -46,79 +46,83 @@ export const importSavedDataIntoDatabase = async (
           .index("by-law-revision")
           .getAllKeys([lawId, existingSavedLaw.revisionId]);
 
-        for (const key of existingNodeKeys) {
-          await lawNodes.delete(key);
-        }
+        await Promise.all(existingNodeKeys.map((key) => lawNodes.delete(key)));
 
         if (existingSavedLaw.revisionId !== savedLaw.revision.revisionId) {
           await lawRevisions.delete(existingSavedLaw.revisionId);
         }
       }
 
-      await laws.put(savedLaw.law);
-      await lawRevisions.put(savedLaw.revision);
-
-      for (const [sortOrder, node] of savedLaw.nodes.entries()) {
-        await lawNodes.put({
-          id: node.id,
-          lawId: node.lawId,
-          revisionId: node.revisionId,
-          sortOrder,
-          node,
-        });
-      }
-
-      await savedLaws.put({
-        lawId,
-        revisionId: savedLaw.revision.revisionId,
-        nodeCount: savedLaw.nodes.length,
-        savedAt: savedLaw.savedAt,
-        updatedAt: importedAt,
-      });
-    }
-
-    for (const bookmark of data.bookmarks) {
-      await transaction.objectStore("bookmarks").put(withTargetIndexes(bookmark));
-    }
-
-    for (const collection of data.collections) {
-      await transaction.objectStore("collections").put(collection);
-    }
-
-    for (const annotation of data.annotations) {
-      await transaction.objectStore("annotations").put(withTargetIndexes(annotation));
+      // 大量の法令ノードを1件ずつ完了待ちせず、同じ transaction の request queue へまとめて渡す。
+      await Promise.all([
+        laws.put(savedLaw.law),
+        lawRevisions.put(savedLaw.revision),
+        ...savedLaw.nodes.map((node, sortOrder) =>
+          lawNodes.put({
+            id: node.id,
+            lawId: node.lawId,
+            revisionId: node.revisionId,
+            sortOrder,
+            node,
+          }),
+        ),
+        savedLaws.put({
+          lawId,
+          revisionId: savedLaw.revision.revisionId,
+          nodeCount: savedLaw.nodes.length,
+          savedAt: savedLaw.savedAt,
+          updatedAt: importedAt,
+        }),
+      ]);
     }
 
     const affectedCardIds = new Set(data.studyCards.map((card) => card.id));
 
-    for (const card of data.studyCards) {
-      await transaction.objectStore("studyCards").put(withTargetIndexes(card));
-    }
+    await Promise.all([
+      ...data.bookmarks.map((bookmark) =>
+        transaction.objectStore("bookmarks").put(withTargetIndexes(bookmark)),
+      ),
+      ...data.collections.map((collection) =>
+        transaction.objectStore("collections").put(collection),
+      ),
+      ...data.annotations.map((annotation) =>
+        transaction.objectStore("annotations").put(withTargetIndexes(annotation)),
+      ),
+      ...data.studyCards.map((card) =>
+        transaction.objectStore("studyCards").put(withTargetIndexes(card)),
+      ),
+      ...data.studySessions.map((session) => transaction.objectStore("studySessions").put(session)),
+    ]);
 
-    for (const session of data.studySessions) {
-      await transaction.objectStore("studySessions").put(session);
-    }
+    const previousReviewLogs = await Promise.all(
+      data.reviewLogs.map((log) => reviewLogs.get(log.id)),
+    );
 
-    for (const log of data.reviewLogs) {
-      const previous = await reviewLogs.get(log.id);
+    for (const [index, log] of data.reviewLogs.entries()) {
+      const previous = previousReviewLogs[index];
 
       if (previous !== undefined) {
         affectedCardIds.add(previous.cardId);
       }
 
       affectedCardIds.add(log.cardId);
-      await reviewLogs.put(log);
     }
+    await Promise.all(data.reviewLogs.map((log) => reviewLogs.put(log)));
 
-    for (const cardId of affectedCardIds) {
-      const history = await reviewLogs.index("by-card-id").getAll(cardId);
+    const historiesByCardId = await Promise.all(
+      [...affectedCardIds].map(async (cardId) => ({
+        cardId,
+        history: await reviewLogs.index("by-card-id").getAll(cardId),
+      })),
+    );
 
-      if (history.length === 0) {
-        await cardSchedules.delete(cardId);
-      } else {
-        await cardSchedules.put(fixedIntervalScheduler(history, new Date(importedAt)));
-      }
-    }
+    await Promise.all(
+      historiesByCardId.map(({ cardId, history }) =>
+        history.length === 0
+          ? cardSchedules.delete(cardId)
+          : cardSchedules.put(fixedIntervalScheduler(history, new Date(importedAt))),
+      ),
+    );
 
     await transaction.done;
   } catch (error) {
