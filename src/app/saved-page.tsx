@@ -3,8 +3,8 @@ import { Link, useParams } from "@tanstack/react-router";
 import { Archive, Download, FolderPlus, StickyNote, type LucideIcon } from "lucide-react";
 
 import type { Bookmark, Collection } from "@/core/domain";
+import { createSavedDataFile } from "@/core/native-integration";
 import {
-  createSavedDataExport,
   createSavedLawUseCase,
   createStorageRepository,
   generateStorageId,
@@ -16,6 +16,7 @@ import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { formatIsoDateLabel } from "@/shared/utils/dates";
 
+import { downloadTextFile } from "./download-text-file";
 import { parseTags } from "./saved-page-utils";
 
 const defaultStorageRepository = createStorageRepository();
@@ -139,26 +140,8 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
     setIsExporting(true);
 
     try {
-      const exportedAt = new Date().toISOString();
-      const exportData = await createSavedDataExport(storageRepository, exportedAt);
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-        type: "application/json",
-      });
-      const url = URL.createObjectURL(blob);
-      const revokeObjectUrl = URL.revokeObjectURL.bind(URL);
-      const link = document.createElement("a");
-
-      try {
-        link.href = url;
-        link.download = `surasura-roppou-export-${exportedAt.slice(0, 10)}.json`;
-        document.body.append(link);
-        link.click();
-      } finally {
-        link.remove();
-        window.setTimeout(() => {
-          revokeObjectUrl(url);
-        }, 100);
-      }
+      const file = await createSavedDataFile(storageRepository, new Date());
+      downloadTextFile(file);
       setExportMessage("JSONを書き出しました。");
     } catch {
       setExportError(

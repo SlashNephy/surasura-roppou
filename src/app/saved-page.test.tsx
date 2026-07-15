@@ -73,7 +73,13 @@ describe("SavedPage", () => {
       return "blob:saved-data";
     });
     const revokeObjectURL = vi.fn<(url: string) => void>();
-    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {
+    let downloadedFileName: string | undefined;
+    let downloadedHref: string | undefined;
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      downloadedFileName = this.download;
+      downloadedHref = this.href;
       // jsdom does not perform downloads; the generated Blob is asserted below.
     });
 
@@ -89,6 +95,8 @@ describe("SavedPage", () => {
 
       expect(createObjectURL).toHaveBeenCalledOnce();
       expect(click).toHaveBeenCalledOnce();
+      expect(downloadedFileName).toMatch(/^surasura-roppou-export-\d{4}-\d{2}-\d{2}\.json$/);
+      expect(downloadedHref).toBe("blob:saved-data");
       await waitFor(() => {
         expect(revokeObjectURL).toHaveBeenCalledWith("blob:saved-data");
       });
