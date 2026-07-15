@@ -368,6 +368,36 @@ describe("LawViewerPageContent", () => {
     expect(within(article).getByRole("heading", { name: "第1条" })).toBeInTheDocument();
   });
 
+  it("switches structural headings and both table of contents with display mode", async () => {
+    const { user } = renderLawViewerRoute("/laws/129AC0000000089");
+
+    const lawArticle = await screen.findByRole("article", { name: "民法" });
+    const desktopToc = screen.getByLabelText("法令の目次");
+
+    await user.click(screen.getByRole("button", { name: "目次" }));
+
+    const mobileToc = document.querySelector("#law-viewer-mobile-toc");
+
+    if (!(mobileToc instanceof HTMLElement)) {
+      throw new Error("Mobile table of contents was not rendered");
+    }
+
+    expect(within(lawArticle).getByRole("heading", { name: /第1編\s+総則/u })).toBeInTheDocument();
+    expect(within(desktopToc).getByText(/第1編\s+総則/u)).toBeInTheDocument();
+    expect(within(mobileToc).getByText(/第1編\s+総則/u)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "原文表示" }));
+
+    expect(within(lawArticle).getByRole("heading", { name: /第一編\s+総則/u })).toBeInTheDocument();
+    expect(within(desktopToc).getByText(/第一編\s+総則/u)).toBeInTheDocument();
+    expect(within(mobileToc).getByText(/第一編\s+総則/u)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "読みやすい表示" }));
+
+    expect(within(desktopToc).getByText(/第1章\s+通則/u)).toBeInTheDocument();
+    expect(within(mobileToc).getByRole("button", { name: "第1条" })).toBeInTheDocument();
+  });
+
   it("copies an article in the unified format from the article hover action", async () => {
     const clipboard = vi.fn<(text: string) => Promise<void>>(() => Promise.resolve());
     const { user } = renderLawViewerContentRoute("/laws/129AC0000000089/articles/1", {
