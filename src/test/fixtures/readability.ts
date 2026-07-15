@@ -1,5 +1,4 @@
-export type ReadabilityTransformMode =
-  "article-number" | "date" | "law-number" | "parentheses" | "unchanged";
+import type { ReadabilityTransformMode } from "@/shared/utils/readability";
 
 export interface ReadabilityTransformFixture {
   name: string;
