@@ -110,13 +110,19 @@ const transformArticleNumbers = (text: string): string =>
 const transformStructuralHeadingNumber = (text: string): string =>
   text.replace(
     structuralHeadingPrefixRegex,
-    (_match, kanjiNumber: string, suffix: string, branchNumbers: string | undefined) => {
+    (match, kanjiNumber: string, suffix: string, branchNumbers: string | undefined) => {
+      const arabicNumber = toArabicNumber(kanjiNumber);
+
+      if (arabicNumber === undefined) {
+        return match;
+      }
+
       const displayBranchNumbers =
         branchNumbers === undefined
           ? ""
           : `の${branchNumbers.split("の").map(replaceKanjiNumber).join("の")}`;
 
-      return `第${replaceKanjiNumber(kanjiNumber)}${suffix}${displayBranchNumbers}`;
+      return `第${String(arabicNumber)}${suffix}${displayBranchNumbers}`;
     },
   );
 

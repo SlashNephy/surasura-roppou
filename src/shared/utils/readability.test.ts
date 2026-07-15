@@ -30,6 +30,13 @@ describe("readability", () => {
   });
 
   it.each([
+    ["第十十章の二　第一条", "第十十章の二　第1条"],
+    ["第四章の十十　第一条", "第4章の十十　第1条"],
+  ])("preserves malformed heading number components: %s", (input, expected) => {
+    expect(transformReadableHeadingText(input)).toBe(expected);
+  });
+
+  it.each([
     ["", ""],
     [
       "私権は、公共の福祉に適合しなければならない。",
@@ -107,5 +114,9 @@ describe("readability", () => {
     ["第百百節", "第百百節"],
   ])("keeps malformed legal number unchanged: %s", (input, expected) => {
     expect(transformReadableText(input)).toBe(expected);
+  });
+
+  it("converts a valid article base while preserving its malformed branch number", () => {
+    expect(transformReadableText("第四条の十十")).toBe("第4条の十十");
   });
 });
