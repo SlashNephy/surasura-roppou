@@ -44,6 +44,9 @@ describe("readability", () => {
     ["別表第一の二", "別表1の2"],
     ["別記様式第一の二", "別記様式1の2"],
     ["第一目から第三目まで", "第1目から第3目まで"],
+    ["第四章の二　処分等の求め", "第4章の2　処分等の求め"],
+    ["第三節の二", "第3節の2"],
+    ["第一款の二", "第1款の2"],
   ])("transforms common legal notation: %s", (input, expected) => {
     expect(transformReadableText(input)).toBe(expected);
   });

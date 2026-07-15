@@ -28,8 +28,9 @@ const structuralHeadingNumberRegex = new RegExp(
   `第(${kanjiNumberPattern})(編|章|節|款|目)(?!\\p{Script=Han})`,
   "gu",
 );
+// e-Gov の「第四章の二」のような枝番付き構造見出しを、条項号や別表と同じ表示規則で扱う。
 const branchNumberRegex = new RegExp(
-  `(第\\d+(?:条|項|号)|別表\\d+|別記様式\\d+)の(${branchNumberPattern})`,
+  `(第\\d+(?:編|章|節|款|目|条|項|号)|別表\\d+|別記様式\\d+)の(${branchNumberPattern})`,
   "g",
 );
 const appendixTableNumberRegex = new RegExp(`(別表|別記様式)第?(${kanjiNumberPattern})`, "g");

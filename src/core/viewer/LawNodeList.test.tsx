@@ -243,6 +243,28 @@ describe("LawNodeList", () => {
     expect(screen.getByRole("heading", { level: 3, name: "第一章　通則" })).toBeInTheDocument();
   });
 
+  it.each([
+    ["readable", "第4章の2　処分等の求め"],
+    ["original", "第四章の二　処分等の求め"],
+  ] as const)("renders a branch chapter heading in %s mode", (displayMode, expectedHeading) => {
+    render(
+      <LawNodeList
+        displayMode={displayMode}
+        nodes={[
+          node({
+            id: "chapter:4-2",
+            type: "Chapter",
+            path: "chapter:4-2",
+            title: "第四章の二　処分等の求め",
+            plainText: "第四章の二　処分等の求め",
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { level: 2, name: expectedHeading })).toBeInTheDocument();
+  });
+
   it("renders LawNode hierarchy as readable legal text blocks", () => {
     render(<LawNodeList activeArticleNumber="1" nodes={nodes} />);
 
