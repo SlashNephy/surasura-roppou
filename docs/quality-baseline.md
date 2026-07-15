@@ -291,7 +291,9 @@ origin 全体へ影響する `localStorage.clear()` の使用を禁止する。
 
 ## 8. 現行実装の監査結果
 
-本節は、commit `ae3d5e5fc4781a94f6a1f417b6c8999df914cf9c` の production build を実レスポンスと headed Chrome で監査した結果である。
+第 8.1 節、第 8.2 節、および第 8.3 節の cold cache 追加監査を除く結果は、commit `ae3d5e5fc4781a94f6a1f417b6c8999df914cf9c` の production build を実レスポンスと headed Chrome で監査した結果である。
+
+第 8.3 節の cold cache 追加監査だけは、commit `b6d255de17d712c3df8a09eee10c07eecf994969` の production build を対象とし、同節で別の監査結果として明示する。
 
 値は第 4.2 節の基準と同じ page time origin、`performance.now()`、二つの `requestAnimationFrame` を用いたローカル監査値であり、実利用環境全体の適合を表すものではない。
 
