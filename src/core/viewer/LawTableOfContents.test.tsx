@@ -37,8 +37,24 @@ const noopSelectArticle = () => {
 };
 
 describe("LawTableOfContents", () => {
-  it("renders nested items under the legal table of contents navigation", () => {
+  it("renders nested items as readable text by default", () => {
     render(<LawTableOfContents items={items} onSelectArticle={noopSelectArticle} />);
+
+    const navigation = screen.getByRole("navigation", { name: "法令目次" });
+
+    expect(within(navigation).getByText(/第1編\s+総則/u)).toBeInTheDocument();
+    expect(within(navigation).getByText(/第1章\s+通則/u)).toBeInTheDocument();
+    expect(within(navigation).getByRole("button", { name: "第1条" })).toBeInTheDocument();
+  });
+
+  it("keeps original table of contents text in original mode", () => {
+    render(
+      <LawTableOfContents
+        displayMode="original"
+        items={items}
+        onSelectArticle={noopSelectArticle}
+      />,
+    );
 
     const navigation = screen.getByRole("navigation", { name: "法令目次" });
 
@@ -56,7 +72,7 @@ describe("LawTableOfContents", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "第一条" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "第1条" })).toHaveAttribute(
       "aria-current",
       "location",
     );
@@ -66,7 +82,7 @@ describe("LawTableOfContents", () => {
     const onSelectArticle = vi.fn();
 
     render(<LawTableOfContents items={items} onSelectArticle={onSelectArticle} />);
-    fireEvent.click(screen.getByRole("button", { name: "第一条" }));
+    fireEvent.click(screen.getByRole("button", { name: "第1条" }));
 
     expect(onSelectArticle).toHaveBeenCalledExactlyOnceWith("1");
   });

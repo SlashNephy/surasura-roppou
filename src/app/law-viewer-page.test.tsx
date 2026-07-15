@@ -442,7 +442,7 @@ describe("LawViewerPageContent", () => {
       "data-active",
       "true",
     );
-    expect(screen.getByRole("button", { name: "第一条" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "第1条" })).toHaveAttribute(
       "aria-current",
       "location",
     );
@@ -457,7 +457,7 @@ describe("LawViewerPageContent", () => {
   it("navigates to the selected article from the table of contents", async () => {
     const { history, user } = renderLawViewerRoute("/laws/129AC0000000089");
 
-    await user.click(await screen.findByRole("button", { name: "第二条" }));
+    await user.click(await screen.findByRole("button", { name: "第2条" }));
 
     await waitFor(() => {
       expect(history.location.pathname).toBe("/laws/129AC0000000089/articles/2");
@@ -597,7 +597,7 @@ describe("LawViewerPageContent", () => {
     await user.click(tocToggle);
     const mobileTocPanel = document.querySelector("#law-viewer-mobile-toc");
 
-    await user.click(within(mobileTocPanel as HTMLElement).getByRole("button", { name: "第二条" }));
+    await user.click(within(mobileTocPanel as HTMLElement).getByRole("button", { name: "第2条" }));
 
     await waitFor(() => {
       expect(history.location.pathname).toBe("/laws/129AC0000000089/articles/2");
@@ -612,7 +612,7 @@ describe("LawViewerPageContent", () => {
     await screen.findByRole("article", { name: "第一条" });
     scrollMocks.scrollIntoView.mockClear();
 
-    await user.click(screen.getByRole("button", { name: "第一条" }));
+    await user.click(screen.getByRole("button", { name: "第1条" }));
 
     expect(scrollMocks.scrollIntoView).toHaveBeenCalledWith({
       block: "start",
