@@ -12,6 +12,7 @@ import {
   createStorageRepository,
   type PreparedSavedDataImport,
   type SavedDataCounts,
+  type SavedDataImportErrorCode,
   type StorageRepository,
 } from "@/core/storage";
 import { Button } from "@/shared/ui/button";
@@ -36,6 +37,40 @@ const dataCountDefinitions: readonly {
 
 type BusyState = "reading" | "exporting" | "importing" | undefined;
 
+const busyMessages: Record<Exclude<BusyState, undefined>, string> = {
+  reading: "JSONファイルを確認中…",
+  exporting: "エクスポート中…",
+  importing: "インポート中…",
+};
+
+const importErrorMessages: Record<SavedDataImportErrorCode, string> = {
+  "invalid-json": "ファイルをJSONとして読み取れません。内容を確認してください。",
+  "unsupported-version":
+    "このファイルには対応していません。export version 2 のJSONを選択してください。",
+  "invalid-schema":
+    "JSONがexport version 2の形式と一致しません。元のアプリでデータを書き出し直してください。",
+  "duplicate-id": "同じIDのデータが重複しています。元のアプリでデータを書き出し直してください。",
+  "invalid-reference":
+    "関連するデータが不足しています。元のアプリでデータを書き出し直してください。",
+};
+
+const exportedAtFormatter = new Intl.DateTimeFormat("ja-JP", {
+  dateStyle: "medium",
+  timeStyle: "medium",
+});
+const countFormatter = new Intl.NumberFormat("ja-JP");
+
+const importErrorMessage = (error: unknown): string =>
+  error instanceof SavedDataImportError
+    ? importErrorMessages[error.code]
+    : "JSONファイルを検証できませんでした。別のファイルを選択してください。";
+
+const formatExportedAt = (exportedAt: string): string | undefined => {
+  const timestamp = Date.parse(exportedAt);
+
+  return Number.isNaN(timestamp) ? undefined : exportedAtFormatter.format(new Date(timestamp));
+};
+
 interface DataTransferPageProps {
   storageRepository?: StorageRepository;
 }
@@ -50,11 +85,14 @@ export const DataTransferPage = ({
   const [successMessage, setSuccessMessage] = useState<string | undefined>();
   const [error, setError] = useState<string | undefined>();
   const isBusy = busy !== undefined;
+  const busyMessage = busy === undefined ? undefined : busyMessages[busy];
+  const formattedExportedAt =
+    prepared === undefined ? undefined : formatExportedAt(prepared.preview.exportedAt);
   const countRows =
     prepared === undefined
       ? []
       : dataCountDefinitions.map(({ key, label }) => ({
-          count: prepared.preview.counts[key],
+          formattedCount: countFormatter.format(prepared.preview.counts[key]),
           key,
           label,
         }));
@@ -104,17 +142,7 @@ export const DataTransferPage = ({
     try {
       setPrepared(prepareSavedDataImportFile(contents));
     } catch (validationError) {
-      if (validationError instanceof SavedDataImportError) {
-        if (validationError.code === "unsupported-version") {
-          setError("このファイルには対応していません。export version 2 のJSONを選択してください。");
-        } else if (validationError.code === "invalid-json") {
-          setError("ファイルをJSONとして読み取れません。内容を確認してください。");
-        } else {
-          setError(`JSONの内容を確認してください。${validationError.message}`);
-        }
-      } else {
-        setError("JSONファイルを検証できませんでした。別のファイルを選択してください。");
-      }
+      setError(importErrorMessage(validationError));
     } finally {
       setBusy(undefined);
     }
@@ -166,7 +194,7 @@ export const DataTransferPage = ({
         </p>
       </div>
 
-      {successMessage === undefined ? null : (
+      {busy !== undefined || successMessage === undefined ? null : (
         <p
           aria-live="polite"
           className="rounded-md border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-foreground"
@@ -177,19 +205,22 @@ export const DataTransferPage = ({
       )}
       {error === undefined ? null : (
         <p
-          className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm leading-6 text-destructive"
+          className="break-words rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm leading-6 text-destructive"
           role="alert"
         >
           {error}
         </p>
       )}
-      {busy === "reading" ? (
+      {busyMessage === undefined ? null : (
         <p aria-live="polite" className="text-sm text-muted-foreground" role="status">
-          JSONファイルを読み込んでいます。
+          {busyMessage}
         </p>
-      ) : null}
+      )}
 
-      <section className="grid gap-4 rounded-lg border bg-card p-4 sm:p-5">
+      <section
+        aria-busy={busy === "exporting"}
+        className="grid gap-4 rounded-lg border bg-card p-4 sm:p-5"
+      >
         <div className="grid gap-1">
           <h2 className="text-lg font-semibold text-foreground">エクスポート</h2>
           <p className="text-sm leading-6 text-muted-foreground">
@@ -197,6 +228,7 @@ export const DataTransferPage = ({
           </p>
         </div>
         <Button
+          aria-busy={busy === "exporting"}
           className="w-full gap-2 sm:w-fit"
           disabled={isBusy}
           onClick={() => {
@@ -206,11 +238,14 @@ export const DataTransferPage = ({
           variant="outline"
         >
           <Download aria-hidden="true" className="size-4" />
-          {busy === "exporting" ? "エクスポート中" : "JSONをエクスポート"}
+          {busy === "exporting" ? "エクスポート中…" : "JSONをエクスポート"}
         </Button>
       </section>
 
-      <section className="grid gap-4 rounded-lg border bg-card p-4 sm:p-5">
+      <section
+        aria-busy={busy === "reading" || busy === "importing"}
+        className="grid gap-4 rounded-lg border bg-card p-4 sm:p-5"
+      >
         <div className="grid gap-1">
           <h2 className="text-lg font-semibold text-foreground">インポート</h2>
           <p className="text-sm leading-6 text-muted-foreground">
@@ -224,8 +259,10 @@ export const DataTransferPage = ({
           <Input
             accept=".json,application/json"
             className="h-auto min-h-10 py-1.5"
+            autoComplete="off"
             disabled={isBusy}
             id={fileInputId}
+            name="saved-data-import"
             onChange={(event) => {
               void handleFileChange(event);
             }}
@@ -246,8 +283,12 @@ export const DataTransferPage = ({
                 <dt className="text-muted-foreground">形式</dt>
                 <dd className="break-all text-foreground">version {prepared.preview.version}</dd>
                 <dt className="text-muted-foreground">出力日時</dt>
-                <dd className="break-all text-foreground">
-                  <time dateTime={prepared.preview.exportedAt}>{prepared.preview.exportedAt}</time>
+                <dd className="break-words text-foreground">
+                  {formattedExportedAt === undefined ? (
+                    "日時不明"
+                  ) : (
+                    <time dateTime={prepared.preview.exportedAt}>{formattedExportedAt}</time>
+                  )}
                 </dd>
               </dl>
             </div>
@@ -258,7 +299,9 @@ export const DataTransferPage = ({
                   key={row.key}
                 >
                   <dt className="min-w-0 break-words text-foreground">{row.label}</dt>
-                  <dd className="shrink-0 tabular-nums text-muted-foreground">{row.count}件</dd>
+                  <dd className="shrink-0 tabular-nums text-muted-foreground">
+                    {row.formattedCount}件
+                  </dd>
                 </div>
               ))}
             </dl>
@@ -266,6 +309,7 @@ export const DataTransferPage = ({
               同じIDのデータは上書きされ、このファイルに含まれないデータはそのまま残ります。
             </p>
             <Button
+              aria-busy={busy === "importing"}
               className="w-full gap-2 sm:w-fit"
               disabled={isBusy}
               onClick={() => {
@@ -274,7 +318,7 @@ export const DataTransferPage = ({
               type="button"
             >
               <Upload aria-hidden="true" className="size-4" />
-              {busy === "importing" ? "インポート中" : "この内容をインポート"}
+              {busy === "importing" ? "インポート中…" : "この内容をインポート"}
             </Button>
           </section>
         )}

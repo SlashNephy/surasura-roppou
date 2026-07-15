@@ -48,7 +48,15 @@ describe("DataTransferPage", () => {
 
     const preview = await screen.findByRole("region", { name: "インポート内容の確認" });
     expect(within(preview).getByText("version 2")).toBeInTheDocument();
-    expect(within(preview).getByText(data.exportedAt)).toBeInTheDocument();
+    const expectedExportedAt = new Intl.DateTimeFormat("ja-JP", {
+      dateStyle: "medium",
+      timeStyle: "medium",
+    }).format(new Date(data.exportedAt));
+    expect(within(preview).getByText(expectedExportedAt)).toHaveAttribute(
+      "datetime",
+      data.exportedAt,
+    );
+    expect(preview).not.toHaveTextContent(data.exportedAt);
     for (const label of [
       "保存法令本文",
       "ブックマーク",
@@ -88,6 +96,64 @@ describe("DataTransferPage", () => {
     expect(importSavedData).not.toHaveBeenCalled();
   });
 
+  it("describes an invalid schema without exposing raw validator details", async () => {
+    const data = { ...createSavedDataExportFixture(), unknownField: true };
+    const user = userEvent.setup();
+
+    renderDataTransferRoute();
+
+    await user.upload(
+      await screen.findByLabelText("インポートするJSONファイル"),
+      createJsonFile(data),
+    );
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("export version 2の形式と一致しません");
+    expect(alert).not.toHaveTextContent("must NOT");
+    expect(alert).not.toHaveTextContent("unknownField");
+  });
+
+  it("describes duplicate IDs without exposing the internal ID", async () => {
+    const data = createSavedDataExportFixture();
+    const bookmark = data.bookmarks[0];
+    const duplicateId = bookmark.id;
+    data.bookmarks.push({ ...bookmark });
+    const user = userEvent.setup();
+
+    renderDataTransferRoute();
+
+    await user.upload(
+      await screen.findByLabelText("インポートするJSONファイル"),
+      createJsonFile(data),
+    );
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("同じIDのデータが重複");
+    expect(alert).toHaveTextContent("元のアプリでデータを書き出し直");
+    expect(alert).not.toHaveTextContent("Duplicate");
+    expect(alert).not.toHaveTextContent(duplicateId);
+  });
+
+  it("describes missing related data without exposing internal references", async () => {
+    const data = createSavedDataExportFixture();
+    const missingCardId = "missing-study-card-id";
+    data.reviewLogs[0] = { ...data.reviewLogs[0], cardId: missingCardId };
+    const user = userEvent.setup();
+
+    renderDataTransferRoute();
+
+    await user.upload(
+      await screen.findByLabelText("インポートするJSONファイル"),
+      createJsonFile(data),
+    );
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("関連するデータが不足");
+    expect(alert).toHaveTextContent("元のアプリでデータを書き出し直");
+    expect(alert).not.toHaveTextContent("Review log");
+    expect(alert).not.toHaveTextContent(missingCardId);
+  });
+
   it("keeps the preview and reports that data is unchanged when repository import fails", async () => {
     const data = createSavedDataExportFixture();
     const importSavedData = vi.fn<StorageRepository["importSavedData"]>(() =>
@@ -107,7 +173,62 @@ describe("DataTransferPage", () => {
     expect(screen.getByRole("region", { name: "インポート内容の確認" })).toBeInTheDocument();
   });
 
-  it("disables every data action while import is pending and restores them after success", async () => {
+  it("announces reading and disables every data action while file text is pending", async () => {
+    const data = createSavedDataExportFixture();
+    const deferred = createDeferred<string>();
+    const file = createJsonFile(data);
+    Object.defineProperty(file, "text", { value: () => deferred.promise });
+    const user = userEvent.setup();
+
+    renderDataTransferRoute();
+
+    const fileInput = await screen.findByLabelText("インポートするJSONファイル");
+    await user.upload(fileInput, file);
+
+    expect(fileInput).toBeDisabled();
+    expect(fileInput).toHaveAttribute("name", "saved-data-import");
+    expect(fileInput).toHaveAttribute("autocomplete", "off");
+    expect(screen.getByRole("button", { name: "JSONをエクスポート" })).toBeDisabled();
+    expect(screen.getByRole("status")).toHaveTextContent("JSONファイルを確認中…");
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+    expect(screen.getByRole("heading", { name: "インポート" }).closest("section")).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+
+    deferred.resolve(JSON.stringify(data));
+    expect(await screen.findByRole("region", { name: "インポート内容の確認" })).toBeInTheDocument();
+  });
+
+  it("announces exporting and disables every data action while export is pending", async () => {
+    const data = createSavedDataExportFixture();
+    const deferred = createDeferred<typeof data.bookmarks>();
+    const repository = createRepository({ listBookmarks: () => deferred.promise });
+    const user = userEvent.setup();
+
+    renderDataTransferRoute(repository);
+
+    const fileInput = await screen.findByLabelText("インポートするJSONファイル");
+    await user.upload(fileInput, createJsonFile(data));
+    await user.click(screen.getByRole("button", { name: "JSONをエクスポート" }));
+
+    expect(fileInput).toBeDisabled();
+    expect(screen.getByRole("button", { name: "エクスポート中…" })).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "この内容をインポート" })).toBeDisabled();
+    expect(screen.getByRole("status")).toHaveTextContent("エクスポート中…");
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+    expect(
+      screen.getByRole("heading", { name: "エクスポート" }).closest("section"),
+    ).toHaveAttribute("aria-busy", "true");
+
+    deferred.reject(new Error("export stopped after busy-state assertion"));
+    expect(await screen.findByRole("alert")).toHaveTextContent("JSONを書き出せませんでした");
+  });
+
+  it("announces importing and disables every data action while import is pending", async () => {
     const data = createSavedDataExportFixture();
     const deferred = createDeferred<SavedDataImportResult>();
     const importSavedData = vi.fn<StorageRepository["importSavedData"]>(() => deferred.promise);
@@ -121,16 +242,26 @@ describe("DataTransferPage", () => {
 
     expect(fileInput).toBeDisabled();
     expect(screen.getByRole("button", { name: "JSONをエクスポート" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "インポート中" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "インポート中…" })).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("インポート中…");
+    expect(screen.getByRole("heading", { name: "インポート" }).closest("section")).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
 
     deferred.resolve({
       counts: allDataCounts,
       importedAt: "2026-07-15T00:01:00.000Z",
     });
 
-    expect(await screen.findByRole("status")).toHaveTextContent(
+    await screen.findByText("7分類、合計7件のデータを取り込みました。");
+    expect(screen.getByRole("status")).toHaveTextContent(
       "7分類、合計7件のデータを取り込みました。",
     );
+    expect(screen.getAllByRole("status")).toHaveLength(1);
     expect(fileInput).toBeEnabled();
     expect(screen.getByRole("button", { name: "JSONをエクスポート" })).toBeEnabled();
   });
@@ -195,6 +326,46 @@ describe("DataTransferPage", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("JSONとして読み取れません");
     expect(screen.queryByRole("region", { name: "インポート内容の確認" })).not.toBeInTheDocument();
+  });
+
+  it("shows an unknown-date fallback without creating an invalid time element", async () => {
+    const data = { ...createSavedDataExportFixture(), exportedAt: "not-a-date" };
+    const user = userEvent.setup();
+
+    renderDataTransferRoute();
+
+    await user.upload(
+      await screen.findByLabelText("インポートするJSONファイル"),
+      createJsonFile(data),
+    );
+
+    const preview = await screen.findByRole("region", { name: "インポート内容の確認" });
+    expect(within(preview).getByText("日時不明")).toBeInTheDocument();
+    expect(within(preview).queryByText("not-a-date")).not.toBeInTheDocument();
+    expect(preview.querySelector("time")).not.toBeInTheDocument();
+  });
+
+  it("formats four-digit category counts for Japanese readers", async () => {
+    const data = createSavedDataExportFixture();
+    const bookmark = data.bookmarks[0];
+    data.bookmarks = [
+      bookmark,
+      ...Array.from({ length: 1233 }, (_, index) => ({
+        ...bookmark,
+        id: `bookmark-${(index + 2).toLocaleString("en-US", { useGrouping: false })}`,
+      })),
+    ];
+    const user = userEvent.setup();
+
+    renderDataTransferRoute();
+
+    await user.upload(
+      await screen.findByLabelText("インポートするJSONファイル"),
+      createJsonFile(data),
+    );
+
+    const preview = await screen.findByRole("region", { name: "インポート内容の確認" });
+    expect(within(preview).getByText("1,234件")).toBeInTheDocument();
   });
 });
 
