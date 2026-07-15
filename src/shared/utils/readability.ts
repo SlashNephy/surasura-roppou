@@ -23,6 +23,11 @@ const kanjiNumberPattern = "[一二三四五六七八九十百千]+";
 const eraYearPattern = `${kanjiNumberPattern}|元`;
 const branchNumberPattern = `${kanjiNumberPattern}(?:の${kanjiNumberPattern})*`;
 const articleNumberRegex = new RegExp(`第(${kanjiNumberPattern})(条|項|号)`, "g");
+// 本文中の「第四章の二つ」などとの曖昧さを避け、e-Gov の見出し形式である先頭の構造番号と区切りがそろう場合だけ変換する。
+const structuralHeadingPrefixRegex = new RegExp(
+  `^第(${kanjiNumberPattern})(編|章|節|款|目)(?:の(${branchNumberPattern}))?(?=$|[\\s\\p{P}\\p{S}])`,
+  "u",
+);
 const branchNumberRegex = new RegExp(
   `(第\\d+(?:条|項|号)|別表\\d+|別記様式\\d+)の(${branchNumberPattern})`,
   "g",
@@ -87,17 +92,39 @@ const replaceKanjiNumber = (kanjiNumber: string): string => {
 const transformParentheses = (text: string): string =>
   text.replaceAll("（", "(").replaceAll("）", ")");
 
+const replaceLegalNumber = (_match: string, kanjiNumber: string, suffix: string): string => {
+  return `第${replaceKanjiNumber(kanjiNumber)}${suffix}`;
+};
+
+const replaceBranchNumbers = (_match: string, prefix: string, branchNumbers: string): string =>
+  `${prefix}の${branchNumbers.split("の").map(replaceKanjiNumber).join("の")}`;
+
 const transformArticleNumbers = (text: string): string =>
   text
-    .replace(articleNumberRegex, (_match, kanjiNumber: string, suffix: string) => {
-      return `第${replaceKanjiNumber(kanjiNumber)}${suffix}`;
-    })
+    .replace(articleNumberRegex, replaceLegalNumber)
     .replace(appendixTableNumberRegex, (_match, prefix: string, tableNumber: string) => {
       return `${prefix}${replaceKanjiNumber(tableNumber)}`;
     })
-    .replace(branchNumberRegex, (_match, prefix: string, branchNumbers: string) => {
-      return `${prefix}の${branchNumbers.split("の").map(replaceKanjiNumber).join("の")}`;
-    });
+    .replace(branchNumberRegex, replaceBranchNumbers);
+
+const transformStructuralHeadingNumber = (text: string): string =>
+  text.replace(
+    structuralHeadingPrefixRegex,
+    (match, kanjiNumber: string, suffix: string, branchNumbers: string | undefined) => {
+      const arabicNumber = toArabicNumber(kanjiNumber);
+
+      if (arabicNumber === undefined) {
+        return match;
+      }
+
+      const displayBranchNumbers =
+        branchNumbers === undefined
+          ? ""
+          : `の${branchNumbers.split("の").map(replaceKanjiNumber).join("の")}`;
+
+      return `第${String(arabicNumber)}${suffix}${displayBranchNumbers}`;
+    },
+  );
 
 const transformDates = (text: string): string =>
   text.replace(eraDateRegex, (_match, era: string, year: string, month: string, day: string) => {
@@ -130,3 +157,6 @@ export const transformReadableText = (
       );
   }
 };
+
+export const transformReadableHeadingText = (text: string): string =>
+  transformReadableText(transformStructuralHeadingNumber(text));

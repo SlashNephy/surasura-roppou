@@ -534,6 +534,7 @@ const LawViewerReadyState = ({
             <p className="text-[10px] font-medium tracking-widest text-muted-foreground">目次</p>
             <LawTableOfContents
               activeArticleNumber={activeArticleNumber}
+              displayMode={displayMode}
               items={tocItems}
               onSelectArticle={navigateToArticle}
             />
@@ -744,6 +745,7 @@ const LawViewerReadyState = ({
           >
             <LawTableOfContents
               activeArticleNumber={activeArticleNumber}
+              displayMode={displayMode}
               items={tocItems}
               onSelectArticle={navigateToArticle}
             />

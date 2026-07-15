@@ -236,11 +236,48 @@ describe("LawNodeList", () => {
     expect(screen.getByText("第一条 rawTextが空の本文。")).toBeInTheDocument();
   });
 
-  it("renders LawNode hierarchy as readable legal text blocks", () => {
-    render(<LawNodeList activeArticleNumber="1" nodes={nodes} />);
+  it("keeps legal structure headings unchanged in original mode", () => {
+    render(<LawNodeList displayMode="original" nodes={nodes} />);
 
     expect(screen.getByRole("heading", { level: 2, name: "第一編　総則" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 3, name: "第一章　通則" })).toBeInTheDocument();
+  });
+
+  it.each([
+    ["readable", "第4章の2　処分等の求め"],
+    ["original", "第四章の二　処分等の求め"],
+  ] as const)("renders a branch chapter heading in %s mode", (displayMode, expectedHeading) => {
+    render(
+      <LawNodeList
+        displayMode={displayMode}
+        nodes={[
+          node({
+            id: "chapter:4-2",
+            type: "Chapter",
+            path: "chapter:4-2",
+            title: "第四章の二　処分等の求め",
+            plainText: "第四章の二　処分等の求め",
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { level: 2, name: expectedHeading })).toBeInTheDocument();
+  });
+
+  it("renders LawNode hierarchy as readable legal text blocks", () => {
+    render(<LawNodeList activeArticleNumber="1" nodes={nodes} />);
+
+    expect(screen.getByRole("heading", { level: 2, name: "第1編　総則" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 3, name: "第1章　通則" })).toBeInTheDocument();
+    expect(
+      screen.queryByText((_, element) => {
+        return (
+          element?.tagName.toLowerCase() === "p" &&
+          /第(?:一|1)章\u3000通則/u.test(element.textContent)
+        );
+      }),
+    ).not.toBeInTheDocument();
 
     const article = screen.getByRole("article", { name: "第一条" });
     expect(article).toHaveAttribute("id", "article-1");

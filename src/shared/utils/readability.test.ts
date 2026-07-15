@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { readabilityTransformFixtures } from "@/test/fixtures/readability";
+import {
+  readabilityHeadingTransformFixtures,
+  readabilityTransformFixtures,
+} from "@/test/fixtures/readability";
 
-import { transformReadableText, toArabicNumber } from "./readability";
+import { transformReadableHeadingText, transformReadableText, toArabicNumber } from "./readability";
 
 describe("readability", () => {
   it.each(readabilityTransformFixtures)(
@@ -11,6 +14,27 @@ describe("readability", () => {
       expect(transformReadableText(input, mode)).toBe(expected);
     },
   );
+
+  it.each(readabilityHeadingTransformFixtures)(
+    "transforms heading fixture: $name",
+    ({ expected, input }) => {
+      expect(transformReadableHeadingText(input)).toBe(expected);
+    },
+  );
+
+  it.each([
+    ["第一章及び第二章", "第一章及び第二章"],
+    ["第四章の二つの規定", "第四章の二つの規定"],
+  ])("keeps non-heading text unchanged in heading transform: %s", (input, expected) => {
+    expect(transformReadableHeadingText(input)).toBe(expected);
+  });
+
+  it.each([
+    ["第十十章の二　第一条", "第十十章の二　第1条"],
+    ["第四章の十十　第一条", "第4章の十十　第1条"],
+  ])("preserves malformed heading number components: %s", (input, expected) => {
+    expect(transformReadableHeadingText(input)).toBe(expected);
+  });
 
   it.each([
     ["", ""],
@@ -22,6 +46,21 @@ describe("readability", () => {
       "一般、一部、同一、第三者、第一審、第一義的。",
       "一般、一部、同一、第三者、第一審、第一義的。",
     ],
+    ["第一目標を達成する。", "第一目標を達成する。"],
+    ["第一目的は安全である。", "第一目的は安全である。"],
+    ["第一編成を発表する。", "第一編成を発表する。"],
+    ["第一章及び第二章", "第一章及び第二章"],
+    ["第四章の二で定める。", "第四章の二で定める。"],
+    ["第四章の二より適用する。", "第四章の二より適用する。"],
+    ["第四章の二かつ第三章の三", "第四章の二かつ第三章の三"],
+    ["第四章の二以下", "第四章の二以下"],
+    ["第四章の二とおり", "第四章の二とおり"],
+    ["第四章の二つ", "第四章の二つ"],
+    ["第四章の二か所", "第四章の二か所"],
+    ["第一目から第三目まで", "第一目から第三目まで"],
+    ["第四章の一部を改正する。", "第四章の一部を改正する。"],
+    ["第三節の二次的な効果", "第三節の二次的な効果"],
+    ["第四章の二の一部を改正する。", "第四章の二の一部を改正する。"],
   ])("keeps non-target prose unchanged: %s", (input, expected) => {
     expect(transformReadableText(input)).toBe(expected);
   });
@@ -71,7 +110,13 @@ describe("readability", () => {
   it.each([
     ["第十十条", "第十十条"],
     ["第十百号", "第十百号"],
-  ])("keeps malformed article number unchanged: %s", (input, expected) => {
+    ["第十十章", "第十十章"],
+    ["第百百節", "第百百節"],
+  ])("keeps malformed legal number unchanged: %s", (input, expected) => {
     expect(transformReadableText(input)).toBe(expected);
+  });
+
+  it("converts a valid article base while preserving its malformed branch number", () => {
+    expect(transformReadableText("第四条の十十")).toBe("第4条の十十");
   });
 });
