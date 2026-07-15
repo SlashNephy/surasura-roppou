@@ -124,12 +124,8 @@ export const importSavedDataIntoDatabase = async (
   } catch (error) {
     try {
       transaction.abort();
-    } catch (abortError) {
-      // 失敗した IDB request が先に transaction を abort した場合だけ、重ねた abort の例外を無視する。
-      if (!(abortError instanceof DOMException && abortError.name === "InvalidStateError")) {
-        await transaction.done.catch(() => undefined);
-        throw abortError;
-      }
+    } catch {
+      // request failure で既に abort 済みの場合がある。cleanup 例外で最初の request / scheduler error を隠さない。
     }
 
     // abort 完了の reject を観測し、元の書き込み例外だけを呼び出し元へ返す。
