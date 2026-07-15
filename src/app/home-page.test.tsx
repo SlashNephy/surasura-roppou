@@ -65,9 +65,12 @@ describe("HomePage", () => {
     expect(
       await screen.findByRole("heading", { name: "撮って、開いて、すらすら読める。" }),
     ).toBeInTheDocument();
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "保存済み法令を読み込めませんでした。",
-    );
+    // listSavedLaws の失敗で useSavedLaws と useStudyDashboard の両方がエラーになるため、
+    // role="status" が複数出る。保存済み法令のエラーバナーが存在することだけを確認する。
+    const statusElements = await screen.findAllByRole("status");
+    expect(
+      statusElements.some((el) => el.textContent === "保存済み法令を読み込めませんでした。"),
+    ).toBe(true);
     expect(screen.queryByRole("link", { name: "日本国憲法" })).not.toBeInTheDocument();
   });
 });
@@ -87,6 +90,74 @@ vi.stubGlobal(
     }
   },
 );
+
+it("学習データの読み込みに失敗するとエラーメッセージを表示する", async () => {
+  const failing = {
+    listDueStudyCards: () => Promise.reject(new Error("boom")),
+    listUnscheduledStudyCards: () => Promise.resolve([]),
+    listStudyCards: () => Promise.resolve([]),
+    listReviewLogs: () => Promise.resolve([]),
+    listSavedLaws: () => Promise.resolve([]),
+  } as unknown as Parameters<typeof renderHome>[0];
+
+  renderHome(failing);
+
+  expect(await screen.findByText("学習データの読み込みに失敗しました")).toBeInTheDocument();
+});
+
+it("学習データがあると今日の復習・苦手条文・最近開いた項目を表示する", async () => {
+  const { repository } = createMemoryStorageRepository({
+    savedLawDocument: createSavedLawDocument({
+      law: sampleLawViewerDocument.law,
+      revision: sampleLawViewerDocument.revision,
+      nodes: sampleLawViewerDocument.nodes,
+    }),
+    studyCards: [
+      {
+        id: "weak",
+        source: "manual",
+        target: { lawId: sampleLawViewerDocument.law.lawId, article: "1" },
+        type: "fill_blank",
+        question: "第1条の趣旨",
+        answer: "…",
+        tags: [],
+        examPinned: false,
+        createdAt: "2026-07-01T00:00:00.000Z",
+        updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+    ],
+    reviewLogs: [
+      {
+        id: "l1",
+        cardId: "weak",
+        grade: "again",
+        reviewedAt: "2026-07-10T00:00:00.000Z",
+        scheduler: "fixed-interval@1",
+      },
+      {
+        id: "l2",
+        cardId: "weak",
+        grade: "again",
+        reviewedAt: "2026-07-11T00:00:00.000Z",
+        scheduler: "fixed-interval@1",
+      },
+      {
+        id: "l3",
+        cardId: "weak",
+        grade: "good",
+        reviewedAt: "2026-07-12T00:00:00.000Z",
+        scheduler: "fixed-interval@1",
+      },
+    ],
+  });
+
+  renderHome(repository);
+
+  expect(await screen.findByRole("heading", { name: "苦手な条文" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "最近開いた" })).toBeInTheDocument();
+  // 古い「準備中」文言が消えている。
+  expect(screen.queryByText("復習機能は準備中です")).not.toBeInTheDocument();
+});
 
 it("検索バーをクリックするとパレットが開く", async () => {
   const user = userEvent.setup();

@@ -1,8 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { BookOpenCheck } from "lucide-react";
-import { useEffect, useState } from "react";
 
-import type { StudyCard } from "@/core/domain";
 import { createStorageRepository } from "@/core/storage";
 import type { SavedLawSummary, StorageRepository } from "@/core/storage";
 import { gyoseishoshiSubjects, isLawInSubject } from "@/core/study";
@@ -10,6 +8,7 @@ import { Badge } from "@/shared/ui/badge";
 import { formatIsoDateLabel } from "@/shared/utils/dates";
 
 import { useSavedLaws } from "./use-saved-laws";
+import { useStudyDashboard } from "./use-study-dashboard";
 
 const defaultStorageRepository = createStorageRepository();
 
@@ -89,61 +88,39 @@ export const LawsPage = ({
 const formatSavedLawFetchedDate = (savedLaw: SavedLawSummary): string =>
   formatIsoDateLabel(savedLaw.revision.fetchedAt);
 
-// 復習ホームの表示に使う一式。undefined = 読み込み前または失敗。件数表示を省略して導線だけ出す。
-interface StudyOverview {
-  cards: StudyCard[];
-  dueCount: number;
-  unscheduledCount: number;
-}
-
 export const StudyPage = ({
-  // 本番ルーターは createAppRouter() を引数なしで呼ぶため、DI がないときは既定のリポジトリへフォールバックする。
-  storageRepository = defaultStorageRepository,
+  storageRepository,
 }: { storageRepository?: StorageRepository } = {}) => {
-  const [overview, setOverview] = useState<StudyOverview>();
-
-  useEffect(() => {
-    let isCurrent = true;
-
-    void Promise.all([
-      storageRepository.listStudyCards(),
-      storageRepository.listDueStudyCards(new Date().toISOString()),
-      storageRepository.listUnscheduledStudyCards(),
-    ])
-      .then(([cards, dueCards, unscheduledCards]) => {
-        if (isCurrent) {
-          setOverview({
-            cards,
-            dueCount: dueCards.length,
-            unscheduledCount: unscheduledCards.length,
-          });
-        }
-      })
-      .catch(() => {
-        // 読み込み失敗時は件数を出さないだけに留め、ページ全体は表示する。
-        if (isCurrent) {
-          setOverview(undefined);
-        }
-      });
-
-    return () => {
-      isCurrent = false;
-    };
-  }, [storageRepository]);
+  const { dashboard, error } = useStudyDashboard(storageRepository);
 
   return (
     <section className="mx-auto grid w-full max-w-2xl gap-4 px-5 py-10">
       <h1 className="font-serif text-2xl font-semibold text-foreground">復習</h1>
+      {error !== undefined ? (
+        // 読み込み失敗時は savedLawsError と同型のバナーでエラーを明示する
+        <p
+          role="status"
+          className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground"
+        >
+          {error}
+        </p>
+      ) : null}
       <div className="rounded-md bg-primary p-4 text-primary-foreground">
         <p className="font-semibold">今日の復習</p>
         <p className="mt-1 text-xs opacity-75">
-          {overview === undefined
+          {dashboard === undefined
             ? "復習するカードを確認しています"
-            : overview.dueCount === 0
+            : dashboard.dueCount === 0
               ? "今日の復習はありません"
-              : `${overview.dueCount.toLocaleString("ja-JP")} 件のカードが復習期限です`}
+              : `${dashboard.dueCount.toLocaleString("ja-JP")} 件のカードが復習期限です`}
         </p>
-        {overview !== undefined && overview.dueCount > 0 ? (
+        {dashboard?.stats.accuracy !== undefined ? (
+          <p className="mt-1 text-xs opacity-75">
+            通算正答率 {Math.round(dashboard.stats.accuracy * 100)}%（
+            {dashboard.stats.totalReviews.toLocaleString("ja-JP")} 回答）
+          </p>
+        ) : null}
+        {dashboard !== undefined && dashboard.dueCount > 0 ? (
           <Link
             className="mt-2 inline-block rounded-md bg-primary-foreground px-3 py-1.5 text-sm font-medium text-primary"
             to="/study/review"
@@ -156,11 +133,11 @@ export const StudyPage = ({
         <section className="rounded-md border bg-card p-4">
           <h2 className="text-sm font-medium text-foreground">新しく覚える</h2>
           <p className="mt-2 text-xs leading-5 text-muted-foreground">
-            {overview === undefined
+            {dashboard === undefined
               ? "未学習のカードから新しく覚えます"
-              : `${overview.unscheduledCount.toLocaleString("ja-JP")} 件の未学習カード`}
+              : `${dashboard.unscheduledCount.toLocaleString("ja-JP")} 件の未学習カード`}
           </p>
-          {overview !== undefined && overview.unscheduledCount > 0 ? (
+          {dashboard !== undefined && dashboard.unscheduledCount > 0 ? (
             <Link
               className="mt-2 inline-block text-sm text-primary underline-offset-4 hover:underline"
               search={{ mode: "new" }}
@@ -173,9 +150,9 @@ export const StudyPage = ({
         <section className="rounded-md border bg-card p-4">
           <h2 className="text-sm font-medium text-foreground">条文カード</h2>
           <p className="mt-2 text-xs leading-5 text-muted-foreground">
-            {overview === undefined
+            {dashboard === undefined
               ? "保存したカードを一覧できます"
-              : `${overview.cards.length.toLocaleString("ja-JP")} 件のカード`}
+              : `${dashboard.cardCount.toLocaleString("ja-JP")} 件のカード`}
           </p>
           <Link
             className="mt-2 inline-block text-sm text-primary underline-offset-4 hover:underline"
@@ -185,8 +162,38 @@ export const StudyPage = ({
           </Link>
         </section>
         <section className="rounded-md border bg-card p-4">
-          <h2 className="text-sm font-medium text-foreground">苦手な条文</h2>
-          <p className="mt-2 text-xs leading-5 text-muted-foreground">準備中</p>
+          <h2 id="weak-cards-heading" className="text-sm font-medium text-foreground">
+            苦手な条文
+          </h2>
+          {dashboard === undefined ? (
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              苦手な条文を集計しています
+            </p>
+          ) : dashboard.weakCards.length === 0 ? (
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              まだ苦手な条文はありません
+            </p>
+          ) : (
+            <ul aria-labelledby="weak-cards-heading" className="mt-2 grid gap-1.5">
+              {dashboard.weakCards.map((weak) => (
+                <li key={weak.card.id} className="flex items-center justify-between gap-2 text-sm">
+                  <Link
+                    className="min-w-0 truncate text-primary underline-offset-4 hover:underline"
+                    params={{
+                      lawId: weak.card.target.lawId,
+                      article: weak.card.target.article ?? "",
+                    }}
+                    to="/laws/$lawId/articles/$article"
+                  >
+                    {weak.card.question}
+                  </Link>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {Math.round(weak.accuracy * 100)}%
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
         <section className="rounded-md border bg-card p-4">
           <h2 id="subject-presets-heading" className="text-sm font-medium text-foreground">
@@ -202,9 +209,9 @@ export const StudyPage = ({
                 >
                   {subject.label}
                 </Link>
-                {overview === undefined ? null : (
+                {dashboard === undefined ? null : (
                   <span className="text-xs text-muted-foreground">
-                    {overview.cards
+                    {dashboard.cards
                       .filter((card) => isLawInSubject(subject.id, card.target.lawId))
                       .length.toLocaleString("ja-JP")}{" "}
                     件
