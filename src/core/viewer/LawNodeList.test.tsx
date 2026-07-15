@@ -270,6 +270,14 @@ describe("LawNodeList", () => {
 
     expect(screen.getByRole("heading", { level: 2, name: "第1編　総則" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 3, name: "第1章　通則" })).toBeInTheDocument();
+    expect(
+      screen.queryByText((_, element) => {
+        return (
+          element?.tagName.toLowerCase() === "p" &&
+          /第(?:一|1)章\u3000通則/u.test(element.textContent)
+        );
+      }),
+    ).not.toBeInTheDocument();
 
     const article = screen.getByRole("article", { name: "第一条" });
     expect(article).toHaveAttribute("id", "article-1");

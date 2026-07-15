@@ -372,13 +372,18 @@ describe("LawViewerPageContent", () => {
     const { user } = renderLawViewerRoute("/laws/129AC0000000089");
 
     const lawArticle = await screen.findByRole("article", { name: "民法" });
-    const desktopToc = screen.getByLabelText("法令の目次");
+    const desktopToc = within(screen.getByRole("complementary", { name: "法令の目次" })).getByRole(
+      "navigation",
+      { name: "法令目次" },
+    );
 
     await user.click(screen.getByRole("button", { name: "目次" }));
 
-    const mobileToc = document.querySelector("#law-viewer-mobile-toc");
+    const tableOfContents = screen.getAllByRole("navigation", { name: "法令目次" });
+    expect(tableOfContents).toHaveLength(2);
+    const mobileToc = tableOfContents.find((navigation) => navigation !== desktopToc);
 
-    if (!(mobileToc instanceof HTMLElement)) {
+    if (mobileToc === undefined) {
       throw new Error("Mobile table of contents was not rendered");
     }
 

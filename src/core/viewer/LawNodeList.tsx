@@ -183,10 +183,12 @@ const LawNodeBlock = ({
 
   const headingClassName = headingClassNameByType[node.type];
   const displayTitle = getDisplayHeadingInlineText(node.title, displayMode);
-  const bodyText = stripTrailingChildPlainTexts(
-    stripLeadingMarker(getDisplayHeadingText(node, displayMode), displayTitle),
-    children,
-    displayMode,
+  const bodyText = stripLeadingMarker(
+    applyLawHeadingTextDisplayMode(
+      stripTrailingChildPlainTexts(getDisplayText(node, displayMode), children, displayMode),
+      displayMode,
+    ),
+    displayTitle,
   );
 
   return (
@@ -273,12 +275,6 @@ const getDisplayText = (node: LawNode, displayMode: LawTextDisplayMode): string 
   const text = displayMode === "original" ? node.rawText || node.plainText : node.plainText;
 
   return applyLawTextDisplayMode(text, displayMode);
-};
-
-const getDisplayHeadingText = (node: LawNode, displayMode: LawTextDisplayMode): string => {
-  const text = displayMode === "original" ? node.rawText || node.plainText : node.plainText;
-
-  return applyLawHeadingTextDisplayMode(text, displayMode);
 };
 
 const getDisplayInlineText = (
