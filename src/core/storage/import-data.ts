@@ -1,4 +1,5 @@
 import Ajv2020 from "ajv/dist/2020.js";
+import type { ErrorObject } from "ajv";
 
 import savedDataExportSchema from "../../../docs/schemas/saved-data-export-v2.schema.json";
 
@@ -45,6 +46,14 @@ export interface SavedDataImportResult {
   counts: SavedDataCounts;
 }
 
+interface SavedDataSchemaErrorDetail {
+  readonly keyword: string;
+  readonly instancePath: string;
+  readonly schemaPath: string;
+  readonly params: Readonly<Record<string, unknown>>;
+  readonly message?: string;
+}
+
 const ajv = new Ajv2020({ allErrors: false, strict: true });
 const validateSavedDataExport = ajv.compile<SavedDataExport>(savedDataExportSchema);
 
@@ -71,11 +80,12 @@ export const parseSavedDataImport = (input: string): PreparedSavedDataImport => 
   if (!validateSavedDataExport(parsed)) {
     const schemaError = validateSavedDataExport.errors?.[0];
     const instancePath = schemaError?.instancePath === "" ? "/" : schemaError?.instancePath;
-    const message = schemaError?.message ?? "不明なスキーマ違反です";
+    const message = formatSchemaErrorMessage(schemaError);
 
     throw new SavedDataImportError(
       "invalid-schema",
       `保存データがスキーマに適合しません（${instancePath ?? "/"}: ${message}）。`,
+      schemaError === undefined ? undefined : { cause: copySchemaError(schemaError) },
     );
   }
 
@@ -90,6 +100,33 @@ export const parseSavedDataImport = (input: string): PreparedSavedDataImport => 
       counts: countSavedData(parsed),
     },
   };
+};
+
+const formatSchemaErrorMessage = (error: ErrorObject | undefined): string => {
+  const message = error?.message ?? "不明なスキーマ違反です";
+
+  if (error?.keyword !== "additionalProperties") {
+    return message;
+  }
+
+  const additionalProperty = (error.params as Record<string, unknown>).additionalProperty;
+
+  return typeof additionalProperty === "string"
+    ? `${message}（未知のフィールド「${additionalProperty}」）`
+    : message;
+};
+
+const copySchemaError = (error: ErrorObject): SavedDataSchemaErrorDetail => {
+  // validator の次回実行から独立させ、発生時点の原因追跡情報を Error に残す。
+  const params = structuredClone(error.params as unknown) as Record<string, unknown>;
+
+  return Object.freeze({
+    keyword: error.keyword,
+    instancePath: error.instancePath,
+    schemaPath: error.schemaPath,
+    params: Object.freeze(params),
+    message: error.message,
+  });
 };
 
 const parseJson = (input: string): unknown => {

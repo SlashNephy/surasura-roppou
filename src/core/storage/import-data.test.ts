@@ -7,6 +7,16 @@ import type { SavedDataExport } from "./export-data";
 
 const stringify = (data: unknown): string => JSON.stringify(data);
 
+interface MutableSchemaFixture {
+  bookmarks: { target: Record<string, unknown> }[];
+  savedLaws: { nodes: { type: string }[] }[];
+  studyCards: { source: string; type: string }[];
+  reviewLogs: { grade: string }[];
+}
+
+const createMutableSchemaFixture = (): MutableSchemaFixture =>
+  structuredClone(createSavedDataExportFixture()) as unknown as MutableSchemaFixture;
+
 const getImportError = (input: string): SavedDataImportError => {
   try {
     parseSavedDataImport(input);
@@ -69,7 +79,63 @@ describe("parseSavedDataImport", () => {
     const error = getImportError(stringify(data));
 
     expect(error.code).toBe("invalid-schema");
+    expect(error.message).toContain("unknownField");
     expect(error.message).toContain("/: must NOT have additional properties");
+  });
+
+  it("retains structured Ajv details after later validations", () => {
+    const data = { ...createSavedDataExportFixture(), unknownField: true };
+    const error = getImportError(stringify(data));
+
+    getImportError(stringify({ ...createSavedDataExportFixture(), anotherUnknownField: true }));
+
+    expect(error.cause).toEqual({
+      keyword: "additionalProperties",
+      instancePath: "",
+      schemaPath: "#/additionalProperties",
+      params: { additionalProperty: "unknownField" },
+      message: "must NOT have additional properties",
+    });
+  });
+
+  it.each([
+    {
+      violation: "a nested target field is unknown",
+      mutate: (data: MutableSchemaFixture) => {
+        data.bookmarks[0].target.unknownField = true;
+      },
+    },
+    {
+      violation: "LawNode.type is outside its enum",
+      mutate: (data: MutableSchemaFixture) => {
+        data.savedLaws[0].nodes[0].type = "UnknownNode";
+      },
+    },
+    {
+      violation: "StudyCard.source is outside its enum",
+      mutate: (data: MutableSchemaFixture) => {
+        data.studyCards[0].source = "import";
+      },
+    },
+    {
+      violation: "StudyCard.type is outside its enum",
+      mutate: (data: MutableSchemaFixture) => {
+        data.studyCards[0].type = "essay";
+      },
+    },
+    {
+      violation: "ReviewLog.grade is outside its enum",
+      mutate: (data: MutableSchemaFixture) => {
+        data.reviewLogs[0].grade = "perfect";
+      },
+    },
+  ])("rejects an invalid schema when $violation", ({ mutate }) => {
+    const data = createMutableSchemaFixture();
+    mutate(data);
+
+    const error = getImportError(stringify(data));
+
+    expect(error.code).toBe("invalid-schema");
   });
 
   it.each([
