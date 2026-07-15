@@ -66,9 +66,13 @@ const importErrorMessage = (error: unknown): string =>
     : "JSONファイルを検証できませんでした。別のファイルを選択してください。";
 
 const formatExportedAt = (exportedAt: string): string | undefined => {
-  const timestamp = Date.parse(exportedAt);
+  const exportedAtDate = new Date(exportedAt);
 
-  return Number.isNaN(timestamp) ? undefined : exportedAtFormatter.format(new Date(timestamp));
+  if (Number.isNaN(exportedAtDate.getTime()) || exportedAtDate.toISOString() !== exportedAt) {
+    return undefined;
+  }
+
+  return exportedAtFormatter.format(exportedAtDate);
 };
 
 interface DataTransferPageProps {

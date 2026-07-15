@@ -345,6 +345,26 @@ describe("DataTransferPage", () => {
     expect(preview.querySelector("time")).not.toBeInTheDocument();
   });
 
+  it.each(["0", "2026/07/15"])(
+    "rejects the non-canonical exportedAt value %s without creating a time element",
+    async (exportedAt) => {
+      const data = { ...createSavedDataExportFixture(), exportedAt };
+      const user = userEvent.setup();
+
+      renderDataTransferRoute();
+
+      await user.upload(
+        await screen.findByLabelText("インポートするJSONファイル"),
+        createJsonFile(data),
+      );
+
+      const preview = await screen.findByRole("region", { name: "インポート内容の確認" });
+      expect(within(preview).getByText("日時不明")).toBeInTheDocument();
+      expect(within(preview).queryByText(exportedAt)).not.toBeInTheDocument();
+      expect(preview.querySelector("time")).not.toBeInTheDocument();
+    },
+  );
+
   it("formats four-digit category counts for Japanese readers", async () => {
     const data = createSavedDataExportFixture();
     const bookmark = data.bookmarks[0];
