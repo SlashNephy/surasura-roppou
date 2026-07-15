@@ -1,6 +1,7 @@
 export { generateStorageId } from "./id";
 export { createSavedLawUseCase } from "./saved-law-use-case";
 export { createSavedDataExport } from "./export-data";
+export { SavedDataImportError, countSavedData, parseSavedDataImport } from "./import-data";
 export {
   createStorageRepository,
   deleteSurasuraDatabase,
@@ -18,5 +19,12 @@ export type {
   StorageRepositoryOptions,
 } from "./repository";
 export type { SavedDataExport } from "./export-data";
+export type {
+  PreparedSavedDataImport,
+  SavedDataCounts,
+  SavedDataImportErrorCode,
+  SavedDataImportPreview,
+  SavedDataImportResult,
+} from "./import-data";
 export type { LawIndexHook, SavedLawUseCase, SavedLawUseCaseOptions } from "./saved-law-use-case";
 export type { LawCatalogEntry, SavedLawRecord, SearchPosting, SurasuraDatabase } from "./schema";
