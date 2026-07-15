@@ -47,6 +47,10 @@ describe("readability", () => {
     ["第四章の二　処分等の求め", "第4章の2　処分等の求め"],
     ["第三節の二", "第3節の2"],
     ["第一款の二", "第1款の2"],
+    ["第四章の一部を改正する。", "第4章の一部を改正する。"],
+    ["第三節の二次的な効果", "第3節の二次的な効果"],
+    ["第四章の二の一部を改正する。", "第4章の2の一部を改正する。"],
+    ["第四章の二の三　手続", "第4章の2の3　手続"],
   ])("transforms common legal notation: %s", (input, expected) => {
     expect(transformReadableText(input)).toBe(expected);
   });

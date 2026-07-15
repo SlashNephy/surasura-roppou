@@ -22,15 +22,20 @@ const unitByKanji = new Map([
 const kanjiNumberPattern = "[一二三四五六七八九十百千]+";
 const eraYearPattern = `${kanjiNumberPattern}|元`;
 const branchNumberPattern = `${kanjiNumberPattern}(?:の${kanjiNumberPattern})*`;
+// 各枝番号の直後で漢字語との境界を判定し、真の「の二」だけを変換して後続の「の一部」は残す。
+const structuralBranchNumberPattern = `${kanjiNumberPattern}(?!\\p{Script=Han})(?:の${kanjiNumberPattern}(?!\\p{Script=Han}))*`;
 const articleNumberRegex = new RegExp(`第(${kanjiNumberPattern})(条|項|号)`, "g");
 // 構造単位が「目標」や「編成」の語頭として現れる場合を除外しつつ、「第一目から」のように助詞が続く参照は変換する。
 const structuralHeadingNumberRegex = new RegExp(
   `第(${kanjiNumberPattern})(編|章|節|款|目)(?!\\p{Script=Han})`,
   "gu",
 );
-// e-Gov の「第四章の二」のような枝番付き構造見出しを、条項号や別表と同じ表示規則で扱う。
+const structuralBranchNumberRegex = new RegExp(
+  `(第\\d+(?:編|章|節|款|目))の(${structuralBranchNumberPattern})`,
+  "gu",
+);
 const branchNumberRegex = new RegExp(
-  `(第\\d+(?:編|章|節|款|目|条|項|号)|別表\\d+|別記様式\\d+)の(${branchNumberPattern})`,
+  `(第\\d+(?:条|項|号)|別表\\d+|別記様式\\d+)の(${branchNumberPattern})`,
   "g",
 );
 const appendixTableNumberRegex = new RegExp(`(別表|別記様式)第?(${kanjiNumberPattern})`, "g");
@@ -97,6 +102,9 @@ const replaceLegalNumber = (_match: string, kanjiNumber: string, suffix: string)
   return `第${replaceKanjiNumber(kanjiNumber)}${suffix}`;
 };
 
+const replaceBranchNumbers = (_match: string, prefix: string, branchNumbers: string): string =>
+  `${prefix}の${branchNumbers.split("の").map(replaceKanjiNumber).join("の")}`;
+
 const transformLegalNumbers = (text: string): string =>
   text
     .replace(structuralHeadingNumberRegex, replaceLegalNumber)
@@ -104,9 +112,8 @@ const transformLegalNumbers = (text: string): string =>
     .replace(appendixTableNumberRegex, (_match, prefix: string, tableNumber: string) => {
       return `${prefix}${replaceKanjiNumber(tableNumber)}`;
     })
-    .replace(branchNumberRegex, (_match, prefix: string, branchNumbers: string) => {
-      return `${prefix}の${branchNumbers.split("の").map(replaceKanjiNumber).join("の")}`;
-    });
+    .replace(structuralBranchNumberRegex, replaceBranchNumbers)
+    .replace(branchNumberRegex, replaceBranchNumbers);
 
 const transformDates = (text: string): string =>
   text.replace(eraDateRegex, (_match, era: string, year: string, month: string, day: string) => {
