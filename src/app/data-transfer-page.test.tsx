@@ -313,6 +313,33 @@ describe("DataTransferPage", () => {
     expect(JSON.parse(await exportedBlob.text()) as unknown).toMatchObject({ version: 2 });
   });
 
+  it("does not download or report success when a saved law body is unavailable", async () => {
+    const data = createSavedDataExportFixture();
+    const baseRepository = createMemoryStorageRepository({
+      savedLawDocument: data.savedLaws[0],
+    }).repository;
+    const repository: StorageRepository = {
+      ...baseRepository,
+      getLawDocument: vi.fn(() => Promise.resolve(undefined)),
+    };
+    const createObjectURL = vi.fn<(blob: Blob) => string>(() => "blob:incomplete-export");
+    const revokeObjectURL = vi.fn<(url: string) => void>();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click");
+    const user = userEvent.setup();
+
+    await withObjectUrl(createObjectURL, revokeObjectURL, async () => {
+      renderDataTransferRoute(repository);
+
+      await user.click(await screen.findByRole("button", { name: "JSONをエクスポート" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("JSONを書き出せませんでした");
+    });
+
+    expect(createObjectURL).not.toHaveBeenCalled();
+    expect(click).not.toHaveBeenCalled();
+    expect(screen.queryByText("JSONを書き出しました。")).not.toBeInTheDocument();
+  });
+
   it("clears an old preview when a newly selected file is invalid JSON", async () => {
     const user = userEvent.setup();
 

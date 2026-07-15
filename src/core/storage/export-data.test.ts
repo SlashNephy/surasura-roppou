@@ -137,7 +137,7 @@ describe("createSavedDataExport", () => {
     });
   });
 
-  it("skips stale saved law summaries whose document body is unavailable", async () => {
+  it("rejects the export when a saved law document body is unavailable", async () => {
     const summary = {
       law,
       revision,
@@ -151,18 +151,13 @@ describe("createSavedDataExport", () => {
       listSavedLaws: vi.fn<StorageRepository["listSavedLaws"]>(() => Promise.resolve([summary])),
     };
 
-    await expect(
-      createSavedDataExport(repository, "2026-07-07T00:00:00.000Z"),
-    ).resolves.toMatchObject({
-      bookmarks: [],
-      collections: [],
-      savedLaws: [],
-      version: 2,
-    });
+    await expect(createSavedDataExport(repository, "2026-07-07T00:00:00.000Z")).rejects.toThrow(
+      `Saved law document is unavailable: ${law.lawId}`,
+    );
     expect(repository.getLawDocument).toHaveBeenCalledWith(law.lawId);
   });
 
-  it("continues exporting user metadata when a saved law document fails to load", async () => {
+  it("preserves the storage error when a saved law document fails to load", async () => {
     const summary = {
       law,
       revision,
@@ -184,17 +179,9 @@ describe("createSavedDataExport", () => {
       listSavedLaws: vi.fn<StorageRepository["listSavedLaws"]>(() => Promise.resolve([summary])),
     };
 
-    await expect(
-      createSavedDataExport(repository, "2026-07-07T00:00:00.000Z"),
-    ).resolves.toMatchObject({
-      annotations: [annotation],
-      bookmarks: [bookmark],
-      collections: [collection],
-      savedLaws: [],
-      studyCards: [studyCard],
-      studySessions: [studySession],
-      version: 2,
-    });
+    await expect(createSavedDataExport(repository, "2026-07-07T00:00:00.000Z")).rejects.toThrow(
+      "IndexedDB read failed",
+    );
     expect(repository.getLawDocument).toHaveBeenCalledWith(law.lawId);
   });
 

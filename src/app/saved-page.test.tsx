@@ -158,6 +158,36 @@ describe("SavedPage", () => {
     }
   });
 
+  it("does not download or report success when a saved law body is unavailable", async () => {
+    const document = createSavedLawDocument({
+      law: sampleLawViewerDocument.law,
+      revision: sampleLawViewerDocument.revision,
+      nodes: sampleLawViewerDocument.nodes,
+    });
+    const baseRepository = createMemoryStorageRepository({ savedLawDocument: document }).repository;
+    const repository: StorageRepository = {
+      ...baseRepository,
+      getLawDocument: vi.fn(() => Promise.resolve(undefined)),
+    };
+    const createObjectURL = vi.fn<(blob: Blob) => string>(() => "blob:incomplete-export");
+    const revokeObjectURL = vi.fn<(url: string) => void>();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click");
+    const user = userEvent.setup();
+
+    await withObjectUrl(createObjectURL, revokeObjectURL, async () => {
+      renderSavedRoute("/saved", repository);
+
+      await screen.findByRole("heading", { name: "保存リスト" });
+      await user.click(screen.getByRole("button", { name: "JSONをエクスポート" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("JSONを書き出せませんでした");
+    });
+
+    expect(createObjectURL).not.toHaveBeenCalled();
+    expect(click).not.toHaveBeenCalled();
+    expect(screen.queryByText("JSONを書き出しました。")).not.toBeInTheDocument();
+  });
+
   it("creates a tagged bookmark with a memo from the saved list", async () => {
     const storage = createMemoryStorageRepository({
       savedLawDocument: createSavedLawDocument({

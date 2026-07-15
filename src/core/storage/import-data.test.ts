@@ -259,6 +259,100 @@ describe("parseSavedDataImport", () => {
     expect(error.code).toBe("invalid-reference");
   });
 
+  it.each([
+    {
+      relationship: "missing child",
+      breakReference: (data: SavedDataExport) => {
+        data.savedLaws[0].nodes[0].children = ["missing-node"];
+      },
+    },
+    {
+      relationship: "missing parent",
+      breakReference: (data: SavedDataExport) => {
+        data.savedLaws[0].nodes[0].parentId = "missing-node";
+      },
+    },
+    {
+      relationship: "child whose parentId points elsewhere",
+      breakReference: (data: SavedDataExport) => {
+        const savedLaw = data.savedLaws[0];
+        const parent = savedLaw.nodes[0];
+        const differentParent = {
+          ...structuredClone(parent),
+          id: "different-parent",
+          children: [],
+        };
+        const child = {
+          ...structuredClone(parent),
+          id: "child-node",
+          children: [],
+          parentId: differentParent.id,
+        };
+        parent.children = [child.id];
+        savedLaw.nodes.push(differentParent, child);
+      },
+    },
+    {
+      relationship: "parent that omits its child",
+      breakReference: (data: SavedDataExport) => {
+        const savedLaw = data.savedLaws[0];
+        const parent = savedLaw.nodes[0];
+        savedLaw.nodes.push({
+          ...structuredClone(parent),
+          id: "child-node",
+          children: [],
+          parentId: parent.id,
+        });
+      },
+    },
+    {
+      relationship: "duplicate child reference",
+      breakReference: (data: SavedDataExport) => {
+        const savedLaw = data.savedLaws[0];
+        const parent = savedLaw.nodes[0];
+        const child = {
+          ...structuredClone(parent),
+          id: "child-node",
+          children: [],
+          parentId: parent.id,
+        };
+        parent.children = [child.id, child.id];
+        savedLaw.nodes.push(child);
+      },
+    },
+    {
+      relationship: "self cycle",
+      breakReference: (data: SavedDataExport) => {
+        const node = data.savedLaws[0].nodes[0];
+        node.parentId = node.id;
+        node.children = [node.id];
+      },
+    },
+    {
+      relationship: "multi-node cycle",
+      breakReference: (data: SavedDataExport) => {
+        const savedLaw = data.savedLaws[0];
+        const first = savedLaw.nodes[0];
+        const second = {
+          ...structuredClone(first),
+          id: "second-node",
+          children: [first.id],
+          parentId: first.id,
+        };
+        first.parentId = second.id;
+        first.children = [second.id];
+        savedLaw.nodes.push(second);
+      },
+    },
+  ])("rejects a saved law node graph with a $relationship", ({ breakReference }) => {
+    const data = createSavedDataExportFixture();
+    breakReference(data);
+
+    const error = getImportError(stringify(data));
+
+    expect(error.code).toBe("invalid-reference");
+  });
+
   it("preserves dangling collection, review-session, and study-session references", () => {
     const data = createSavedDataExportFixture();
     const collection = data.collections[0];

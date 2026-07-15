@@ -237,5 +237,86 @@ const validateReferences = (data: SavedDataExport): void => {
         );
       }
     }
+
+    validateSavedLawNodeGraph(lawId, savedLaw.nodes);
+  }
+};
+
+const validateSavedLawNodeGraph = (
+  lawId: string,
+  nodes: SavedDataExport["savedLaws"][number]["nodes"],
+): void => {
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+
+  for (const node of nodes) {
+    const childIds = new Set<string>();
+
+    for (const childId of node.children) {
+      if (childIds.has(childId)) {
+        throw new SavedDataImportError(
+          "invalid-reference",
+          `Saved law node "${node.id}" contains duplicate child "${childId}".`,
+        );
+      }
+      childIds.add(childId);
+
+      const child = nodeById.get(childId);
+      if (child === undefined) {
+        throw new SavedDataImportError(
+          "invalid-reference",
+          `Saved law node "${node.id}" references missing child "${childId}".`,
+        );
+      }
+
+      if (child.parentId !== node.id) {
+        throw new SavedDataImportError(
+          "invalid-reference",
+          `Saved law node "${childId}" does not reference parent "${node.id}".`,
+        );
+      }
+    }
+
+    if (node.parentId === undefined) {
+      continue;
+    }
+
+    const parent = nodeById.get(node.parentId);
+    if (parent === undefined) {
+      throw new SavedDataImportError(
+        "invalid-reference",
+        `Saved law node "${node.id}" references missing parent "${node.parentId}".`,
+      );
+    }
+
+    if (!parent.children.includes(node.id)) {
+      throw new SavedDataImportError(
+        "invalid-reference",
+        `Saved law node "${node.id}" is absent from parent "${parent.id}" children.`,
+      );
+    }
+  }
+
+  const checkedNodeIds = new Set<string>();
+  for (const node of nodes) {
+    const pathNodeIds = new Set<string>();
+    let currentNode: (typeof nodes)[number] | undefined = node;
+
+    // 根から到達できない循環と深い入力の双方を安全に扱うため、親参照を反復して検査する。
+    while (currentNode !== undefined && !checkedNodeIds.has(currentNode.id)) {
+      if (pathNodeIds.has(currentNode.id)) {
+        throw new SavedDataImportError(
+          "invalid-reference",
+          `Saved law "${lawId}" contains a cycle at node "${currentNode.id}".`,
+        );
+      }
+
+      pathNodeIds.add(currentNode.id);
+      currentNode =
+        currentNode.parentId === undefined ? undefined : nodeById.get(currentNode.parentId);
+    }
+
+    for (const nodeId of pathNodeIds) {
+      checkedNodeIds.add(nodeId);
+    }
   }
 };
