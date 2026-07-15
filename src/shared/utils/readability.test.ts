@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { readabilityTransformFixtures } from "@/test/fixtures/readability";
+import {
+  readabilityHeadingTransformFixtures,
+  readabilityTransformFixtures,
+} from "@/test/fixtures/readability";
 
-import { transformReadableText, toArabicNumber } from "./readability";
+import { transformReadableHeadingText, transformReadableText, toArabicNumber } from "./readability";
 
 describe("readability", () => {
   it.each(readabilityTransformFixtures)(
@@ -11,6 +14,20 @@ describe("readability", () => {
       expect(transformReadableText(input, mode)).toBe(expected);
     },
   );
+
+  it.each(readabilityHeadingTransformFixtures)(
+    "transforms heading fixture: $name",
+    ({ expected, input }) => {
+      expect(transformReadableHeadingText(input)).toBe(expected);
+    },
+  );
+
+  it.each([
+    ["第一章及び第二章", "第一章及び第二章"],
+    ["第四章の二つの規定", "第四章の二つの規定"],
+  ])("keeps non-heading text unchanged in heading transform: %s", (input, expected) => {
+    expect(transformReadableHeadingText(input)).toBe(expected);
+  });
 
   it.each([
     ["", ""],
@@ -25,6 +42,18 @@ describe("readability", () => {
     ["第一目標を達成する。", "第一目標を達成する。"],
     ["第一目的は安全である。", "第一目的は安全である。"],
     ["第一編成を発表する。", "第一編成を発表する。"],
+    ["第一章及び第二章", "第一章及び第二章"],
+    ["第四章の二で定める。", "第四章の二で定める。"],
+    ["第四章の二より適用する。", "第四章の二より適用する。"],
+    ["第四章の二かつ第三章の三", "第四章の二かつ第三章の三"],
+    ["第四章の二以下", "第四章の二以下"],
+    ["第四章の二とおり", "第四章の二とおり"],
+    ["第四章の二つ", "第四章の二つ"],
+    ["第四章の二か所", "第四章の二か所"],
+    ["第一目から第三目まで", "第一目から第三目まで"],
+    ["第四章の一部を改正する。", "第四章の一部を改正する。"],
+    ["第三節の二次的な効果", "第三節の二次的な効果"],
+    ["第四章の二の一部を改正する。", "第四章の二の一部を改正する。"],
   ])("keeps non-target prose unchanged: %s", (input, expected) => {
     expect(transformReadableText(input)).toBe(expected);
   });
@@ -43,19 +72,6 @@ describe("readability", () => {
     ["別記様式第一", "別記様式1"],
     ["別表第一の二", "別表1の2"],
     ["別記様式第一の二", "別記様式1の2"],
-    ["第一目から第三目まで", "第1目から第3目まで"],
-    ["第四章の二　処分等の求め", "第4章の2　処分等の求め"],
-    ["第三節の二", "第3節の2"],
-    ["第一款の二", "第1款の2"],
-    ["第四章の一部を改正する。", "第4章の一部を改正する。"],
-    ["第三節の二次的な効果", "第3節の二次的な効果"],
-    ["第四章の二の一部を改正する。", "第4章の2の一部を改正する。"],
-    ["第四章の二の三　手続", "第4章の2の3　手続"],
-    ["第四章の二つの規定", "第4章の二つの規定"],
-    ["第四章の二か所を改正する。", "第4章の二か所を改正する。"],
-    ["第一章及び第二章", "第1章及び第2章"],
-    ["第四章の二及び第四章の三", "第4章の2及び第4章の3"],
-    ["第四章の二又は第四章の三", "第4章の2又は第4章の3"],
   ])("transforms common legal notation: %s", (input, expected) => {
     expect(transformReadableText(input)).toBe(expected);
   });

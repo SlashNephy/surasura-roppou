@@ -3,7 +3,11 @@ import { type ReactNode, useMemo } from "react";
 import type { LawNode, LawNodeType } from "@/core/domain";
 import { cn } from "@/shared/utils/cn";
 
-import { applyLawTextDisplayMode, type LawTextDisplayMode } from "./displayMode";
+import {
+  applyLawHeadingTextDisplayMode,
+  applyLawTextDisplayMode,
+  type LawTextDisplayMode,
+} from "./displayMode";
 import { articleAnchorId, computeChildArticleContext } from "./lawToc";
 
 interface LawNodeListProps {
@@ -178,9 +182,9 @@ const LawNodeBlock = ({
   }
 
   const headingClassName = headingClassNameByType[node.type];
-  const displayTitle = getDisplayInlineText(node.title, displayMode);
+  const displayTitle = getDisplayHeadingInlineText(node.title, displayMode);
   const bodyText = stripTrailingChildPlainTexts(
-    stripLeadingMarker(getDisplayText(node, displayMode), displayTitle),
+    stripLeadingMarker(getDisplayHeadingText(node, displayMode), displayTitle),
     children,
     displayMode,
   );
@@ -271,6 +275,12 @@ const getDisplayText = (node: LawNode, displayMode: LawTextDisplayMode): string 
   return applyLawTextDisplayMode(text, displayMode);
 };
 
+const getDisplayHeadingText = (node: LawNode, displayMode: LawTextDisplayMode): string => {
+  const text = displayMode === "original" ? node.rawText || node.plainText : node.plainText;
+
+  return applyLawHeadingTextDisplayMode(text, displayMode);
+};
+
 const getDisplayInlineText = (
   text: string | undefined,
   displayMode: LawTextDisplayMode,
@@ -280,4 +290,15 @@ const getDisplayInlineText = (
   }
 
   return applyLawTextDisplayMode(text, displayMode);
+};
+
+const getDisplayHeadingInlineText = (
+  text: string | undefined,
+  displayMode: LawTextDisplayMode,
+): string | undefined => {
+  if (text === undefined) {
+    return undefined;
+  }
+
+  return applyLawHeadingTextDisplayMode(text, displayMode);
 };

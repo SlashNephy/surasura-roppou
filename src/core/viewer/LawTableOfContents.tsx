@@ -1,7 +1,7 @@
 import { Button } from "@/shared/ui/button";
 import { cn } from "@/shared/utils/cn";
 
-import { applyLawTextDisplayMode, type LawTextDisplayMode } from "./displayMode";
+import { applyLawHeadingTextDisplayMode, type LawTextDisplayMode } from "./displayMode";
 import type { LawTocItem } from "./lawToc";
 
 interface LawTableOfContentsProps {
@@ -70,7 +70,7 @@ const TocItem = ({
   const articleNumber = item.type === "Article" ? item.articleNumber : undefined;
   const isArticle = articleNumber !== undefined;
   const isActiveArticle = articleNumber === activeArticleNumber;
-  const displayTitle = applyLawTextDisplayMode(item.title, displayMode);
+  const displayTitle = applyLawHeadingTextDisplayMode(item.title, displayMode);
 
   return (
     <div className="grid min-w-0 gap-1">

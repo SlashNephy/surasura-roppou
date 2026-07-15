@@ -22,19 +22,11 @@ const unitByKanji = new Map([
 const kanjiNumberPattern = "[一二三四五六七八九十百千]+";
 const eraYearPattern = `${kanjiNumberPattern}|元`;
 const branchNumberPattern = `${kanjiNumberPattern}(?:の${kanjiNumberPattern})*`;
-const legalConjunctionPattern = "及び|又は|若しくは|並びに";
-// 「の二つ」などの一般数量へ食い込まないよう、枝番号は法令参照の終端として現れる文字だけを後続に許可する。
-const legalReferenceBoundaryPattern = `(?:$|[\\s\\p{P}\\p{S}]|の|に|は|を|が|へ|と|も|から|まで|${legalConjunctionPattern})`;
-const structuralBranchNumberPattern = `${branchNumberPattern}(?=${legalReferenceBoundaryPattern})`;
 const articleNumberRegex = new RegExp(`第(${kanjiNumberPattern})(条|項|号)`, "g");
-// 「第一目標」などの一般語を除外しつつ、漢字で始まる「第一章及び第二章」の接続表現は法令参照として変換する。
-const structuralHeadingNumberRegex = new RegExp(
-  `第(${kanjiNumberPattern})(編|章|節|款|目)(?=(?:${legalConjunctionPattern})|[^\\p{Script=Han}]|$)`,
-  "gu",
-);
-const structuralBranchNumberRegex = new RegExp(
-  `(第\\d+(?:編|章|節|款|目))の(${structuralBranchNumberPattern})`,
-  "gu",
+// 本文中の「第四章の二つ」などとの曖昧さを避け、e-Gov の見出し形式である先頭の構造番号と区切りがそろう場合だけ変換する。
+const structuralHeadingPrefixRegex = new RegExp(
+  `^第(${kanjiNumberPattern})(編|章|節|款|目)(?:の(${branchNumberPattern}))?(?=$|[\\s\\p{P}\\p{S}])`,
+  "u",
 );
 const branchNumberRegex = new RegExp(
   `(第\\d+(?:条|項|号)|別表\\d+|別記様式\\d+)の(${branchNumberPattern})`,
@@ -107,15 +99,26 @@ const replaceLegalNumber = (_match: string, kanjiNumber: string, suffix: string)
 const replaceBranchNumbers = (_match: string, prefix: string, branchNumbers: string): string =>
   `${prefix}の${branchNumbers.split("の").map(replaceKanjiNumber).join("の")}`;
 
-const transformLegalNumbers = (text: string): string =>
+const transformArticleNumbers = (text: string): string =>
   text
-    .replace(structuralHeadingNumberRegex, replaceLegalNumber)
     .replace(articleNumberRegex, replaceLegalNumber)
     .replace(appendixTableNumberRegex, (_match, prefix: string, tableNumber: string) => {
       return `${prefix}${replaceKanjiNumber(tableNumber)}`;
     })
-    .replace(structuralBranchNumberRegex, replaceBranchNumbers)
     .replace(branchNumberRegex, replaceBranchNumbers);
+
+const transformStructuralHeadingNumber = (text: string): string =>
+  text.replace(
+    structuralHeadingPrefixRegex,
+    (_match, kanjiNumber: string, suffix: string, branchNumbers: string | undefined) => {
+      const displayBranchNumbers =
+        branchNumbers === undefined
+          ? ""
+          : `の${branchNumbers.split("の").map(replaceKanjiNumber).join("の")}`;
+
+      return `第${replaceKanjiNumber(kanjiNumber)}${suffix}${displayBranchNumbers}`;
+    },
+  );
 
 const transformDates = (text: string): string =>
   text.replace(eraDateRegex, (_match, era: string, year: string, month: string, day: string) => {
@@ -133,7 +136,7 @@ export const transformReadableText = (
 ): string => {
   switch (mode) {
     case "article-number":
-      return transformLegalNumbers(text);
+      return transformArticleNumbers(text);
     case "date":
       return transformDates(text);
     case "law-number":
@@ -143,6 +146,11 @@ export const transformReadableText = (
     case "unchanged":
       return text;
     case "all":
-      return transformLegalNumbers(transformDates(transformLawNumbers(transformParentheses(text))));
+      return transformArticleNumbers(
+        transformDates(transformLawNumbers(transformParentheses(text))),
+      );
   }
 };
+
+export const transformReadableHeadingText = (text: string): string =>
+  transformReadableText(transformStructuralHeadingNumber(text));

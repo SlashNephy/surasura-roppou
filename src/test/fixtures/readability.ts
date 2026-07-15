@@ -8,42 +8,76 @@ export interface ReadabilityTransformFixture {
   expected: string;
 }
 
+export interface ReadabilityHeadingTransformFixture {
+  name: string;
+  input: string;
+  expected: string;
+}
+
+export const readabilityHeadingTransformFixtures = [
+  {
+    name: "part title kanji number",
+    input: "第一編",
+    expected: "第1編",
+  },
+  {
+    name: "chapter title kanji number",
+    input: "第二章",
+    expected: "第2章",
+  },
+  {
+    name: "section title kanji number",
+    input: "第三節",
+    expected: "第3節",
+  },
+  {
+    name: "subsection title kanji number",
+    input: "第四款",
+    expected: "第4款",
+  },
+  {
+    name: "division title kanji number",
+    input: "第五目",
+    expected: "第5目",
+  },
+  {
+    name: "real branch chapter title",
+    input: "第四章の二　処分等の求め",
+    expected: "第4章の2　処分等の求め",
+  },
+  {
+    name: "nested branch chapter title",
+    input: "第四章の二の三　手続",
+    expected: "第4章の2の3　手続",
+  },
+  {
+    name: "branch section title",
+    input: "第三節の二",
+    expected: "第3節の2",
+  },
+  {
+    name: "branch subsection title",
+    input: "第一款の二",
+    expected: "第1款の2",
+  },
+  {
+    name: "article title uses existing transform",
+    input: "第一条",
+    expected: "第1条",
+  },
+  {
+    name: "appendix title uses existing transform",
+    input: "別表第一",
+    expected: "別表1",
+  },
+] satisfies ReadabilityHeadingTransformFixture[];
+
 export const readabilityTransformFixtures = [
   {
     name: "article title kanji number",
     mode: "article-number",
     input: "第一条",
     expected: "第1条",
-  },
-  {
-    name: "part title kanji number",
-    mode: "article-number",
-    input: "第一編",
-    expected: "第1編",
-  },
-  {
-    name: "chapter title kanji number",
-    mode: "article-number",
-    input: "第二章",
-    expected: "第2章",
-  },
-  {
-    name: "section title kanji number",
-    mode: "article-number",
-    input: "第三節",
-    expected: "第3節",
-  },
-  {
-    name: "subsection title kanji number",
-    mode: "article-number",
-    input: "第四款",
-    expected: "第4款",
-  },
-  {
-    name: "division title kanji number",
-    mode: "article-number",
-    input: "第五目",
-    expected: "第5目",
   },
   {
     name: "branch article title kanji number",
