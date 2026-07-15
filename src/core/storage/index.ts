@@ -2,6 +2,7 @@ export { generateStorageId } from "./id";
 export { createSavedLawUseCase } from "./saved-law-use-case";
 export { createSavedDataExport } from "./export-data";
 export { SavedDataImportError, countSavedData, parseSavedDataImport } from "./import-data";
+export { importSavedDataIntoDatabase } from "./import-saved-data";
 export {
   createStorageRepository,
   deleteSurasuraDatabase,

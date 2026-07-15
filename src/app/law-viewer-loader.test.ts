@@ -280,6 +280,7 @@ const createStorageRepositoryStub = ({
   recordReview: vi.fn(),
   putStudySession: vi.fn(),
   listStudySessions: vi.fn(),
+  importSavedData: vi.fn(),
   putOcrSession: vi.fn(),
   listOcrSessions: vi.fn(),
   close: vi.fn(),

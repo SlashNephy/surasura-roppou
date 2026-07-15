@@ -14,6 +14,8 @@ import type {
   StudyCard,
   StudySession,
 } from "@/core/domain";
+import { createSavedDataExport, parseSavedDataImport } from "@/core/storage";
+import { createSavedDataExportFixture } from "@/test/fixtures/saved-data";
 
 import {
   createStorageRepository as originalCreateStorageRepository,
@@ -439,6 +441,139 @@ describe("StorageRepository", () => {
     } finally {
       database.close();
     }
+  });
+
+  it("imports all saved data categories and rebuilds card schedules", async () => {
+    const fixture = createSavedDataExportFixture();
+    fixture.reviewLogs[0] = { ...fixture.reviewLogs[0], id: "review-import-1" };
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await expect(repository.importSavedData(fixture)).resolves.toEqual({
+      importedAt: fixedNow().toISOString(),
+      counts: {
+        savedLaws: 1,
+        bookmarks: 1,
+        collections: 1,
+        annotations: 1,
+        studyCards: 1,
+        reviewLogs: 1,
+        studySessions: 1,
+      },
+    });
+
+    await expect(repository.getLawDocument(fixture.savedLaws[0].law.lawId)).resolves.toEqual(
+      fixture.savedLaws[0],
+    );
+    await expect(repository.listBookmarks()).resolves.toEqual(fixture.bookmarks);
+    await expect(repository.listCollections()).resolves.toEqual(fixture.collections);
+    await expect(repository.listAnnotations()).resolves.toEqual(fixture.annotations);
+    await expect(repository.listStudyCards()).resolves.toEqual(fixture.studyCards);
+    await expect(repository.listReviewLogs()).resolves.toEqual(fixture.reviewLogs);
+    await expect(repository.listStudySessions()).resolves.toEqual(fixture.studySessions);
+    const dueCards = await repository.listDueStudyCards("2026-07-15T00:00:00.000Z");
+    expect(dueCards).toHaveLength(1);
+    expect(dueCards[0].card).toEqual(fixture.studyCards[0]);
+    expect(dueCards[0].schedule).toMatchObject({
+      cardId: fixture.studyCards[0].id,
+      derivedFrom: "review-import-1",
+      reviews: 1,
+    });
+  });
+
+  it("merges imported records by id while preserving records absent from the import", async () => {
+    const fixture = createSavedDataExportFixture();
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+    const existingBookmark = { ...fixture.bookmarks[0], title: "既存タイトル" } satisfies Bookmark;
+    const unrelatedCollection = {
+      ...fixture.collections[0],
+      id: "unrelated-collection",
+      title: "import 対象外のコレクション",
+      bookmarkIds: [],
+    } satisfies Collection;
+
+    await repository.putBookmark(existingBookmark);
+    await repository.putCollection(unrelatedCollection);
+    await repository.importSavedData(fixture);
+
+    await expect(repository.listBookmarks()).resolves.toEqual(fixture.bookmarks);
+    await expect(repository.listCollections()).resolves.toEqual([
+      fixture.collections[0],
+      unrelatedCollection,
+    ]);
+  });
+
+  it("moves an overwritten review log to its imported card and rebuilds both schedules", async () => {
+    const fixture = createSavedDataExportFixture();
+    const databaseName = createDatabaseName();
+    const repository = createStorageRepository({ databaseName, now: fixedNow });
+    const oldCard = { ...fixture.studyCards[0], id: "old-card" } satisfies StudyCard;
+
+    await repository.putStudyCard(oldCard);
+    await repository.recordReview({ ...fixture.reviewLogs[0], cardId: oldCard.id });
+
+    const database = await openSurasuraDatabase(databaseName);
+    try {
+      await expect(database.get("cardSchedules", oldCard.id)).resolves.toBeDefined();
+
+      await repository.importSavedData(fixture);
+
+      await expect(repository.listReviewLogs(oldCard.id)).resolves.toEqual([]);
+      await expect(repository.listReviewLogs(fixture.studyCards[0].id)).resolves.toEqual(
+        fixture.reviewLogs,
+      );
+      await expect(database.get("cardSchedules", oldCard.id)).resolves.toBeUndefined();
+      await expect(database.get("cardSchedules", fixture.studyCards[0].id)).resolves.toMatchObject({
+        cardId: fixture.studyCards[0].id,
+        derivedFrom: fixture.reviewLogs[0].id,
+        reviews: 1,
+      });
+    } finally {
+      database.close();
+    }
+  });
+
+  it("rolls back every imported record when a later IndexedDB write fails", async () => {
+    const fixture = createSavedDataExportFixture();
+    Object.assign(fixture.reviewLogs[0], { id: undefined });
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await expect(repository.importSavedData(fixture)).rejects.toBeDefined();
+
+    await expect(
+      repository.getLawDocument(fixture.savedLaws[0].law.lawId),
+    ).resolves.toBeUndefined();
+    await expect(repository.listBookmarks()).resolves.toEqual([]);
+    await expect(repository.listStudyCards()).resolves.toEqual([]);
+  });
+
+  it("round-trips a current version 2 export through JSON parsing and a fresh repository", async () => {
+    const fixture = createSavedDataExportFixture();
+    const source = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+    const target = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await source.importSavedData(fixture);
+    const sourceExport = await createSavedDataExport(source, fixture.exportedAt);
+    const parsed = parseSavedDataImport(JSON.stringify(sourceExport)).data;
+
+    await target.importSavedData(parsed);
+    const targetExport = await createSavedDataExport(target, sourceExport.exportedAt);
+
+    expect(targetExport).toEqual(sourceExport);
   });
 
   it("closes the cached connection and can reopen on later operations", async () => {
