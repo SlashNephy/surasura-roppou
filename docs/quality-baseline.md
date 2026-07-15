@@ -269,78 +269,85 @@ origin 全体へ影響する `localStorage.clear()` の使用を禁止する。
 
 ## 8. 現行実装の監査結果
 
-本節は、現行実装の監査値、判定、証跡を一か所へ記録するための書式である。
+本節は、commit `ae3d5e5fc4781a94f6a1f417b6c8999df914cf9c` の production build を実レスポンスと headed Chrome で監査した結果である。
 
-規範を測定より先に確定したため、現時点の監査項目は未検証であり、適合または未達の判定を先取りしない。
-
-各値と証跡は、Issue #40 の実装計画で直後に続く Task 2（現行実装の監査）で記録する。
+値は第 4.2 節の基準と同じ page time origin、`performance.now()`、二つの `requestAnimationFrame` を用いたローカル監査値であり、実利用環境全体の適合を表すものではない。
 
 ### 8.1 監査環境
 
-| 項目                    | 現在の記録                                                                   |
-| ----------------------- | ---------------------------------------------------------------------------- |
-| 監査実施日と時刻        | 未記録。Task 2（現行実装の監査）で記録する                                   |
-| 監査対象 commit         | 未記録。監査時に完全な commit SHA を記録する                                 |
-| OS、CPU、メモリ         | 未記録。監査端末の実値を記録する                                             |
-| Node と pnpm            | 未記録。実行した version コマンドの出力を記録する                            |
-| ブラウザ                | 未記録。製品名と完全なバージョンを記録する                                   |
-| viewport                | 未記録。desktop と mobile の CSS px を記録する                               |
-| build                   | 未記録。production build のコマンドと出力を記録する                          |
-| network                 | 未記録。接続先と throttling の有無を記録する                                 |
-| cache と Service Worker | 未記録。各試行の warm または cold、Cache Storage、登録と制御状態を記録する   |
-| e-Gov API               | 未記録。取得 URL、HTTP status、revision、payload size、node count を記録する |
+| 項目                    | 実測 / 観測                                                                                                                                                                                                                                                     | 証跡                                                                                      |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| 監査実施日と時刻        | 2026-07-16T01:56:14+09:00                                                                                                                                                                                                                                       | `date --iso-8601=seconds`                                                                 |
+| 監査対象 commit         | `ae3d5e5fc4781a94f6a1f417b6c8999df914cf9c`                                                                                                                                                                                                                      | `git rev-parse HEAD`                                                                      |
+| OS、CPU、メモリ         | Linux 7.1.3-2-cachyos-bore-lto x86_64、12th Gen Intel Core i7-12700K、20 logical CPU / 12 core、メモリ 31 GiB（監査開始時 available 10 GiB）                                                                                                                    | `uname -a`、`lscpu`、`free -h`                                                            |
+| Node と pnpm            | Node v24.18.0、pnpm 11.12.0                                                                                                                                                                                                                                     | `node --version`、`pnpm --version`                                                        |
+| ブラウザ                | playwright-cli 0.1.15、Google Chrome 150.0.7871.114                                                                                                                                                                                                             | `playwright-cli --version`、headed session の CDP `Browser.getVersion`                    |
+| viewport                | desktop 1440 x 900、mobile 390 x 844、200% reflow 相当 720 x 450、minimum reflow 320 x 844 CSS px                                                                                                                                                               | `playwright-cli -s=issue40 resize`、各 route の `innerWidth` と `getBoundingClientRect()` |
+| build                   | `pnpm build`（`tsc -b && vite build`）成功、Vite 8.1.4、2198 modules、902 ms。main JS 686,762 bytes（gzip 204,424）、CSS 58,565 bytes（gzip 10,774）、OCR dynamic entry 17,237 bytes（gzip 7,198）。main chunk に 500 kB 超過 warning あり                      | clean `dist` に対する build 出力、`stat`、`gzip -c`、module graph                         |
+| OCR 配信 artifact       | worker 111,307 bytes、選択される relaxed SIMD LSTM WASM loader 3,905,767 bytes、同 WASM 2,862,266 bytes、日本語 model 2,471,260 bytes。他の同梱 core は JS 3,896,484–4,697,227 bytes、WASM 2,855,361–3,456,075 bytes。precache の重複を除く合計は 769,841 bytes | `find dist`、OCR dynamic entry の import graph、`dist/sw.js`                              |
+| network                 | preview は `http://127.0.0.1:4173/`、e-Gov は HTTPS。UI と性能測定は throttling なし。OCR cold 境界では CDP で HTTP cache を無効化                                                                                                                              | preview の HTTP 200、`Network.emulateNetworkConditions`、`Network.setCacheDisabled`       |
+| cache と Service Worker | 性能は warm HTTP cache、activated かつ page controlled、Workbox Cache Storage あり。OCR は origin storage、既存 Service Worker、HTTP cache を消去して再 install / activate / control した状態から開始                                                           | `navigator.serviceWorker`、Cache Storage、IndexedDB、Web Storage の段階別 Playwright 出力 |
+| e-Gov API               | URL `https://laws.e-gov.go.jp/api/2/law_data/129AC0000000089?law_full_text_format=json&response_format=json`、3 回とも HTTP 200、revision `129AC0000000089_20260624_508AC0000000045`、1,618,344 bytes、民法、正規化後 4,283 nodes                               | Node の独立した実リクエスト 3 回と headed Chrome request #17                              |
 
 ### 8.2 アクセシビリティ
 
-| 監査項目                              | 判定   | 記録する証跡                                                       |
-| ------------------------------------- | ------ | ------------------------------------------------------------------ |
-| 主要 route の Tab と Shift+Tab 順     | 未検証 | 操作順と headed browser のスクリーンショット                       |
-| Enter、Space、Escape、矢印キー        | 未検証 | 対象コントロールと実操作の結果                                     |
-| フォーカス表示とモーダル終了後の復帰  | 未検証 | 起動元、モーダル内、終了後のフォーカス位置                         |
-| ランドマーク、見出し、名前、状態通知  | 未検証 | accessibility tree と画面上の結果                                  |
-| 200% 拡大と 320 CSS px 相当のリフロー | 未検証 | desktop と mobile のスクリーンショットと横スクロールの有無         |
-| 44 x 44 CSS px の推奨                 | 未検証 | 単独のボタン、ナビゲーション、カード操作の実測値、未達理由、代替策 |
-| 24 x 24 CSS px の最低基準             | 未検証 | 全対象の実測値、Target Size (Minimum) の公式例外と間隔             |
+| 領域                       | 条件 / 操作                                                                 | 実測 / 観測                                                                                                                                                                                                                         | 判定           | 証跡                                                                                                       |
+| -------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------- |
+| フォーカス順               | 6 route、1440 x 900、Tab / Shift+Tab                                        | logo、検索、global navigation、main、footer の DOM 順に移動し、正の `tabIndex` はなかった。skip link はない。法令本文より前に 2,346 個の目次ボタンを通るため、本文後方への移動は長い                                                | 適合           | 各 route の headed snapshot と activeElement 列                                                            |
+| キーボード操作             | 法令表示切替、目次第 1050 条、設定 select、data export、mobile 目次         | Enter / Space で表示状態と `aria-pressed` が切り替わり、目次は Enter で `/articles/1050` と `aria-current="location"` へ遷移した。select は ArrowDown、export は Enter で作動。mobile 目次は inline disclosure のため Escape 対象外 | 適合           | headed session の activeElement、URL、ARIA state、`desktop-law-viewer.png`、`/var/tmp/issue40-export.json` |
+| 検索 dialog の復帰         | 390 x 844、検索起動ボタンを Enter / Space、Escape                           | 開いた直後は検索 input へ移動し、矢印キーと Enter で候補を選択できた。Escape で閉じた後は起動元ではなく `BODY` へ移動した                                                                                                           | 未達           | headed session の `document.activeElement`                                                                 |
+| scanner のフォーカス       | 1440 x 900 と 390 x 844、画像選択、OCR 同意表示、「やめる」を Enter / Space | 実 file input 2 個が 1 x 1 CSS px のまま Tab 順に入り、視認可能なフォーカスにならない。同意 UI の「やめる」で起動元が消えた後も安全な要素へ移さず `BODY` になった                                                                   | 未達           | input の rect / `:focus-visible`、キャンセル前後の activeElement、`scanner-consent.png`                    |
+| ランドマークと状態         | 6 route の accessibility tree、desktop / mobile                             | 各 route に banner、global navigation、main、contentinfo と主題を示す H1 があり、操作に accessible name、表示切替と目次に ARIA state があった。閉じた検索 dialog の H2 は tree に残るが interactive descendant は閉じている         | 適合           | `playwright-cli -s=issue40 snapshot`                                                                       |
+| 390 px と 200% 相当 reflow | 6 route を 390 x 844 と 720 x 450 で表示                                    | 全 route で `scrollWidth <= clientWidth`、操作の切れなし。mobile bottom navigation は viewport 下端に残り、各項目は約 90 x 48 CSS px                                                                                                | 適合           | 各 route の viewport、scrollWidth、control rect、`mobile-law-viewer.png`                                   |
+| 320 CSS px reflow          | 6 route を 320 x 844 で表示                                                 | home / scanner は横スクロールなし。law / study / settings / data transfer は viewport の scrollbar 後の clientWidth 305 px に対して body 最小幅 320 pxとなり、最大 15 px の page-level 横スクロールが発生                           | 未達           | 各 route の innerWidth / clientWidth / scrollWidth / 最大 scrollLeft                                       |
+| 44 x 44 CSS px 推奨        | 390 x 844 の全 button / link                                                | bottom navigation は約 90 x 48。単独操作には高さ 28–42 px があり、法令 viewer は 2,360 対象中 2,356 対象が 44 px 未満で、条文 copy / link の多くは 28 x 28。home 8、scanner 6、study 8、settings 5、data transfer 6 対象も推奨未満  | 未達（推奨値） | 全対象の `getBoundingClientRect()`                                                                         |
+| 24 x 24 CSS px 最低基準    | 390 x 844 の全 button / link と公式例外                                     | 24 px 未満は本文中の inline link、間隔例外を満たす study link、またはより大きい visible label を持つ 1 x 1 file input だった。例外外の 24 x 24 未満は観測しなかった                                                                 | 適合           | rect と隣接 target の中心間隔。scanner file input の可視操作は 408 x 136 / 408 x 36 CSS px                 |
 
 ### 8.3 性能
 
-| 監査項目                   | 判定   | 記録する値と証跡                                              |
-| -------------------------- | ------ | ------------------------------------------------------------- |
-| 民法の実レスポンス         | 未検証 | URL、status、revision、payload size、node count、実レスポンス |
-| 受信完了から最初の条文表示 | 未検証 | responseEnd、DOM と二つの rAF、3 回の値、中央値、trace        |
-| 表示モード切替             | 未検証 | readable から original、二つの rAF、3 回の値、中央値、判定    |
-| 目次操作                   | 未検証 | 固定対象名、aria-current、二つの rAF、3 回の値、中央値、判定  |
-| 変換と描画の Long Task     | 未検証 | 全 entry、観測区間、最大時間、trace による処理の帰属          |
-| LCP、INP、CLS のラボ値     | 未検証 | 各値、測定条件、field data ではない旨                         |
-| 安定性                     | 未検証 | crash、操作不能、描画停止、未処理例外、console error の有無   |
+| 領域                       | 条件 / 操作                                                                                                | 実測 / 観測                                                                                                                                                                                                                   | 判定   | 証跡                                                                                              |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------- |
+| 民法の実レスポンス         | 同一 Node script を独立に 3 回実行                                                                         | 全回 200 / 1,618,344 bytes / revision `129AC0000000089_20260624_508AC0000000045` / 民法 / 4,283 nodes。fetch は 355.206、277.924、329.189 ms（中央値 329.189 ms）、normalize は 42.195、45.527、48.085 ms（中央値 45.527 ms） | 適合   | `node --input-type=module --experimental-strip-types` の実出力 3 件                               |
+| 受信完了から最初の条文表示 | warm headed Chrome。各回 `/`、scroll top から SPA 遷移。resource `responseEnd` から DOM 検出後の二つの rAF | responseEnd / end / 差分は 473.0 / 990.1 / 517.1 ms、269.5 / 706.3 / 436.8 ms、284.5 / 759.6 / 475.1 ms。中央値 475.1 ms                                                                                                      | 適合   | PerformanceResourceTiming、最初の非空 `article[aria-label="民法"] article`、同一 timeline の mark |
+| 表示モード切替             | 各回 readable、scroll top から original を作動、`aria-pressed=true` 後に二つの rAF                         | 179.4、176.4、177.1 ms、中央値 177.1 ms                                                                                                                                                                                       | 適合   | headed Chrome の Performance mark と ARIA state                                                   |
+| 目次操作                   | 各回 scroll top、固定対象「第1050条」を作動、`aria-current=location` 後に二つの rAF                        | 103.4、94.6、93.0 ms、中央値 94.6 ms。到達先は `/laws/129AC0000000089/articles/1050`、「第千五十条」が current                                                                                                                | 適合   | headed Chrome の Performance mark、URL、ARIA state                                                |
+| 初回表示の Long Task       | 上記 3 区間                                                                                                | 73 / 124 / 292 ms、117 / 258 ms、137 / 269 ms。trace の最大は main JS の `ThreadControllerImpl::RunTask` 291.040 ms と Layout 200.883 ms で、変換と React 描画の区間に帰属                                                    | 未達   | PerformanceObserver 全 entry と同区間の Chromium trace                                            |
+| 表示切替の Long Task       | 上記 3 区間                                                                                                | 55 / 126 ms、156 ms、166 ms。trace で Layout 90.484–103.285 ms と main JS FunctionCall 51.957 ms 以上を観測                                                                                                                   | 未達   | PerformanceObserver 全 entry と同区間の Chromium trace                                            |
+| 目次操作の Long Task       | 上記 3 区間                                                                                                | 86 ms、77 ms、78 ms。trace で RunMicrotasks 74.064–82.706 ms、main JS FunctionCall 71.926–80.676 ms に帰属                                                                                                                    | 未達   | PerformanceObserver 全 entry と同区間の Chromium trace                                            |
+| LCP と CLS のラボ値        | 1440 x 900、headed Chrome、直接 navigation、throttling なし                                                | final LCP 1,020 ms、CLS 0.08593。どちらもローカル目標内だが field data ではない                                                                                                                                               | 適合   | Paint / LargestContentfulPaint / layout-shift entries                                             |
+| INP                        | 同じローカル session                                                                                       | field data はなく、監査操作から有効な Event Timing entry を取得できなかった                                                                                                                                                   | 未監査 | PerformanceEventTiming                                                                            |
+| 安定性                     | 上記性能 9 試行                                                                                            | crash、操作不能、描画停止、未処理例外、アプリ由来 console error は観測しなかった。object URL 解放監査で、監査コードが失効済み URL を明示 fetch した 1 件の `ERR_FILE_NOT_FOUND` は lifecycle 証跡として別記する               | 適合   | headed session console、page error、各試行の完了 state                                            |
 
 ### 8.4 OCR とプライバシー
 
-| 監査項目                          | 判定   | 記録する証跡                                                                      |
-| --------------------------------- | ------ | --------------------------------------------------------------------------------- |
-| OCR 監査の初期状態                | 未検証 | fresh profile、消去した storage、HTTP cache、Service Worker の再制御状態          |
-| 主要 route の OCR 資産取得        | 未検証 | URL、initiator、dynamic import、precache manifest、cache と Service Worker の状態 |
-| `/scanner` 表示と画像選択         | 未検証 | 同意前に取得された OCR chunk、worker、WASM、model の一覧                          |
-| 同意後の OCR 実行                 | 未検証 | 同意操作、取得資産、request URL と body                                           |
-| OCR 画像の保存と送信              | 未検証 | 各 storage と、現行アプリで画像の外部 request がない Network 証跡                 |
-| OCR テキストと analytics          | 未検証 | OCR セッションの保存状態と送信イベントの実状態                                    |
-| worker と object URL の lifecycle | 未検証 | キャンセル、差し替え、破棄、アンマウントごとの観測結果                            |
-| 外部データの安全な描画            | 未検証 | DOM 上の text node と injection が起きない実入力結果                              |
-| 全削除の対象領域                  | 未検証 | IndexedDB、Cache Storage、Service Worker、Web Storage の棚卸し                    |
+| 領域                          | 条件 / 操作                                                                                                | 実測 / 観測                                                                                                                                                                                                                                  | 判定   | 証跡                                                                                                           |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------- |
+| OCR 監査の初期状態            | 新しい headed context 相当で origin data と既存 Service Worker を消去し、HTTP cache disabled で `/` を開く | Cache Storage、IndexedDB、local / session storage は空。Service Worker を再 install / activate し、page が controller を持つ状態から段階監査を開始                                                                                           | 適合   | CDP `Storage.clearDataForOrigin` / `Network.setCacheDisabled`、段階別 storage snapshot                         |
+| 主要 route と OCR entry       | `/`、law、search、study、settings を経て scanner へ移動                                                    | OCR dynamic entry `assets/src-CwV7Emr-.js` は main から dynamic import されるが、Service Worker install 時点で Workbox precache に保存された。worker、WASM、model はこの段階で未取得                                                         | 未達   | module graph、`dist/sw.js`、Workbox cache の URL 一覧                                                          |
+| scanner 表示と画像選択        | `/scanner` 表示、`issue40-ocr.png` upload、同意 UI 表示まで                                                | entry は precache 済み。worker / WASM / model の追加 request はなく、同意 UI に「約 2.4 MB」「以後オフライン」「端末内で処理」「画像を保存しない」を表示                                                                                     | 適合   | 段階別 requests / cache、`scanner-privacy.png`、`scanner-consent.png`                                          |
+| 同意後の OCR 実行             | 「同意して実行」、処理中キャンセル、再実行して完了                                                         | GET `tesseract/worker.min.js` 200、`tesseract-core-relaxedsimd-lstm.wasm.js` 200、`tessdata/jpn.traineddata` 200。キャンセル後の再実行で worker / WASM を再取得し、OCR session 1 件を作成。request body なし                                 | 適合   | headed request #42–47、OCR session の IndexedDB record                                                         |
+| OCR 画像の保存と送信          | 選択、実行、キャンセル、完了、破棄、scanner 離脱の各境界                                                   | 画像 blob / data URL / object URL は main IndexedDB、model IndexedDB、local / session storage、Cache Storage に残らず、画像の外部 origin request もなかった                                                                                  | 適合   | 全 storage の value 型 / key / URL、headed request 一覧                                                        |
+| OCR テキストと analytics      | OCR 完了後                                                                                                 | `surasura-roppou` v3 の `ocrSessions` に sourceText を持つ 1 record を保存。analytics request は画像、OCR text、閲覧履歴、メモのいずれにも観測しなかった                                                                                     | 適合   | IndexedDB store count / record keys、全 headed requests                                                        |
+| model の永続化                | OCR 完了後                                                                                                 | `keyval-store` v1 の `keyval` に key `./jpn.traineddata`、Uint8Array 2,471,260 bytes を 1 件保存。localStorage には同意 key `surasura:ocr-model-consent=granted` を保存                                                                      | 適合   | IndexedDB `getAllKeys()` / value byteLength、Web Storage                                                       |
+| worker / object URL lifecycle | OCR 中キャンセル、画像差し替え、破棄、scanner 離脱                                                         | worker / WASM request はキャンセル後の再実行で新規発生し、離脱後の page worker は 0。object URL は有効中 200、解放後に監査コードで明示 fetch すると `ERR_FILE_NOT_FOUND`、DOM と storage の object URL は 0                                  | 適合   | headed request #39–55、`page.workers()`、DOM / storage URL scan                                                |
+| 外部データの安全な描画        | e-Gov 実レスポンスと OCR 実結果を DOM で表示                                                               | 実データは text と構造化 DOM で表示された。一方、HTML injection を狙う攻撃文字列を実入力として流す監査は実行していない                                                                                                                       | 未監査 | law viewer と OCR 結果の DOM                                                                                   |
+| 全削除の対象領域              | 現行 UI と実 storage の棚卸し                                                                              | main IndexedDB 14 stores、OCR model 用 `keyval-store`、Workbox Cache Storage、Service Worker、同意 localStorage、sessionStorage が対象。利用者向け全削除 UI がなく、接続 / worker close 後の削除と reload 後の未復活を公開動作で実行できない | 未達   | settings / data transfer の headed snapshot、IndexedDB / Cache Storage / Service Worker / Web Storage の実状態 |
 
 ### 8.5 未達事項と後続 Issue
 
-監査に起因する未達事項と Issue URL は、監査未実施のため現在は記録されていない。
+Task 2 では Issue を作成せず、実測と再現条件を確定する。実在する Issue URL は直後の Issue 作成作業で記録する。
 
-実在しない Issue URL を記載することは禁止する。
-
-監査前に確定している後続作業は次のとおりである。
-
-| 対象                     | 現在の状態                                            | 後続 Issue の記録                                |
-| ------------------------ | ----------------------------------------------------- | ------------------------------------------------ |
-| 文字サイズ、行間、テーマ | 現行 UI は表示のみであり、第 3 節の操作と永続化が必要 | Issue 作成後に実在する URL を記録する            |
-| ローカルデータの全削除   | 第 7 節の利用者向け操作が必要                         | Issue 作成後に実在する URL を記録する            |
-| 監査で検出した追加の未達 | 監査値がないため判定していない                        | 再現手順と証跡を持つ Issue の実在 URL を記録する |
+| 未達事項                         | 監査結果                                                                                                                            | 後続 Issue                      | 優先理由                                                                             |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | ------------------------------------------------------------------------------------ |
+| 文字サイズ、行間、テーマ         | 現行 UI は値の表示だけで、選択、端末保存、再起動時復元がない                                                                        | Task 3 で作成し URL を記録      | 第 3 節で必須とした利用者設定を提供するため                                          |
+| ローカルデータの全削除           | 利用者向け操作がなく、model 用 `keyval-store` を含む owned storage の削除と reload 後の未復活を検証できない                         | Task 3 で作成し URL を記録      | OCR source text と model を含むローカルデータを利用者が制御できるようにするため      |
+| 大規模法令の Long Task           | 初回表示最大 292 ms、表示切替最大 166 ms、目次最大 86 ms。3 操作すべてで変換または描画に帰属する 50 ms 超を観測                     | Task 3 で作成し URL を記録      | 中央値の操作時間は目標内でも main thread block の必須基準を満たさないため            |
+| OCR entry の precache            | dynamic import だが Service Worker install 時に 17,237 bytes の OCR entry を取得、保存                                              | Task 3 で作成し URL を記録      | 同意前取得を禁止する第 5 節の境界を満たさないため                                    |
+| 検索と scanner のフォーカス      | 検索を Escape で閉じた後と scanner 同意を中止した後に `BODY` へ移動し、scanner の 1 x 1 file input は視認可能なフォーカスを持たない | Task 3 で作成し URL を記録      | キーボード利用者が現在位置と操作の継続先を失うため                                   |
+| 320 CSS px の横スクロール        | law / study / settings / data transfer で最大 15 px の page-level 横スクロール                                                      | Task 3 で作成し URL を記録      | Reflow の必須基準で禁止した二方向スクロールが発生するため                            |
+| 44 x 44 CSS px の推奨            | 法令 viewer の 2,360 対象中 2,356 対象など、複数 route で高さ 28–42 px の単独操作を観測                                             | Task 3 で作成し URL を記録      | AA の 24 px 最低基準には適合するが、製品上の推奨値を満たさない理由と代替策がないため |
+| OCR 画像、送信、analytics 境界   | 画像の永続化と外部送信、analytics request はなく、worker / object URL も離脱時に残らなかった                                        | 適合項目のため Issue なし       | 全削除だけは上記の専用 Issue で扱い、適合したプライバシー境界は維持する              |
+| 外部データへの攻撃文字列入力監査 | e-Gov と OCR の実データ表示は確認したが、HTML injection を狙う実入力による browser 監査は実行していない                             | 未監査のため Issue は作成しない | 未達と断定せず、外部入力の表示層を変更する作業で実入力監査を行う                     |
 
 ## 9. 実装者チェックリスト
 
