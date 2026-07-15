@@ -22,12 +22,14 @@ const unitByKanji = new Map([
 const kanjiNumberPattern = "[一二三四五六七八九十百千]+";
 const eraYearPattern = `${kanjiNumberPattern}|元`;
 const branchNumberPattern = `${kanjiNumberPattern}(?:の${kanjiNumberPattern})*`;
-// 各枝番号の直後で漢字語との境界を判定し、真の「の二」だけを変換して後続の「の一部」は残す。
-const structuralBranchNumberPattern = `${kanjiNumberPattern}(?!\\p{Script=Han})(?:の${kanjiNumberPattern}(?!\\p{Script=Han}))*`;
+const legalConjunctionPattern = "及び|又は|若しくは|並びに";
+// 「の二つ」などの一般数量へ食い込まないよう、枝番号は法令参照の終端として現れる文字だけを後続に許可する。
+const legalReferenceBoundaryPattern = `(?:$|[\\s\\p{P}\\p{S}]|の|に|は|を|が|へ|と|も|から|まで|${legalConjunctionPattern})`;
+const structuralBranchNumberPattern = `${branchNumberPattern}(?=${legalReferenceBoundaryPattern})`;
 const articleNumberRegex = new RegExp(`第(${kanjiNumberPattern})(条|項|号)`, "g");
-// 構造単位が「目標」や「編成」の語頭として現れる場合を除外しつつ、「第一目から」のように助詞が続く参照は変換する。
+// 「第一目標」などの一般語を除外しつつ、漢字で始まる「第一章及び第二章」の接続表現は法令参照として変換する。
 const structuralHeadingNumberRegex = new RegExp(
-  `第(${kanjiNumberPattern})(編|章|節|款|目)(?!\\p{Script=Han})`,
+  `第(${kanjiNumberPattern})(編|章|節|款|目)(?=(?:${legalConjunctionPattern})|[^\\p{Script=Han}]|$)`,
   "gu",
 );
 const structuralBranchNumberRegex = new RegExp(
