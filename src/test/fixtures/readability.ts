@@ -16,6 +16,36 @@ export const readabilityTransformFixtures = [
     expected: "第1条",
   },
   {
+    name: "part title kanji number",
+    mode: "article-number",
+    input: "第一編",
+    expected: "第1編",
+  },
+  {
+    name: "chapter title kanji number",
+    mode: "article-number",
+    input: "第二章",
+    expected: "第2章",
+  },
+  {
+    name: "section title kanji number",
+    mode: "article-number",
+    input: "第三節",
+    expected: "第3節",
+  },
+  {
+    name: "subsection title kanji number",
+    mode: "article-number",
+    input: "第四款",
+    expected: "第4款",
+  },
+  {
+    name: "division title kanji number",
+    mode: "article-number",
+    input: "第五目",
+    expected: "第5目",
+  },
+  {
     name: "branch article title kanji number",
     mode: "article-number",
     input: "第十二条の二",

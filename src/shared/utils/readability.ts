@@ -23,6 +23,11 @@ const kanjiNumberPattern = "[一二三四五六七八九十百千]+";
 const eraYearPattern = `${kanjiNumberPattern}|元`;
 const branchNumberPattern = `${kanjiNumberPattern}(?:の${kanjiNumberPattern})*`;
 const articleNumberRegex = new RegExp(`第(${kanjiNumberPattern})(条|項|号)`, "g");
+// 構造単位が「目標」や「編成」の語頭として現れる場合を除外しつつ、「第一目から」のように助詞が続く参照は変換する。
+const structuralHeadingNumberRegex = new RegExp(
+  `第(${kanjiNumberPattern})(編|章|節|款|目)(?!\\p{Script=Han})`,
+  "gu",
+);
 const branchNumberRegex = new RegExp(
   `(第\\d+(?:条|項|号)|別表\\d+|別記様式\\d+)の(${branchNumberPattern})`,
   "g",
@@ -87,11 +92,14 @@ const replaceKanjiNumber = (kanjiNumber: string): string => {
 const transformParentheses = (text: string): string =>
   text.replaceAll("（", "(").replaceAll("）", ")");
 
-const transformArticleNumbers = (text: string): string =>
+const replaceLegalNumber = (_match: string, kanjiNumber: string, suffix: string): string => {
+  return `第${replaceKanjiNumber(kanjiNumber)}${suffix}`;
+};
+
+const transformLegalNumbers = (text: string): string =>
   text
-    .replace(articleNumberRegex, (_match, kanjiNumber: string, suffix: string) => {
-      return `第${replaceKanjiNumber(kanjiNumber)}${suffix}`;
-    })
+    .replace(structuralHeadingNumberRegex, replaceLegalNumber)
+    .replace(articleNumberRegex, replaceLegalNumber)
     .replace(appendixTableNumberRegex, (_match, prefix: string, tableNumber: string) => {
       return `${prefix}${replaceKanjiNumber(tableNumber)}`;
     })
@@ -115,7 +123,7 @@ export const transformReadableText = (
 ): string => {
   switch (mode) {
     case "article-number":
-      return transformArticleNumbers(text);
+      return transformLegalNumbers(text);
     case "date":
       return transformDates(text);
     case "law-number":
@@ -125,8 +133,6 @@ export const transformReadableText = (
     case "unchanged":
       return text;
     case "all":
-      return transformArticleNumbers(
-        transformDates(transformLawNumbers(transformParentheses(text))),
-      );
+      return transformLegalNumbers(transformDates(transformLawNumbers(transformParentheses(text))));
   }
 };

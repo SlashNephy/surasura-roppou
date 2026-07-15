@@ -22,6 +22,9 @@ describe("readability", () => {
       "一般、一部、同一、第三者、第一審、第一義的。",
       "一般、一部、同一、第三者、第一審、第一義的。",
     ],
+    ["第一目標を達成する。", "第一目標を達成する。"],
+    ["第一目的は安全である。", "第一目的は安全である。"],
+    ["第一編成を発表する。", "第一編成を発表する。"],
   ])("keeps non-target prose unchanged: %s", (input, expected) => {
     expect(transformReadableText(input)).toBe(expected);
   });
@@ -40,6 +43,7 @@ describe("readability", () => {
     ["別記様式第一", "別記様式1"],
     ["別表第一の二", "別表1の2"],
     ["別記様式第一の二", "別記様式1の2"],
+    ["第一目から第三目まで", "第1目から第3目まで"],
   ])("transforms common legal notation: %s", (input, expected) => {
     expect(transformReadableText(input)).toBe(expected);
   });
@@ -71,7 +75,9 @@ describe("readability", () => {
   it.each([
     ["第十十条", "第十十条"],
     ["第十百号", "第十百号"],
-  ])("keeps malformed article number unchanged: %s", (input, expected) => {
+    ["第十十章", "第十十章"],
+    ["第百百節", "第百百節"],
+  ])("keeps malformed legal number unchanged: %s", (input, expected) => {
     expect(transformReadableText(input)).toBe(expected);
   });
 });

@@ -236,11 +236,18 @@ describe("LawNodeList", () => {
     expect(screen.getByText("第一条 rawTextが空の本文。")).toBeInTheDocument();
   });
 
-  it("renders LawNode hierarchy as readable legal text blocks", () => {
-    render(<LawNodeList activeArticleNumber="1" nodes={nodes} />);
+  it("keeps legal structure headings unchanged in original mode", () => {
+    render(<LawNodeList displayMode="original" nodes={nodes} />);
 
     expect(screen.getByRole("heading", { level: 2, name: "第一編　総則" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 3, name: "第一章　通則" })).toBeInTheDocument();
+  });
+
+  it("renders LawNode hierarchy as readable legal text blocks", () => {
+    render(<LawNodeList activeArticleNumber="1" nodes={nodes} />);
+
+    expect(screen.getByRole("heading", { level: 2, name: "第1編　総則" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 3, name: "第1章　通則" })).toBeInTheDocument();
 
     const article = screen.getByRole("article", { name: "第一条" });
     expect(article).toHaveAttribute("id", "article-1");
