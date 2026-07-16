@@ -40,17 +40,27 @@ let cachedPreferences = DEFAULT_DISPLAY_PREFERENCES;
 const includes = <Value extends string>(values: readonly Value[], value: string): value is Value =>
   values.includes(value as Value);
 
+const getStorage = (): Storage | undefined => {
+  try {
+    return globalThis.localStorage;
+  } catch {
+    // Window.localStorage 自体へのアクセスを拒否する環境では、ストレージなしとして扱う。
+    return undefined;
+  }
+};
+
 const read = <Value extends string>(
+  storage: Storage | undefined,
   key: string,
   values: readonly Value[],
   fallback: Value,
 ): Value => {
-  if (typeof localStorage === "undefined") {
+  if (storage === undefined) {
     return fallback;
   }
 
   try {
-    const stored = localStorage.getItem(key);
+    const stored = storage.getItem(key);
     return stored !== null && includes(values, stored) ? stored : fallback;
   } catch {
     // ストレージを利用できない環境では、保存値がない場合と同じ既定値へ安全に劣化させる。
@@ -58,13 +68,13 @@ const read = <Value extends string>(
   }
 };
 
-const write = (key: string, value: string): void => {
-  if (typeof localStorage === "undefined") {
+const write = (storage: Storage | undefined, key: string, value: string): void => {
+  if (storage === undefined) {
     return;
   }
 
   try {
-    localStorage.setItem(key, value);
+    storage.setItem(key, value);
   } catch {
     // 保存状態が変わっていないため、購読者へも変更通知を送らない。
     return;
@@ -76,17 +86,20 @@ const write = (key: string, value: string): void => {
 };
 
 export const getDisplayPreferences = (): DisplayPreferences => {
+  const storage = getStorage();
   const fontSize = read(
+    storage,
     storageKeys.fontSize,
     displayFontSizes,
     DEFAULT_DISPLAY_PREFERENCES.fontSize,
   );
   const lineSpacing = read(
+    storage,
     storageKeys.lineSpacing,
     displayLineSpacings,
     DEFAULT_DISPLAY_PREFERENCES.lineSpacing,
   );
-  const theme = read(storageKeys.theme, displayThemes, DEFAULT_DISPLAY_PREFERENCES.theme);
+  const theme = read(storage, storageKeys.theme, displayThemes, DEFAULT_DISPLAY_PREFERENCES.theme);
 
   // useSyncExternalStore の snapshot が、値の不変時に同じ参照を返す契約を保つ。
   if (
@@ -102,15 +115,15 @@ export const getDisplayPreferences = (): DisplayPreferences => {
 };
 
 export const setDisplayFontSize = (value: DisplayFontSize): void => {
-  write(storageKeys.fontSize, value);
+  write(getStorage(), storageKeys.fontSize, value);
 };
 
 export const setDisplayLineSpacing = (value: DisplayLineSpacing): void => {
-  write(storageKeys.lineSpacing, value);
+  write(getStorage(), storageKeys.lineSpacing, value);
 };
 
 export const setDisplayTheme = (value: DisplayTheme): void => {
-  write(storageKeys.theme, value);
+  write(getStorage(), storageKeys.theme, value);
 };
 
 export const subscribeDisplayPreferences = (listener: () => void): (() => void) => {
@@ -144,15 +157,16 @@ export const subscribeDisplayPreferences = (listener: () => void): (() => void) 
 };
 
 export const sanitizeStoredDisplayTheme = (): void => {
-  if (typeof localStorage === "undefined") {
+  const storage = getStorage();
+  if (storage === undefined) {
     return;
   }
 
   try {
-    const stored = localStorage.getItem(storageKeys.theme);
+    const stored = storage.getItem(storageKeys.theme);
     if (stored !== null && !includes(displayThemes, stored)) {
       // next-themes が未知のテーマ名を html class として扱う前に保存境界で除去する。
-      localStorage.removeItem(storageKeys.theme);
+      storage.removeItem(storageKeys.theme);
     }
   } catch {
     // ストレージ操作が拒否された場合は next-themes 側へ処理を委ね、起動自体は妨げない。

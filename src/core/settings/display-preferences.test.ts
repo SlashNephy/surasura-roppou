@@ -107,6 +107,38 @@ describe("getDisplayPreferences", () => {
       sanitizeStoredDisplayTheme();
     }).not.toThrow();
   });
+
+  it("localStorage の参照取得が失敗した場合は既定値へ安全に劣化する", () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeDisplayPreferences(listener);
+    const originalDescriptor = Object.getOwnPropertyDescriptor(window, "localStorage");
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      get() {
+        throw new DOMException("blocked", "SecurityError");
+      },
+    });
+
+    try {
+      expect(getDisplayPreferences()).toEqual(DEFAULT_DISPLAY_PREFERENCES);
+      expect(() => {
+        setDisplayFontSize("large");
+        setDisplayLineSpacing("relaxed");
+        setDisplayTheme("dark");
+        sanitizeStoredDisplayTheme();
+      }).not.toThrow();
+    } finally {
+      if (originalDescriptor === undefined) {
+        Reflect.deleteProperty(window, "localStorage");
+      } else {
+        Object.defineProperty(window, "localStorage", originalDescriptor);
+      }
+      unsubscribe();
+    }
+
+    expect(getDisplayPreferences()).toEqual(DEFAULT_DISPLAY_PREFERENCES);
+    expect(listener).not.toHaveBeenCalled();
+  });
 });
 
 describe("display preference subscriptions", () => {
