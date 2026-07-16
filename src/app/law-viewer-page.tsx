@@ -549,12 +549,12 @@ const LawViewerReadyState = ({
               <span className="text-sm font-medium text-foreground">表示</span>
               <div
                 aria-label="表示モード"
-                className="inline-flex w-fit rounded-md border bg-background p-1"
+                className="flex w-full flex-col gap-1 rounded-md border bg-background p-1 sm:w-fit sm:flex-row sm:gap-0"
                 role="group"
               >
                 <Button
                   aria-pressed={displayMode === "readable"}
-                  className="h-8 px-3"
+                  className="h-8 w-full px-3 sm:w-auto"
                   onClick={() => {
                     setDisplayMode("readable");
                   }}
@@ -565,7 +565,7 @@ const LawViewerReadyState = ({
                 </Button>
                 <Button
                   aria-pressed={displayMode === "original"}
-                  className="h-8 px-3"
+                  className="h-8 w-full px-3 sm:w-auto"
                   onClick={() => {
                     setDisplayMode("original");
                   }}

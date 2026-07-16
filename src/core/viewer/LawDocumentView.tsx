@@ -46,7 +46,7 @@ export const LawDocumentView = ({
         </div>
       </div>
 
-      <dl className="flex min-w-0 flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground">
+      <dl className="flex min-w-0 flex-wrap gap-x-4 gap-y-2 text-sm leading-display text-muted-foreground">
         {revision.effectiveDate !== undefined ? (
           <div className="min-w-0 break-words">
             <dt className="sr-only">施行日</dt>

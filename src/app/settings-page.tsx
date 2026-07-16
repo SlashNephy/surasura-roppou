@@ -72,11 +72,13 @@ const StaticSettingsGroup = ({ group }: { group: SettingsGroup }) => (
 const DisplaySelectRow = ({
   children,
   description,
+  descriptionId,
   id,
   label,
 }: {
   children: ReactNode;
   description?: string;
+  descriptionId?: string;
   id: string;
   label: string;
 }) => (
@@ -87,7 +89,10 @@ const DisplaySelectRow = ({
     <div className="grid min-w-0 gap-2">
       {children}
       {description === undefined ? null : (
-        <p className="leading-display min-w-0 break-words text-xs text-muted-foreground">
+        <p
+          className="leading-display min-w-0 break-words text-xs text-muted-foreground"
+          id={descriptionId}
+        >
           {description}
         </p>
       )}
@@ -101,6 +106,7 @@ const DisplaySettingsGroup = () => {
   const fontSizeId = useId();
   const lineSpacingId = useId();
   const themeId = useId();
+  const themeDescriptionId = useId();
 
   const themeDescription = {
     system: "端末の外観設定に合わせます。",
@@ -144,8 +150,14 @@ const DisplaySettingsGroup = () => {
             <option value="wide">広い</option>
           </Select>
         </DisplaySelectRow>
-        <DisplaySelectRow description={themeDescription} id={themeId} label="テーマ">
+        <DisplaySelectRow
+          description={themeDescription}
+          descriptionId={themeDescriptionId}
+          id={themeId}
+          label="テーマ"
+        >
           <Select
+            aria-describedby={themeDescriptionId}
             className="w-full"
             id={themeId}
             onChange={(event) => {
@@ -256,7 +268,7 @@ export const SettingsPage = () => {
               ))}
               <option value="custom">カスタム</option>
             </Select>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs leading-display text-muted-foreground">
               行政書士試験は例年、試験年の 4 月 1 日現在で施行されている法令が出題基準です。
             </p>
           </div>
@@ -274,7 +286,7 @@ export const SettingsPage = () => {
               type="date"
               value={inputValue}
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs leading-display text-muted-foreground">
               未設定のときは現行法（今日時点で施行）を表示します。
             </p>
             {error !== undefined ? (

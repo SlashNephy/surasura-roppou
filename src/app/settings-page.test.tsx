@@ -118,15 +118,19 @@ describe("SettingsPage 表示", () => {
     const theme = await screen.findByRole("combobox", { name: "テーマ" });
 
     expect(screen.getByText("端末の外観設定に合わせます。")).toBeInTheDocument();
+    expect(theme).toHaveAccessibleDescription("端末の外観設定に合わせます。");
 
     await user.selectOptions(theme, "light");
     expect(screen.getByText("端末の外観設定にかかわらずライトで表示します。")).toBeInTheDocument();
+    expect(theme).toHaveAccessibleDescription("端末の外観設定にかかわらずライトで表示します。");
 
     await user.selectOptions(theme, "dark");
     expect(screen.getByText("端末の外観設定にかかわらずダークで表示します。")).toBeInTheDocument();
+    expect(theme).toHaveAccessibleDescription("端末の外観設定にかかわらずダークで表示します。");
 
     await user.selectOptions(theme, "system");
     expect(screen.getByText("端末の外観設定に合わせます。")).toBeInTheDocument();
+    expect(theme).toHaveAccessibleDescription("端末の外観設定に合わせます。");
   });
 });
 

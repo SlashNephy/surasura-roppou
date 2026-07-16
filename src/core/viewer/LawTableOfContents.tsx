@@ -26,7 +26,7 @@ export const LawTableOfContents = ({
         onSelectArticle={onSelectArticle}
       />
     ) : (
-      <p className="text-sm text-muted-foreground">目次を表示できません</p>
+      <p className="text-sm leading-display text-muted-foreground">目次を表示できません</p>
     )}
   </nav>
 );
@@ -78,7 +78,7 @@ const TocItem = ({
         <Button
           aria-current={isActiveArticle ? "location" : undefined}
           className={cn(
-            "h-auto min-w-0 justify-start rounded-none border-l-2 border-transparent px-2 py-1.5 text-left whitespace-normal",
+            "h-auto min-w-0 justify-start rounded-none border-l-2 border-transparent px-2 py-1.5 text-left leading-display whitespace-normal",
             isActiveArticle && "border-primary bg-accent text-accent-foreground",
           )}
           onClick={() => {
@@ -90,7 +90,7 @@ const TocItem = ({
           <span className="min-w-0 font-serif break-words">{displayTitle}</span>
         </Button>
       ) : (
-        <span className="block min-w-0 px-2 py-1.5 font-serif text-sm font-medium text-foreground break-words">
+        <span className="block min-w-0 px-2 py-1.5 font-serif text-sm leading-display font-medium text-foreground break-words">
           {displayTitle}
         </span>
       )}

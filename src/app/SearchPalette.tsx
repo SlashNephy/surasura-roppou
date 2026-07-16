@@ -247,14 +247,16 @@ export const SearchPalette = () => {
                     </CommandGroup>
                   ) : null}
                   {outcome.status === "unresolved" ? (
-                    <p className="py-6 text-center text-sm">
+                    <p className="py-6 text-center text-sm leading-display">
                       {outcome.reason === "needs-context"
                         ? "相対参照は前後の文脈が必要です。法令名を含めて入力してください。"
                         : "該当する法令が見つかりませんでした。"}
                     </p>
                   ) : null}
                   {outcome.status === "candidates" && outcome.candidates.length === 0 ? (
-                    <p className="py-6 text-center text-sm">該当する候補がありません。</p>
+                    <p className="py-6 text-center text-sm leading-display">
+                      該当する候補がありません。
+                    </p>
                   ) : null}
                 </>
               )}
