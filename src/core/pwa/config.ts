@@ -7,8 +7,8 @@ export const surasuraPwaManifest = {
   start_url: "/",
   scope: "/",
   display: "standalone",
-  background_color: "#fafafa",
-  theme_color: "#4f46e5",
+  background_color: "#fcfbf8",
+  theme_color: "#166534",
   lang: "ja",
   icons: [
     {
