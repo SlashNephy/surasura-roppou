@@ -218,6 +218,66 @@ describe("DisplayPreferencesProvider", () => {
     expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme)).toBe("system");
   });
 
+  it.each([
+    { blockSetItem: false, expectedStoredTheme: "system" },
+    { blockSetItem: true, expectedStoredTheme: "dark light" },
+  ] as const)(
+    "起動時の不正テーマを storage 修正できなくても安全な初期テーマだけを適用する ($blockSetItem)",
+    async ({ blockSetItem, expectedStoredTheme }) => {
+      localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme, "dark light");
+      prefersDark = true;
+      vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
+        throw new DOMException("blocked", "SecurityError");
+      });
+      if (blockSetItem) {
+        vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+          throw new DOMException("blocked", "SecurityError");
+        });
+      }
+      const pageError = vi.fn();
+      window.addEventListener("error", pageError);
+
+      try {
+        expect(() => {
+          renderProvider();
+        }).not.toThrow();
+
+        await waitFor(() => {
+          expect(screen.getByText("standard/standard/system")).toBeInTheDocument();
+          expect(document.documentElement.className).toBe("dark");
+          expect(document.documentElement.style.colorScheme).toBe("dark");
+          expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme)).toBe(
+            expectedStoredTheme,
+          );
+        });
+        expect(pageError).not.toHaveBeenCalled();
+      } finally {
+        window.removeEventListener("error", pageError);
+      }
+    },
+  );
+
+  it.each([
+    { storedTheme: "dark", expectedClass: "dark" },
+    { storedTheme: "light", expectedClass: "light" },
+    { storedTheme: "system", expectedClass: "dark" },
+  ] as const)(
+    "正常な保存テーマ $storedTheme を初期表示し、同じ保存値を維持する",
+    async ({ expectedClass, storedTheme }) => {
+      localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme, storedTheme);
+      prefersDark = true;
+
+      renderProvider();
+
+      await waitFor(() => {
+        expect(screen.getByText(`standard/standard/${storedTheme}`)).toBeInTheDocument();
+        expect(document.documentElement.className).toBe(expectedClass);
+        expect(document.documentElement.style.colorScheme).toBe(expectedClass);
+        expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme)).toBe(storedTheme);
+      });
+    },
+  );
+
   it("実行中に不正なテーマを受信するとシステムへ戻して DOM と保存値を揃える", async () => {
     localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme, "light");
     prefersDark = true;

@@ -1,5 +1,5 @@
 import { ThemeProvider, useTheme } from "next-themes";
-import { useLayoutEffect, useRef, useSyncExternalStore } from "react";
+import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { PropsWithChildren, ReactElement } from "react";
 
 import {
@@ -10,6 +10,7 @@ import {
   sanitizeStoredDisplayTheme,
   subscribeDisplayPreferences,
   type DisplayPreferences,
+  type DisplayTheme,
 } from "@/core/settings";
 
 const getServerDisplayPreferences = (): DisplayPreferences => DEFAULT_DISPLAY_PREFERENCES;
@@ -26,7 +27,14 @@ const removeUnknownThemeClass = (theme: unknown): void => {
     .join(" ");
 };
 
-const DisplayPreferencesBridge = ({ children }: PropsWithChildren): ReactElement => {
+interface DisplayPreferencesBridgeProps extends PropsWithChildren {
+  onInitialThemeReady: () => void;
+}
+
+const DisplayPreferencesBridge = ({
+  children,
+  onInitialThemeReady,
+}: DisplayPreferencesBridgeProps): ReactElement => {
   const { fontSize, lineSpacing } = useSyncExternalStore(
     subscribeDisplayPreferences,
     getDisplayPreferences,
@@ -35,6 +43,7 @@ const DisplayPreferencesBridge = ({ children }: PropsWithChildren): ReactElement
   const { setTheme, theme } = useTheme();
   const hasValidTheme = isDisplayTheme(theme);
   const unknownThemeClass = useRef<unknown>(undefined);
+  const initialThemeReady = useRef(false);
 
   useLayoutEffect(() => {
     document.documentElement.dataset.fontSize = fontSize;
@@ -68,6 +77,10 @@ const DisplayPreferencesBridge = ({ children }: PropsWithChildren): ReactElement
       // next-themes は既知テーマだけを除去するため、補正前に付いた未知 class は別途取り除く。
       removeUnknownThemeClass(unknownThemeClass.current);
       unknownThemeClass.current = undefined;
+      if (!initialThemeReady.current) {
+        initialThemeReady.current = true;
+        onInitialThemeReady();
+      }
       return;
     }
 
@@ -76,20 +89,30 @@ const DisplayPreferencesBridge = ({ children }: PropsWithChildren): ReactElement
     // 保存値の削除が拒否されても、next-themes の session state は独立して system へ戻す。
     sanitizeStoredDisplayTheme();
     setTheme(DEFAULT_DISPLAY_PREFERENCES.theme);
-  }, [hasValidTheme, setTheme, theme]);
+  }, [hasValidTheme, onInitialThemeReady, setTheme, theme]);
 
   return <>{children}</>;
 };
 
 export const DisplayPreferencesProvider = ({ children }: PropsWithChildren): ReactElement => {
+  const [forcedTheme, setForcedTheme] = useState<DisplayTheme | undefined>(
+    () => getDisplayPreferences().theme,
+  );
+  const releaseInitialTheme = useCallback(() => {
+    setForcedTheme(undefined);
+  }, []);
+
   return (
     <ThemeProvider
       attribute="class"
       defaultTheme={DEFAULT_DISPLAY_PREFERENCES.theme}
       enableSystem
+      forcedTheme={forcedTheme}
       storageKey={DISPLAY_PREFERENCES_STORAGE_KEYS.theme}
     >
-      <DisplayPreferencesBridge>{children}</DisplayPreferencesBridge>
+      <DisplayPreferencesBridge onInitialThemeReady={releaseInitialTheme}>
+        {children}
+      </DisplayPreferencesBridge>
     </ThemeProvider>
   );
 };
