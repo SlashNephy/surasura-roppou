@@ -244,7 +244,7 @@ const QuizGenerateDialogContent = ({
                     {draft.candidate.choices === undefined ? null : (
                       <div className="grid gap-1 text-sm">
                         <span className="font-medium text-foreground">選択肢</span>
-                        <ul className="list-disc pl-5 text-muted-foreground">
+                        <ul className="list-disc pl-5 leading-display text-muted-foreground">
                           {draft.candidate.choices.map((choice) => (
                             <li key={choice}>{choice}</li>
                           ))}

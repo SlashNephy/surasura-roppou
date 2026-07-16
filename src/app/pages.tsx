@@ -48,12 +48,12 @@ export const LawsPage = ({
         {savedLawsError !== undefined ? (
           <p
             role="status"
-            className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground"
+            className="rounded-md border border-dashed px-4 py-5 text-sm leading-display text-muted-foreground"
           >
             {savedLawsError}
           </p>
         ) : savedLaws.length === 0 ? (
-          <p className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground">
+          <p className="rounded-md border border-dashed px-4 py-5 text-sm leading-display text-muted-foreground">
             保存済み法令はまだありません。
           </p>
         ) : (
@@ -63,7 +63,7 @@ export const LawsPage = ({
                 <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
                   <div className="grid min-w-0 gap-2">
                     <Link
-                      className="font-serif text-base font-semibold text-foreground underline-offset-4 hover:underline"
+                      className="font-serif text-base leading-display font-semibold text-foreground underline-offset-4 hover:underline"
                       params={{ lawId: savedLaw.law.lawId }}
                       to="/laws/$lawId"
                     >
@@ -100,14 +100,14 @@ export const StudyPage = ({
         // 読み込み失敗時は savedLawsError と同型のバナーでエラーを明示する
         <p
           role="status"
-          className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground"
+          className="rounded-md border border-dashed px-4 py-5 text-sm leading-display text-muted-foreground"
         >
           {error}
         </p>
       ) : null}
       <div className="rounded-md bg-primary p-4 text-primary-foreground">
         <p className="font-semibold">今日の復習</p>
-        <p className="mt-1 text-xs opacity-75">
+        <p className="mt-1 text-xs leading-display opacity-75">
           {dashboard === undefined
             ? "復習するカードを確認しています"
             : dashboard.dueCount === 0
@@ -115,7 +115,7 @@ export const StudyPage = ({
               : `${dashboard.dueCount.toLocaleString("ja-JP")} 件のカードが復習期限です`}
         </p>
         {dashboard?.stats.accuracy !== undefined ? (
-          <p className="mt-1 text-xs opacity-75">
+          <p className="mt-1 text-xs leading-display opacity-75">
             通算正答率 {Math.round(dashboard.stats.accuracy * 100)}%（
             {dashboard.stats.totalReviews.toLocaleString("ja-JP")} 回答）
           </p>

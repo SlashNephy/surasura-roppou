@@ -182,13 +182,13 @@ export const StudyCardsPage = ({
                     </span>
                   </div>
                   <Link
-                    className="line-clamp-2 whitespace-pre-wrap break-words text-base font-semibold text-foreground hover:underline underline-offset-4"
+                    className="line-clamp-2 whitespace-pre-wrap break-words text-base leading-display font-semibold text-foreground hover:underline underline-offset-4"
                     params={{ cardId: card.id }}
                     to="/study/cards/$cardId"
                   >
                     {card.question}
                   </Link>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm leading-display text-muted-foreground">
                     根拠:{" "}
                     {/* ビューア起点の作成フローでは article が必ず入るが、
                         データ不整合時に「第null条」がレンダリングされるのを防ぐため

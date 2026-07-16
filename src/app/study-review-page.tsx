@@ -417,7 +417,7 @@ export const StudyReviewPage = ({
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary">{studyCardTypeLabels[state.session.queue[0].type]}</Badge>
           </div>
-          <p className="whitespace-pre-wrap break-words text-lg font-semibold text-foreground">
+          <p className="whitespace-pre-wrap break-words text-lg leading-display font-semibold text-foreground">
             {state.session.queue[0].question}
           </p>
           {state.session.phase.kind === "question" ? (
@@ -440,7 +440,7 @@ export const StudyReviewPage = ({
                 <>
                   <div className="grid gap-1 rounded-md bg-muted p-4">
                     <p className="text-xs font-medium text-muted-foreground">答え</p>
-                    <p className="whitespace-pre-wrap break-words text-base text-foreground">
+                    <p className="whitespace-pre-wrap break-words text-base leading-display text-foreground">
                       {state.session.queue[0].answer}
                     </p>
                     {state.session.queue[0].explanation === undefined ? null : (

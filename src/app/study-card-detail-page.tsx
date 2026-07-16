@@ -192,7 +192,7 @@ export const StudyCardDetailPage = ({
     <section className="mx-auto grid w-full max-w-2xl gap-4 px-5 py-10">
       <header className="grid gap-1">
         <h1 className="font-serif text-2xl font-semibold text-foreground">条文カード</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm leading-display text-muted-foreground">
           根拠:{" "}
           {/* ビューア起点の作成フローでは article が必ず入るが、
               データ不整合時に「第null条」がレンダリングされるのを防ぐため

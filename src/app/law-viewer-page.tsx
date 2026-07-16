@@ -517,11 +517,11 @@ const LawViewerReadyState = ({
         <aside aria-label="法令の目次" className="hidden border-r bg-muted/40 lg:block">
           <div className="sticky top-14 grid max-h-[calc(100dvh-3.5rem)] content-start gap-3 overflow-y-auto p-4">
             <div className="grid gap-1">
-              <p className="min-w-0 font-serif text-base font-semibold text-foreground break-words">
+              <p className="min-w-0 font-serif text-base leading-display font-semibold text-foreground break-words">
                 {state.law.title}
               </p>
               {state.law.lawNumber !== undefined ? (
-                <p className="min-w-0 text-xs text-muted-foreground break-words">
+                <p className="min-w-0 text-xs leading-display text-muted-foreground break-words">
                   {state.law.lawNumber}
                 </p>
               ) : null}
@@ -697,7 +697,7 @@ const LawViewerReadyState = ({
 
             <div aria-label="基準日情報" className="grid min-w-0 gap-1 md:w-full" role="group">
               <span className="text-sm font-medium text-foreground">基準日</span>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm leading-display text-muted-foreground">
                 基準日 {formatBaseDateLabel(state)} ・ 施行日{" "}
                 {formatEffectiveDateLabel(state.revision)}{" "}
                 <Link className="text-primary underline-offset-4 hover:underline" to="/settings">
@@ -954,7 +954,7 @@ const LawViewerOfflineState = ({ lawTitle }: { lawTitle: string }) => (
     className="mx-auto flex min-h-[calc(100dvh-10rem)] w-full max-w-2xl flex-col justify-center gap-4 px-4 py-10 md:px-6"
   >
     <div className="grid gap-2">
-      <p className="text-sm font-medium text-primary">{lawTitle}</p>
+      <p className="text-sm leading-display font-medium text-primary">{lawTitle}</p>
       <h1 className="text-2xl font-semibold text-foreground">この法令は端末に保存されていません</h1>
       <p className="text-base leading-display text-muted-foreground">
         オフラインで表示するには、通信できる状態で法令本文を開いて保存してください。

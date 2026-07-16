@@ -329,7 +329,7 @@ const SavedLawList = ({ savedLaws }: { savedLaws: SavedLawSummary[] }) => (
             <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
               <div className="grid min-w-0 gap-2">
                 <Link
-                  className="text-base font-semibold text-foreground underline-offset-4 hover:underline"
+                  className="text-base leading-display font-semibold text-foreground underline-offset-4 hover:underline"
                   params={{ lawId: savedLaw.law.lawId }}
                   to="/laws/$lawId"
                 >
@@ -368,7 +368,7 @@ const BookmarkList = ({
           <li key={bookmark.id} className="rounded-md border bg-card p-4">
             <div className="grid gap-2">
               <BookmarkLink bookmark={bookmark} />
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm leading-display text-muted-foreground">
                 法令: {lawTitlesById?.get(bookmark.target.lawId) ?? bookmark.target.lawId}
               </p>
               {bookmark.note === undefined ? null : (
@@ -404,7 +404,7 @@ const CollectionList = ({ collections }: { collections: Collection[] }) => (
           <li key={collection.id} className="rounded-md border bg-card p-4">
             <div className="grid gap-2">
               <Link
-                className="text-base font-semibold text-foreground underline-offset-4 hover:underline"
+                className="text-base leading-display font-semibold text-foreground underline-offset-4 hover:underline"
                 params={{ collectionId: collection.id }}
                 to="/saved/collections/$collectionId"
               >
@@ -659,7 +659,9 @@ const CollectionForm = ({
       <fieldset className="grid gap-2">
         <legend className="text-sm font-medium text-foreground">保存項目</legend>
         {bookmarks.length === 0 ? (
-          <p className="text-sm text-muted-foreground">保存項目を追加すると選択できます。</p>
+          <p className="text-sm leading-display text-muted-foreground">
+            保存項目を追加すると選択できます。
+          </p>
         ) : (
           <div className="grid max-h-48 gap-2 overflow-y-auto rounded-md border bg-background p-2 pr-3">
             {bookmarks.map((bookmark) => (
@@ -706,7 +708,7 @@ const SectionHeading = ({
 const PanelMessage = ({ children, role }: { children: string; role?: "status" }) => (
   <p
     role={role}
-    className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground"
+    className="rounded-md border border-dashed px-4 py-5 text-sm leading-display text-muted-foreground"
   >
     {children}
   </p>
@@ -738,7 +740,7 @@ const BookmarkLink = ({ bookmark }: { bookmark: Bookmark }) => {
   if (article === undefined || article === "") {
     return (
       <Link
-        className="text-base font-semibold text-foreground underline-offset-4 hover:underline"
+        className="text-base leading-display font-semibold text-foreground underline-offset-4 hover:underline"
         params={{ lawId: bookmark.target.lawId }}
         to="/laws/$lawId"
       >
@@ -749,7 +751,7 @@ const BookmarkLink = ({ bookmark }: { bookmark: Bookmark }) => {
 
   return (
     <Link
-      className="text-base font-semibold text-foreground underline-offset-4 hover:underline"
+      className="text-base leading-display font-semibold text-foreground underline-offset-4 hover:underline"
       params={{ lawId: bookmark.target.lawId, article }}
       to="/laws/$lawId/articles/$article"
     >

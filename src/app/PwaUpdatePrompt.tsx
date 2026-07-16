@@ -53,7 +53,9 @@ export const PwaUpdatePrompt = ({ controller = pwaUpdateController }: PwaUpdateP
         )}
         <div className="min-w-0">
           <p className="leading-display">{message}</p>
-          {state.error ? <p className="text-xs text-muted-foreground">{state.error}</p> : null}
+          {state.error ? (
+            <p className="text-xs leading-display text-muted-foreground">{state.error}</p>
+          ) : null}
         </div>
       </div>
       <div className="flex justify-end gap-2">

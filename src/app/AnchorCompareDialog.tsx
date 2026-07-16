@@ -130,7 +130,9 @@ export const AnchorCompareDialog = ({
           </section>
         </div>
 
-        {saveError !== undefined ? <p className="text-sm text-destructive">{saveError}</p> : null}
+        {saveError !== undefined ? (
+          <p className="text-sm leading-display text-destructive">{saveError}</p>
+        ) : null}
 
         <DialogFooter>
           <Button

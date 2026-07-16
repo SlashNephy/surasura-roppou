@@ -201,7 +201,7 @@ export const DataTransferPage = ({
       {busy !== undefined || successMessage === undefined ? null : (
         <p
           aria-live="polite"
-          className="rounded-md border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-foreground"
+          className="rounded-md border border-primary/30 bg-primary/5 px-4 py-3 text-sm leading-display text-foreground"
           role="status"
         >
           {successMessage}
@@ -216,7 +216,11 @@ export const DataTransferPage = ({
         </p>
       )}
       {busyMessage === undefined ? null : (
-        <p aria-live="polite" className="text-sm text-muted-foreground" role="status">
+        <p
+          aria-live="polite"
+          className="text-sm leading-display text-muted-foreground"
+          role="status"
+        >
           {busyMessage}
         </p>
       )}

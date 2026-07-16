@@ -28,7 +28,7 @@ const defaultStorageRepository = createStorageRepository();
 
 // 画像は端末内メモリでのみ保持し、保存・送信しないことを明示する注記。
 const PrivacyNote = () => (
-  <p className="text-xs text-muted-foreground">
+  <p className="text-xs leading-display text-muted-foreground">
     <span aria-hidden="true">🔒 </span>
     画像は端末内で処理され、保存・送信されません
   </p>
@@ -222,7 +222,7 @@ export const ScannerPage = ({
         <OcrPanel blob={image.blob} ocr={ocr} onDiscard={handleDiscard} />
         {sessionSaveFailed && ocr.phase === "done" ? (
           <p
-            className="rounded-md border border-destructive/50 px-4 py-2 text-sm text-destructive"
+            className="rounded-md border border-destructive/50 px-4 py-2 text-sm leading-display text-destructive"
             role="alert"
           >
             セッションを保存できませんでした。候補の利用は続けられます。
