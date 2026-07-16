@@ -78,10 +78,17 @@ describe("SettingsPage 表示", () => {
   });
 
   it("reload 相当の再マウント後に選択値を復元する", async () => {
-    localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.fontSize, "large");
-    localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.lineSpacing, "relaxed");
-    localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme, "light");
+    const firstRender = renderSettingsRoute();
 
+    await firstRender.user.selectOptions(await screen.findByLabelText("文字サイズ"), "large");
+    await firstRender.user.selectOptions(screen.getByLabelText("行間"), "relaxed");
+    await firstRender.user.selectOptions(screen.getByLabelText("テーマ"), "light");
+
+    expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.fontSize)).toBe("large");
+    expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.lineSpacing)).toBe("relaxed");
+    expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme)).toBe("light");
+
+    firstRender.unmount();
     renderSettingsRoute();
 
     expect(await screen.findByLabelText("文字サイズ")).toHaveValue("large");
@@ -89,7 +96,7 @@ describe("SettingsPage 表示", () => {
     expect(screen.getByLabelText("テーマ")).toHaveValue("light");
   });
 
-  it("ラベルから操作対象を特定しキーボードで選択できる", async () => {
+  it("native select をラベルで特定して Tab で到達できる", async () => {
     const { user } = renderSettingsRoute();
 
     const fontSize = await screen.findByRole("combobox", { name: "文字サイズ" });
@@ -104,20 +111,6 @@ describe("SettingsPage 表示", () => {
       await user.tab();
     }
     expect(fontSize).toHaveFocus();
-    let pressedKey: string | undefined;
-    fontSize.addEventListener(
-      "keydown",
-      (event) => {
-        pressedKey = event.key;
-      },
-      { once: true },
-    );
-    await user.keyboard("{ArrowDown}");
-    expect(pressedKey).toBe("ArrowDown");
-    await user.selectOptions(fontSize, "large");
-
-    expect(fontSize).toHaveValue("large");
-    expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.fontSize)).toBe("large");
   });
 
   it("システム、ライト、ダークの選択に応じた説明を表示する", async () => {
@@ -253,11 +246,11 @@ const renderSettingsRoute = () => {
   const history = createMemoryHistory({ initialEntries: ["/settings"] });
   const user = userEvent.setup();
 
-  render(
+  const renderResult = render(
     <DisplayPreferencesProvider>
       <RouterProvider router={createAppRouter({ history })} />
     </DisplayPreferencesProvider>,
   );
 
-  return { history, user };
+  return { history, user, ...renderResult };
 };
