@@ -1,9 +1,10 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DISPLAY_PREFERENCES_STORAGE_KEYS } from "@/core/settings";
 
-import { DisplayPreferencesProvider, useDisplayPreferences } from "./display-preferences";
+import { DisplayPreferencesProvider } from "./display-preferences";
+import { useDisplayPreferences } from "./use-display-preferences";
 
 const mediaListeners = new Set<(event: MediaQueryListEvent) => void>();
 let prefersDark = false;
@@ -113,6 +114,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   localStorage.clear();
   mediaListeners.clear();
   document.documentElement.className = "";
@@ -204,15 +206,68 @@ describe("DisplayPreferencesProvider", () => {
     expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme)).toBe("dark");
   });
 
-  it("不正な保存テーマを起動前に削除してシステムとして扱う", async () => {
+  it("Provider 単体でも不正な保存テーマをシステムへ補正する", async () => {
     localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme, "sepia");
     prefersDark = true;
 
     renderProvider();
 
-    expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme)).toBeNull();
     expect(screen.getByText("standard/standard/system")).toBeInTheDocument();
     await waitFor(() => expect(document.documentElement).toHaveClass("dark"));
     expect(document.documentElement.style.colorScheme).toBe("dark");
+    expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme)).toBe("system");
   });
+
+  it("実行中に不正なテーマを受信するとシステムへ戻して DOM と保存値を揃える", async () => {
+    localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme, "light");
+    prefersDark = true;
+    renderProvider();
+
+    await waitFor(() => expect(screen.getByText("standard/standard/light")).toBeInTheDocument());
+    expect(document.documentElement).not.toHaveClass("dark");
+
+    act(() => {
+      localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme, "sepia");
+      window.dispatchEvent(
+        new StorageEvent("storage", {
+          key: DISPLAY_PREFERENCES_STORAGE_KEYS.theme,
+          newValue: "sepia",
+        }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("standard/standard/system")).toBeInTheDocument();
+      expect(document.documentElement).toHaveClass("dark");
+      expect(document.documentElement).not.toHaveClass("sepia");
+      expect(document.documentElement.style.colorScheme).toBe("dark");
+      expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme)).toBe("system");
+    });
+  });
+
+  it.each([
+    { failingOperation: "removeItem", expectedStoredTheme: "system" },
+    { failingOperation: "setItem", expectedStoredTheme: null },
+  ] as const)(
+    "localStorage.$failingOperation が拒否されても不正テーマを DOM に残さない",
+    async ({ expectedStoredTheme, failingOperation }) => {
+      localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme, "sepia");
+      prefersDark = true;
+      vi.spyOn(Storage.prototype, failingOperation).mockImplementation(() => {
+        throw new DOMException("blocked", "SecurityError");
+      });
+
+      renderProvider();
+
+      await waitFor(() => {
+        expect(screen.getByText("standard/standard/system")).toBeInTheDocument();
+        expect(document.documentElement).toHaveClass("dark");
+        expect(document.documentElement).not.toHaveClass("sepia");
+        expect(document.documentElement.style.colorScheme).toBe("dark");
+        expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme)).toBe(
+          expectedStoredTheme,
+        );
+      });
+    },
+  );
 });

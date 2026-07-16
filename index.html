@@ -4,6 +4,49 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#4f46e5" />
+    <!--
+      初回 paint 前の同期実行を保証するため、外部 script の cold-cache 待ちを避けて inline にする。
+      現在 CSP は未設定であり、将来 strict CSP を導入するときは nonce/hash か外部化を合わせて検討する。
+      この時点では TypeScript を import できないため、表示設定の保存キーと値契約を意図的に重複させる。
+    -->
+    <script>
+      (() => {
+        const storageKey = "surasura:display:theme";
+        const validThemes = ["system", "light", "dark"];
+        let selectedTheme = "system";
+
+        try {
+          const storedTheme = window.localStorage.getItem(storageKey);
+          if (validThemes.includes(storedTheme)) {
+            selectedTheme = storedTheme;
+          } else if (storedTheme !== null) {
+            try {
+              window.localStorage.removeItem(storageKey);
+            } catch {
+              // 読み取り専用の storage でも、下の system 解決で初期表示を確定する。
+            }
+          }
+        } catch {
+          // storage 自体へアクセスできない環境は、未設定と同じ system として扱う。
+        }
+
+        let resolvedTheme = selectedTheme === "dark" ? "dark" : "light";
+        if (selectedTheme === "system") {
+          try {
+            resolvedTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+          } catch {
+            // matchMedia が利用できない環境でも light を確定し、無テーマ状態を作らない。
+          }
+        }
+
+        const root = document.documentElement;
+        root.classList.remove("light", "dark");
+        root.classList.add(resolvedTheme);
+        root.style.colorScheme = resolvedTheme;
+      })();
+    </script>
     <meta
       name="description"
       content="すらすら六法は、法令を読みやすく閲覧し、条文参照をすぐ確認できる Web/PWA アプリです。"

@@ -40,6 +40,9 @@ let cachedPreferences = DEFAULT_DISPLAY_PREFERENCES;
 const includes = <Value extends string>(values: readonly Value[], value: string): value is Value =>
   values.includes(value as Value);
 
+export const isDisplayTheme = (value: unknown): value is DisplayTheme =>
+  typeof value === "string" && includes(displayThemes, value);
+
 const getStorage = (): Storage | undefined => {
   try {
     return globalThis.localStorage;

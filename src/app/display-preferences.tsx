@@ -1,35 +1,29 @@
 import { ThemeProvider, useTheme } from "next-themes";
-import { useCallback, useLayoutEffect, useState, useSyncExternalStore } from "react";
+import { useLayoutEffect, useRef, useSyncExternalStore } from "react";
 import type { PropsWithChildren, ReactElement } from "react";
 
 import {
   DEFAULT_DISPLAY_PREFERENCES,
   DISPLAY_PREFERENCES_STORAGE_KEYS,
   getDisplayPreferences,
+  isDisplayTheme,
   sanitizeStoredDisplayTheme,
-  setDisplayFontSize,
-  setDisplayLineSpacing,
   subscribeDisplayPreferences,
-  type DisplayFontSize,
-  type DisplayLineSpacing,
   type DisplayPreferences,
-  type DisplayTheme,
 } from "@/core/settings";
-
-interface DisplayPreferencesValue extends DisplayPreferences {
-  setFontSize: (value: DisplayFontSize) => void;
-  setLineSpacing: (value: DisplayLineSpacing) => void;
-  setTheme: (value: DisplayTheme) => void;
-}
 
 const getServerDisplayPreferences = (): DisplayPreferences => DEFAULT_DISPLAY_PREFERENCES;
 
-const isDisplayTheme = (value: string | undefined): value is DisplayTheme =>
-  value === "system" || value === "light" || value === "dark";
+const removeUnknownThemeClass = (theme: unknown): void => {
+  if (typeof theme !== "string" || theme.length === 0) {
+    return;
+  }
 
-const getInitialTheme = (): DisplayTheme => {
-  sanitizeStoredDisplayTheme();
-  return getDisplayPreferences().theme;
+  const root = document.documentElement;
+  root.className = root.className
+    .split(/\s+/u)
+    .filter((className) => className.length > 0 && className !== theme)
+    .join(" ");
 };
 
 const DisplayPreferencesBridge = ({ children }: PropsWithChildren): ReactElement => {
@@ -38,51 +32,42 @@ const DisplayPreferencesBridge = ({ children }: PropsWithChildren): ReactElement
     getDisplayPreferences,
     getServerDisplayPreferences,
   );
+  const { setTheme, theme } = useTheme();
+  const hasValidTheme = isDisplayTheme(theme);
+  const unknownThemeClass = useRef<unknown>(undefined);
 
   useLayoutEffect(() => {
     document.documentElement.dataset.fontSize = fontSize;
     document.documentElement.dataset.lineSpacing = lineSpacing;
   }, [fontSize, lineSpacing]);
 
+  useLayoutEffect(() => {
+    if (hasValidTheme) {
+      // next-themes は既知テーマだけを除去するため、補正前に付いた未知 class は別途取り除く。
+      removeUnknownThemeClass(unknownThemeClass.current);
+      unknownThemeClass.current = undefined;
+      return;
+    }
+
+    unknownThemeClass.current = theme;
+    removeUnknownThemeClass(theme);
+    // 保存値の削除が拒否されても、next-themes の session state は独立して system へ戻す。
+    sanitizeStoredDisplayTheme();
+    setTheme(DEFAULT_DISPLAY_PREFERENCES.theme);
+  }, [hasValidTheme, setTheme, theme]);
+
   return <>{children}</>;
 };
 
 export const DisplayPreferencesProvider = ({ children }: PropsWithChildren): ReactElement => {
-  const [defaultTheme] = useState(getInitialTheme);
-
   return (
     <ThemeProvider
       attribute="class"
-      defaultTheme={defaultTheme}
+      defaultTheme={DEFAULT_DISPLAY_PREFERENCES.theme}
       enableSystem
       storageKey={DISPLAY_PREFERENCES_STORAGE_KEYS.theme}
     >
       <DisplayPreferencesBridge>{children}</DisplayPreferencesBridge>
     </ThemeProvider>
   );
-};
-
-export const useDisplayPreferences = (): DisplayPreferencesValue => {
-  const { fontSize, lineSpacing } = useSyncExternalStore(
-    subscribeDisplayPreferences,
-    getDisplayPreferences,
-    getServerDisplayPreferences,
-  );
-  const { setTheme: setNextTheme, theme: nextTheme } = useTheme();
-  const theme = isDisplayTheme(nextTheme) ? nextTheme : DEFAULT_DISPLAY_PREFERENCES.theme;
-  const setTheme = useCallback(
-    (value: DisplayTheme): void => {
-      setNextTheme(value);
-    },
-    [setNextTheme],
-  );
-
-  return {
-    fontSize,
-    lineSpacing,
-    theme,
-    setFontSize: setDisplayFontSize,
-    setLineSpacing: setDisplayLineSpacing,
-    setTheme,
-  };
 };
