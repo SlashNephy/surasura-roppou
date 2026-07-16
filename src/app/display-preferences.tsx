@@ -42,6 +42,28 @@ const DisplayPreferencesBridge = ({ children }: PropsWithChildren): ReactElement
   }, [fontSize, lineSpacing]);
 
   useLayoutEffect(() => {
+    const handleThemeStorage = (event: StorageEvent) => {
+      if (
+        event.key !== DISPLAY_PREFERENCES_STORAGE_KEYS.theme ||
+        event.newValue === null ||
+        isDisplayTheme(event.newValue)
+      ) {
+        return;
+      }
+
+      // next-themes の bubble listener が任意文字列を classList.add する前に無害化する。
+      event.stopImmediatePropagation();
+      sanitizeStoredDisplayTheme();
+      setTheme(DEFAULT_DISPLAY_PREFERENCES.theme);
+    };
+
+    window.addEventListener("storage", handleThemeStorage, true);
+    return () => {
+      window.removeEventListener("storage", handleThemeStorage, true);
+    };
+  }, [setTheme]);
+
+  useLayoutEffect(() => {
     if (hasValidTheme) {
       // next-themes は既知テーマだけを除去するため、補正前に付いた未知 class は別途取り除く。
       removeUnknownThemeClass(unknownThemeClass.current);

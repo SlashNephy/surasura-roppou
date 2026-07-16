@@ -245,6 +245,109 @@ describe("DisplayPreferencesProvider", () => {
     });
   });
 
+  it.each(["sepia", "dark light", ""])(
+    "不正な theme storage event %j を DOM 適用前に遮断する",
+    async (invalidTheme) => {
+      localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme, "light");
+      prefersDark = true;
+      renderProvider();
+
+      await waitFor(() => expect(screen.getByText("standard/standard/light")).toBeInTheDocument());
+      const propagatedStorageEvent = vi.fn();
+      const pageError = vi.fn();
+      window.addEventListener("storage", propagatedStorageEvent);
+      window.addEventListener("error", pageError);
+
+      try {
+        act(() => {
+          localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme, invalidTheme);
+          window.dispatchEvent(
+            new StorageEvent("storage", {
+              key: DISPLAY_PREFERENCES_STORAGE_KEYS.theme,
+              newValue: invalidTheme,
+            }),
+          );
+        });
+
+        await waitFor(() => {
+          expect(screen.getByText("standard/standard/system")).toBeInTheDocument();
+          expect(document.documentElement.className).toBe("dark");
+          expect(document.documentElement.style.colorScheme).toBe("dark");
+          expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme)).toBe("system");
+        });
+        expect(propagatedStorageEvent).not.toHaveBeenCalled();
+        expect(pageError).not.toHaveBeenCalled();
+      } finally {
+        window.removeEventListener("storage", propagatedStorageEvent);
+        window.removeEventListener("error", pageError);
+      }
+    },
+  );
+
+  it("Provider の unmount 後は theme storage event を遮断しない", () => {
+    const { unmount } = renderProvider();
+    unmount();
+    const propagatedStorageEvent = vi.fn();
+    window.addEventListener("storage", propagatedStorageEvent);
+
+    try {
+      window.dispatchEvent(
+        new StorageEvent("storage", {
+          key: DISPLAY_PREFERENCES_STORAGE_KEYS.theme,
+          newValue: "dark light",
+        }),
+      );
+
+      expect(propagatedStorageEvent).toHaveBeenCalledTimes(1);
+    } finally {
+      window.removeEventListener("storage", propagatedStorageEvent);
+    }
+  });
+
+  it.each([
+    { newValue: "dark", expectedTheme: "dark", expectedClass: "dark" },
+    { newValue: "light", expectedTheme: "light", expectedClass: "light" },
+    { newValue: "system", expectedTheme: "system", expectedClass: "dark" },
+    { newValue: null, expectedTheme: "system", expectedClass: "dark" },
+  ] as const)(
+    "正常な theme storage event $newValue は next-themes へ渡す",
+    async ({ expectedClass, expectedTheme, newValue }) => {
+      localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme, "light");
+      prefersDark = true;
+      renderProvider();
+
+      await waitFor(() => expect(screen.getByText("standard/standard/light")).toBeInTheDocument());
+      const propagatedStorageEvent = vi.fn();
+      window.addEventListener("storage", propagatedStorageEvent);
+
+      try {
+        act(() => {
+          if (newValue === null) {
+            localStorage.removeItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme);
+          } else {
+            localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme, newValue);
+          }
+          window.dispatchEvent(
+            new StorageEvent("storage", {
+              key: DISPLAY_PREFERENCES_STORAGE_KEYS.theme,
+              newValue,
+            }),
+          );
+        });
+
+        await waitFor(() => {
+          expect(screen.getByText(`standard/standard/${expectedTheme}`)).toBeInTheDocument();
+          expect(document.documentElement.className).toBe(expectedClass);
+          expect(document.documentElement.style.colorScheme).toBe(expectedClass);
+          expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme)).toBe(expectedTheme);
+        });
+        expect(propagatedStorageEvent).toHaveBeenCalledTimes(1);
+      } finally {
+        window.removeEventListener("storage", propagatedStorageEvent);
+      }
+    },
+  );
+
   it.each([
     { failingOperation: "removeItem", expectedStoredTheme: "system" },
     { failingOperation: "setItem", expectedStoredTheme: null },
