@@ -162,6 +162,24 @@ describe("display preference validators", () => {
 });
 
 describe("display preference subscriptions", () => {
+  it("複数の購読を単一の storage リスナーで監視し、最後の解除時に停止する", () => {
+    const addEventListener = vi.spyOn(window, "addEventListener");
+    const removeEventListener = vi.spyOn(window, "removeEventListener");
+    const unsubscribeFirst = subscribeDisplayPreferences(vi.fn());
+    const unsubscribeSecond = subscribeDisplayPreferences(vi.fn());
+
+    expect(addEventListener.mock.calls.filter(([type]) => type === "storage")).toHaveLength(1);
+
+    unsubscribeFirst();
+    expect(removeEventListener.mock.calls.filter(([type]) => type === "storage")).toHaveLength(0);
+
+    unsubscribeSecond();
+    expect(removeEventListener.mock.calls.filter(([type]) => type === "storage")).toHaveLength(1);
+
+    unsubscribeSecond();
+    expect(removeEventListener.mock.calls.filter(([type]) => type === "storage")).toHaveLength(1);
+  });
+
   it("setter の保存直後に同一タブの購読者へ通知する", () => {
     const listener = vi.fn();
     const unsubscribe = subscribeDisplayPreferences(listener);

@@ -146,10 +146,8 @@ body {
   line-height: var(--display-line-height);
 }
 
-@layer utilities {
-  .leading-display {
-    line-height: var(--display-line-height);
-  }
+@utility leading-display {
+  line-height: var(--display-line-height);
 }
 
 button,

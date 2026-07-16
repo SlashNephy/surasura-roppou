@@ -35,7 +35,38 @@ export const DISPLAY_PREFERENCES_STORAGE_KEYS = {
 
 const listeners = new Set<() => void>();
 
+let storageEventTarget: Window | undefined;
+
 let cachedPreferences = DEFAULT_DISPLAY_PREFERENCES;
+
+const handleStorage = (event: StorageEvent): void => {
+  if (
+    event.key !== null &&
+    event.key !== DISPLAY_PREFERENCES_STORAGE_KEYS.fontSize &&
+    event.key !== DISPLAY_PREFERENCES_STORAGE_KEYS.lineSpacing &&
+    event.key !== DISPLAY_PREFERENCES_STORAGE_KEYS.theme
+  ) {
+    return;
+  }
+
+  for (const listener of listeners) {
+    listener();
+  }
+};
+
+const startStorageSubscription = (): void => {
+  if (storageEventTarget !== undefined || typeof window === "undefined") {
+    return;
+  }
+
+  storageEventTarget = window;
+  storageEventTarget.addEventListener("storage", handleStorage);
+};
+
+const stopStorageSubscription = (): void => {
+  storageEventTarget?.removeEventListener("storage", handleStorage);
+  storageEventTarget = undefined;
+};
 
 const includes = <Value extends string>(values: readonly Value[], value: string): value is Value =>
   values.includes(value as Value);
@@ -146,26 +177,11 @@ export const subscribeDisplayPreferences = (listener: () => void): (() => void) 
     listener();
   };
   listeners.add(notify);
-
-  const handleStorage = (event: StorageEvent) => {
-    if (
-      event.key === null ||
-      event.key === DISPLAY_PREFERENCES_STORAGE_KEYS.fontSize ||
-      event.key === DISPLAY_PREFERENCES_STORAGE_KEYS.lineSpacing ||
-      event.key === DISPLAY_PREFERENCES_STORAGE_KEYS.theme
-    ) {
-      notify();
-    }
-  };
-
-  if (typeof window !== "undefined") {
-    window.addEventListener("storage", handleStorage);
-  }
+  startStorageSubscription();
 
   return () => {
-    listeners.delete(notify);
-    if (typeof window !== "undefined") {
-      window.removeEventListener("storage", handleStorage);
+    if (listeners.delete(notify) && listeners.size === 0) {
+      stopStorageSubscription();
     }
   };
 };

@@ -298,11 +298,11 @@ export const SavedCollectionPage = ({
           <Link to="/saved">保存リストへ戻る</Link>
         </Button>
         <p className="text-sm font-medium text-primary">Collection</p>
-        <h1 className="text-3xl font-semibold tracking-normal text-foreground md:text-4xl">
+        <h1 className="min-w-0 break-words text-3xl font-semibold tracking-normal text-foreground md:text-4xl">
           {collection.title}
         </h1>
         {collection.description === undefined ? null : (
-          <p className="max-w-2xl text-base leading-display text-muted-foreground">
+          <p className="max-w-2xl min-w-0 break-words text-base leading-display text-muted-foreground">
             {collection.description}
           </p>
         )}
@@ -329,7 +329,7 @@ const SavedLawList = ({ savedLaws }: { savedLaws: SavedLawSummary[] }) => (
             <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
               <div className="grid min-w-0 gap-2">
                 <Link
-                  className="text-base leading-display font-semibold text-foreground underline-offset-4 hover:underline"
+                  className="min-w-0 break-words text-base leading-display font-semibold text-foreground underline-offset-4 hover:underline"
                   params={{ lawId: savedLaw.law.lawId }}
                   to="/laws/$lawId"
                 >
@@ -368,7 +368,7 @@ const BookmarkList = ({
           <li key={bookmark.id} className="rounded-md border bg-card p-4">
             <div className="grid gap-2">
               <BookmarkLink bookmark={bookmark} />
-              <p className="text-sm leading-display text-muted-foreground">
+              <p className="min-w-0 break-words text-sm leading-display text-muted-foreground">
                 法令: {lawTitlesById?.get(bookmark.target.lawId) ?? bookmark.target.lawId}
               </p>
               {bookmark.note === undefined ? null : (
@@ -404,14 +404,14 @@ const CollectionList = ({ collections }: { collections: Collection[] }) => (
           <li key={collection.id} className="rounded-md border bg-card p-4">
             <div className="grid gap-2">
               <Link
-                className="text-base leading-display font-semibold text-foreground underline-offset-4 hover:underline"
+                className="min-w-0 break-words text-base leading-display font-semibold text-foreground underline-offset-4 hover:underline"
                 params={{ collectionId: collection.id }}
                 to="/saved/collections/$collectionId"
               >
                 {collection.title}
               </Link>
               {collection.description === undefined ? null : (
-                <p className="text-sm leading-display text-muted-foreground">
+                <p className="min-w-0 break-words text-sm leading-display text-muted-foreground">
                   {collection.description}
                 </p>
               )}
@@ -665,17 +665,20 @@ const CollectionForm = ({
         ) : (
           <div className="grid max-h-48 gap-2 overflow-y-auto rounded-md border bg-background p-2 pr-3">
             {bookmarks.map((bookmark) => (
-              <label key={bookmark.id} className="flex items-center gap-2 text-sm text-foreground">
+              <label
+                key={bookmark.id}
+                className="flex min-w-0 items-center gap-2 text-sm text-foreground"
+              >
                 <input
                   checked={selectedBookmarkIds.includes(bookmark.id)}
-                  className="size-4 accent-primary"
+                  className="size-4 shrink-0 accent-primary"
                   disabled={isSubmitting}
                   onChange={() => {
                     toggleBookmark(bookmark.id);
                   }}
                   type="checkbox"
                 />
-                {bookmark.title}
+                <span className="min-w-0 break-words">{bookmark.title}</span>
               </label>
             ))}
           </div>
@@ -740,7 +743,7 @@ const BookmarkLink = ({ bookmark }: { bookmark: Bookmark }) => {
   if (article === undefined || article === "") {
     return (
       <Link
-        className="text-base leading-display font-semibold text-foreground underline-offset-4 hover:underline"
+        className="min-w-0 break-words text-base leading-display font-semibold text-foreground underline-offset-4 hover:underline"
         params={{ lawId: bookmark.target.lawId }}
         to="/laws/$lawId"
       >
@@ -751,7 +754,7 @@ const BookmarkLink = ({ bookmark }: { bookmark: Bookmark }) => {
 
   return (
     <Link
-      className="text-base leading-display font-semibold text-foreground underline-offset-4 hover:underline"
+      className="min-w-0 break-words text-base leading-display font-semibold text-foreground underline-offset-4 hover:underline"
       params={{ lawId: bookmark.target.lawId, article }}
       to="/laws/$lawId/articles/$article"
     >
