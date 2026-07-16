@@ -1,9 +1,12 @@
-import { type ChangeEvent, useId, useState } from "react";
+import { type ChangeEvent, type ReactNode, useId, useState } from "react";
 import { Link } from "@tanstack/react-router";
 
 import {
   baseDateToStudyYear,
   earliestBaseDate,
+  isDisplayFontSize,
+  isDisplayLineSpacing,
+  isDisplayTheme,
   isValidBaseDate,
   listSelectableStudyYears,
   studyYearToBaseDate,
@@ -12,6 +15,7 @@ import { Input } from "@/shared/ui/input";
 import { Select } from "@/shared/ui/select";
 
 import { useBaseDate } from "./use-base-date";
+import { useDisplayPreferences } from "./use-display-preferences";
 
 interface SettingsRow {
   label: string;
@@ -24,17 +28,8 @@ interface SettingsGroup {
   rows: SettingsRow[];
 }
 
-// 基準日以外はまだ静的表示のグループ。後続 issue で順次実体化する。
+// 表示設定と基準日以外はまだ静的表示のグループ。後続 issue で順次実体化する。
 const staticGroups: SettingsGroup[] = [
-  {
-    heading: "表示",
-    rows: [
-      { label: "文字サイズ", value: "標準" },
-      { label: "行間", value: "ゆったり" },
-      { label: "テーマ", value: "自動" },
-      { label: "既定の表示", value: "読みやすい表示" },
-    ],
-  },
   {
     heading: "データ",
     rows: [
@@ -73,6 +68,106 @@ const StaticSettingsGroup = ({ group }: { group: SettingsGroup }) => (
     </div>
   </section>
 );
+
+const DisplaySelectRow = ({
+  children,
+  description,
+  id,
+  label,
+}: {
+  children: ReactNode;
+  description?: string;
+  id: string;
+  label: string;
+}) => (
+  <div className="grid min-w-0 gap-2 px-4 py-3 text-sm sm:grid-cols-[minmax(0,1fr)_12rem] sm:items-start">
+    <label className="min-w-0 break-words font-medium text-foreground sm:pt-2" htmlFor={id}>
+      {label}
+    </label>
+    <div className="grid min-w-0 gap-2">
+      {children}
+      {description === undefined ? null : (
+        <p className="leading-display min-w-0 break-words text-xs text-muted-foreground">
+          {description}
+        </p>
+      )}
+    </div>
+  </div>
+);
+
+const DisplaySettingsGroup = () => {
+  const { fontSize, lineSpacing, setFontSize, setLineSpacing, setTheme, theme } =
+    useDisplayPreferences();
+  const fontSizeId = useId();
+  const lineSpacingId = useId();
+  const themeId = useId();
+
+  const themeDescription = {
+    system: "端末の外観設定に合わせます。",
+    light: "端末の外観設定にかかわらずライトで表示します。",
+    dark: "端末の外観設定にかかわらずダークで表示します。",
+  }[theme];
+
+  return (
+    <section className="grid gap-2">
+      <h2 className="text-xs font-medium tracking-widest text-muted-foreground">表示</h2>
+      <div className="divide-y rounded-md border bg-card">
+        <DisplaySelectRow id={fontSizeId} label="文字サイズ">
+          <Select
+            className="w-full"
+            id={fontSizeId}
+            onChange={(event) => {
+              if (isDisplayFontSize(event.target.value)) {
+                setFontSize(event.target.value);
+              }
+            }}
+            value={fontSize}
+          >
+            <option value="standard">標準</option>
+            <option value="large">やや大きい</option>
+            <option value="extra-large">大きい</option>
+          </Select>
+        </DisplaySelectRow>
+        <DisplaySelectRow id={lineSpacingId} label="行間">
+          <Select
+            className="w-full"
+            id={lineSpacingId}
+            onChange={(event) => {
+              if (isDisplayLineSpacing(event.target.value)) {
+                setLineSpacing(event.target.value);
+              }
+            }}
+            value={lineSpacing}
+          >
+            <option value="standard">標準</option>
+            <option value="relaxed">ゆったり</option>
+            <option value="wide">広い</option>
+          </Select>
+        </DisplaySelectRow>
+        <DisplaySelectRow description={themeDescription} id={themeId} label="テーマ">
+          <Select
+            className="w-full"
+            id={themeId}
+            onChange={(event) => {
+              if (isDisplayTheme(event.target.value)) {
+                setTheme(event.target.value);
+              }
+            }}
+            value={theme}
+          >
+            <option value="system">システム</option>
+            <option value="light">ライト</option>
+            <option value="dark">ダーク</option>
+          </Select>
+        </DisplaySelectRow>
+        <div className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
+          <span className="min-w-0 break-words text-foreground">既定の表示</span>
+          <span className="shrink-0 text-muted-foreground">読みやすい表示</span>
+        </div>
+      </div>
+    </section>
+  );
+};
 
 export const SettingsPage = () => {
   const { baseDate, setBaseDate } = useBaseDate();
@@ -138,7 +233,7 @@ export const SettingsPage = () => {
     <section className="mx-auto grid w-full max-w-2xl gap-6 px-5 py-10">
       <h1 className="font-serif text-2xl font-semibold text-foreground">設定</h1>
 
-      <StaticSettingsGroup group={staticGroups[0]} />
+      <DisplaySettingsGroup />
 
       <section className="grid gap-2">
         <h2 className="text-xs font-medium tracking-widest text-muted-foreground">学習</h2>
@@ -183,7 +278,11 @@ export const SettingsPage = () => {
               未設定のときは現行法（今日時点で施行）を表示します。
             </p>
             {error !== undefined ? (
-              <p id={baseDateErrorId} role="alert" className="text-xs leading-5 text-destructive">
+              <p
+                id={baseDateErrorId}
+                role="alert"
+                className="text-xs leading-display text-destructive"
+              >
                 {error}
               </p>
             ) : null}
@@ -195,7 +294,7 @@ export const SettingsPage = () => {
         </div>
       </section>
 
-      <StaticSettingsGroup group={staticGroups[1]} />
+      <StaticSettingsGroup group={staticGroups[0]} />
     </section>
   );
 };

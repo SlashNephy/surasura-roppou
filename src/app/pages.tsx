@@ -25,7 +25,7 @@ export const LawsPage = ({
         <h1 className="font-serif text-3xl font-semibold tracking-normal text-foreground md:text-4xl">
           法令を探す
         </h1>
-        <p className="max-w-2xl text-base leading-7 text-muted-foreground">
+        <p className="max-w-2xl text-base leading-display text-muted-foreground">
           法令名、略称、法令番号から目的の法令へ進むための入口です。
         </p>
       </div>
@@ -132,7 +132,7 @@ export const StudyPage = ({
       <div className="grid gap-3 sm:grid-cols-2">
         <section className="rounded-md border bg-card p-4">
           <h2 className="text-sm font-medium text-foreground">新しく覚える</h2>
-          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+          <p className="mt-2 text-xs leading-display text-muted-foreground">
             {dashboard === undefined
               ? "未学習のカードから新しく覚えます"
               : `${dashboard.unscheduledCount.toLocaleString("ja-JP")} 件の未学習カード`}
@@ -149,7 +149,7 @@ export const StudyPage = ({
         </section>
         <section className="rounded-md border bg-card p-4">
           <h2 className="text-sm font-medium text-foreground">条文カード</h2>
-          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+          <p className="mt-2 text-xs leading-display text-muted-foreground">
             {dashboard === undefined
               ? "保存したカードを一覧できます"
               : `${dashboard.cardCount.toLocaleString("ja-JP")} 件のカード`}
@@ -166,11 +166,11 @@ export const StudyPage = ({
             苦手な条文
           </h2>
           {dashboard === undefined ? (
-            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            <p className="mt-2 text-xs leading-display text-muted-foreground">
               苦手な条文を集計しています
             </p>
           ) : dashboard.weakCards.length === 0 ? (
-            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            <p className="mt-2 text-xs leading-display text-muted-foreground">
               まだ苦手な条文はありません
             </p>
           ) : (

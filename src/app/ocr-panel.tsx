@@ -113,7 +113,7 @@ export const OcrPanel = ({ blob, ocr, onDiscard }: OcrPanelProps) => {
     return (
       <div className="grid gap-3">
         <p
-          className="rounded-md border border-destructive/50 px-4 py-3 text-sm leading-6 text-destructive"
+          className="rounded-md border border-destructive/50 px-4 py-3 text-sm leading-display text-destructive"
           role="alert"
         >
           {ocrErrorMessage(errorKind ?? "unknown")}

@@ -505,7 +505,7 @@ const LawViewerReadyState = ({
     <p
       id={articleJumpErrorId}
       role="alert"
-      className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-6 text-destructive"
+      className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-display text-destructive"
     >
       指定された条文が見つかりません。
     </p>
@@ -531,7 +531,9 @@ const LawViewerReadyState = ({
                 オフライン保存済み
               </Badge>
             ) : null}
-            <p className="text-[10px] font-medium tracking-widest text-muted-foreground">目次</p>
+            <p className="text-[0.625rem] font-medium tracking-widest text-muted-foreground">
+              目次
+            </p>
             <LawTableOfContents
               activeArticleNumber={activeArticleNumber}
               displayMode={displayMode}
@@ -711,7 +713,7 @@ const LawViewerReadyState = ({
             <p
               id={saveErrorId}
               role="alert"
-              className="mb-4 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-6 text-destructive"
+              className="mb-4 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-display text-destructive"
             >
               {saveError}
             </p>
@@ -720,7 +722,7 @@ const LawViewerReadyState = ({
           {copyError !== undefined ? (
             <p
               role="alert"
-              className="mb-4 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-6 text-destructive"
+              className="mb-4 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-display text-destructive"
             >
               {copyError}
             </p>
@@ -771,7 +773,7 @@ const LawViewerReadyState = ({
             revision={state.revision}
           />
 
-          <p className="mt-6 border-t pt-4 text-xs leading-5 text-muted-foreground">
+          <p className="mt-6 border-t pt-4 text-xs leading-display text-muted-foreground">
             基準日 {formatBaseDateLabel(state)} ・ 施行日 {formatEffectiveDateLabel(state.revision)}{" "}
             ・ 取得日時 {formatIsoDateLabel(state.revision.fetchedAt)}
             {state.loadedFromStorage && state.requestedAsOf !== undefined
@@ -791,7 +793,7 @@ const LawViewerReadyState = ({
             {(["メモ", "定義語", "関連条文", "復習カード"] as const).map((panelTitle) => (
               <section key={panelTitle} className="rounded-md border bg-card p-3">
                 <h2 className="text-sm font-medium text-foreground">{panelTitle}</h2>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">準備中</p>
+                <p className="mt-2 text-xs leading-display text-muted-foreground">準備中</p>
               </section>
             ))}
             <div className="grid gap-2 border-t pt-3">
@@ -938,7 +940,7 @@ const LawViewerErrorState = ({ message }: { message: string }) => (
   >
     <div className="grid gap-2">
       <h1 className="text-2xl font-semibold text-foreground">法令を表示できません</h1>
-      <p className="text-base leading-7 text-muted-foreground">{message}</p>
+      <p className="text-base leading-display text-muted-foreground">{message}</p>
     </div>
     <Button asChild className="w-fit">
       <Link to="/laws">法令検索へ戻る</Link>
@@ -954,7 +956,7 @@ const LawViewerOfflineState = ({ lawTitle }: { lawTitle: string }) => (
     <div className="grid gap-2">
       <p className="text-sm font-medium text-primary">{lawTitle}</p>
       <h1 className="text-2xl font-semibold text-foreground">この法令は端末に保存されていません</h1>
-      <p className="text-base leading-7 text-muted-foreground">
+      <p className="text-base leading-display text-muted-foreground">
         オフラインで表示するには、通信できる状態で法令本文を開いて保存してください。
       </p>
     </div>

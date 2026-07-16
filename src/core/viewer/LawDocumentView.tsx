@@ -39,7 +39,7 @@ export const LawDocumentView = ({
             {law.title}
           </h1>
           {law.lawNumber !== undefined ? (
-            <p className="text-sm leading-6 text-muted-foreground break-words">
+            <p className="text-sm leading-display text-muted-foreground break-words">
               {getDisplayLawNumber(law.lawNumber, displayMode)}
             </p>
           ) : null}

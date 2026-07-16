@@ -40,6 +40,12 @@ let cachedPreferences = DEFAULT_DISPLAY_PREFERENCES;
 const includes = <Value extends string>(values: readonly Value[], value: string): value is Value =>
   values.includes(value as Value);
 
+export const isDisplayFontSize = (value: unknown): value is DisplayFontSize =>
+  typeof value === "string" && includes(displayFontSizes, value);
+
+export const isDisplayLineSpacing = (value: unknown): value is DisplayLineSpacing =>
+  typeof value === "string" && includes(displayLineSpacings, value);
+
 export const isDisplayTheme = (value: unknown): value is DisplayTheme =>
   typeof value === "string" && includes(displayThemes, value);
 

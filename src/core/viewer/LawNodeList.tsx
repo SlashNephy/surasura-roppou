@@ -136,7 +136,9 @@ const LawNodeBlock = ({
                 renderArticleActions,
               })
             ) : (
-              <p className="font-serif leading-8 text-foreground break-words">{displayText}</p>
+              <p className="font-serif leading-display text-foreground break-words">
+                {displayText}
+              </p>
             )}
           </div>
         </article>
@@ -161,7 +163,7 @@ const LawNodeBlock = ({
             node.type === "Subitem" && "pl-8",
           )}
         >
-          <p className="flex min-w-0 gap-3 font-serif leading-8 text-foreground">
+          <p className="flex min-w-0 gap-3 font-serif leading-display text-foreground">
             {displayMarker !== undefined ? (
               <span className="shrink-0 text-muted-foreground">{displayMarker}</span>
             ) : null}
@@ -199,7 +201,7 @@ const LawNodeBlock = ({
         </Heading>
       ) : null}
       {bodyText !== "" ? (
-        <p className="font-serif leading-8 text-foreground break-words">{bodyText}</p>
+        <p className="font-serif leading-display text-foreground break-words">{bodyText}</p>
       ) : null}
       {renderChildBlocks({
         activeArticleNumber,

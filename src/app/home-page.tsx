@@ -115,7 +115,7 @@ export const HomePage = ({
                 </h3>
               </div>
               {dashboard.weakCards.length === 0 ? (
-                <p className="text-xs leading-5 text-muted-foreground">
+                <p className="text-xs leading-display text-muted-foreground">
                   まだ苦手な条文はありません
                 </p>
               ) : (
@@ -155,7 +155,7 @@ export const HomePage = ({
                 </h3>
               </div>
               {dashboard.recentItems.length === 0 ? (
-                <p className="text-xs leading-5 text-muted-foreground">
+                <p className="text-xs leading-display text-muted-foreground">
                   最近開いた項目はまだありません
                 </p>
               ) : (

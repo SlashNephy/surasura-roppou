@@ -101,7 +101,7 @@ export const StudyCardDetailPage = ({
     return (
       <section className="mx-auto grid w-full max-w-2xl gap-4 px-5 py-10">
         <h1 className="font-serif text-2xl font-semibold text-foreground">条文カード</h1>
-        <p className="text-sm leading-6 text-muted-foreground">カードが見つかりません。</p>
+        <p className="text-sm leading-display text-muted-foreground">カードが見つかりません。</p>
         <Link className="text-primary underline-offset-4 hover:underline" to="/study/cards">
           一覧へ戻る
         </Link>
@@ -114,7 +114,7 @@ export const StudyCardDetailPage = ({
       <section className="mx-auto grid w-full max-w-2xl gap-4 px-5 py-10">
         <h1 className="font-serif text-2xl font-semibold text-foreground">条文カード</h1>
         <p
-          className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-6 text-destructive"
+          className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-display text-destructive"
           role="alert"
         >
           カードを読み込めませんでした。ページを再読み込みしてください。
@@ -255,7 +255,7 @@ export const StudyCardDetailPage = ({
           <div className="grid gap-1 text-sm">
             <span className="font-medium text-foreground">選択肢</span>
             {/* 自動生成カードの選択肢。編集は対象外（確定済み設計 6.3）のため読み取り専用で表示する。 */}
-            <ul className="list-disc pl-5 leading-6 text-muted-foreground">
+            <ul className="list-disc pl-5 leading-display text-muted-foreground">
               {card.choices.map((choice) => (
                 <li key={choice}>{choice}</li>
               ))}
@@ -296,8 +296,8 @@ export const StudyCardDetailPage = ({
           <p
             className={
               message.kind === "error"
-                ? "rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-6 text-destructive"
-                : "rounded-md border border-input bg-card px-3 py-2 text-sm leading-6 text-foreground"
+                ? "rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-display text-destructive"
+                : "rounded-md border border-input bg-card px-3 py-2 text-sm leading-display text-foreground"
             }
             role={message.kind === "error" ? "alert" : "status"}
           >

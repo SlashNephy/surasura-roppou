@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_DISPLAY_PREFERENCES,
   getDisplayPreferences,
+  isDisplayFontSize,
+  isDisplayLineSpacing,
   sanitizeStoredDisplayTheme,
   setDisplayFontSize,
   setDisplayLineSpacing,
@@ -138,6 +140,24 @@ describe("getDisplayPreferences", () => {
 
     expect(getDisplayPreferences()).toEqual(DEFAULT_DISPLAY_PREFERENCES);
     expect(listener).not.toHaveBeenCalled();
+  });
+});
+
+describe("display preference validators", () => {
+  it.each(["standard", "large", "extra-large"])("文字サイズ %s を受理する", (value) => {
+    expect(isDisplayFontSize(value)).toBe(true);
+  });
+
+  it.each(["standard", "relaxed", "wide"])("行間 %s を受理する", (value) => {
+    expect(isDisplayLineSpacing(value)).toBe(true);
+  });
+
+  it.each([undefined, null, "huge", 1])("文字サイズの不正値 %s を拒否する", (value) => {
+    expect(isDisplayFontSize(value)).toBe(false);
+  });
+
+  it.each([undefined, null, "narrow", 1])("行間の不正値 %s を拒否する", (value) => {
+    expect(isDisplayLineSpacing(value)).toBe(false);
   });
 });
 

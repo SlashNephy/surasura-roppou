@@ -286,7 +286,7 @@ export const ScannerPage = ({
         <>
           <p
             role="alert"
-            className="rounded-md border border-destructive/50 px-4 py-3 text-sm leading-6 text-destructive"
+            className="rounded-md border border-destructive/50 px-4 py-3 text-sm leading-display text-destructive"
           >
             {cameraErrorMessage(cameraError)}
           </p>

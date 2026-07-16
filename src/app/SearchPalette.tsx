@@ -177,7 +177,7 @@ export const SearchPalette = () => {
         <span className="hidden truncate md:inline">法律や条文で検索できます</span>
         <kbd
           aria-hidden="true"
-          className="ml-auto hidden rounded border px-1.5 text-[10px] md:inline"
+          className="ml-auto hidden rounded border px-1.5 text-[0.625rem] md:inline"
         >
           /
         </kbd>
@@ -199,6 +199,7 @@ export const SearchPalette = () => {
             <CommandGroup heading="移動">
               {destinations.map((destination) => (
                 <CommandItem
+                  className="leading-display"
                   key={destination.to}
                   onSelect={() => {
                     navigateTo(destination.to);
@@ -223,6 +224,7 @@ export const SearchPalette = () => {
                     <CommandGroup heading="候補">
                       {outcome.candidates.map((candidate) => (
                         <CommandItem
+                          className="leading-display"
                           key={`${candidate.kind}:${candidate.lawId}:${candidate.article ?? ""}`}
                           value={`${candidate.lawTitle} ${candidate.article ?? ""} ${candidate.lawId}`}
                           onSelect={() => {
@@ -235,7 +237,7 @@ export const SearchPalette = () => {
                               {candidate.article !== undefined ? ` 第${candidate.article}条` : ""}
                             </span>
                             {candidate.reason.length > 0 ? (
-                              <span className="truncate text-xs text-muted-foreground">
+                              <span className="truncate text-xs leading-display text-muted-foreground">
                                 {candidate.reason.join(" / ")}
                               </span>
                             ) : null}
@@ -259,6 +261,7 @@ export const SearchPalette = () => {
               {/* 「検索」項目は検索中でも常に表示する */}
               <CommandGroup>
                 <CommandItem
+                  className="leading-display"
                   value="__full_search__"
                   onSelect={() => {
                     goToSearchPage();

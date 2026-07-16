@@ -9,18 +9,19 @@ import {
 } from "@tanstack/react-router";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { computeArticleFingerprint } from "@/core/domain";
 import type { Bookmark } from "@/core/domain";
 import { createEgovLawRepository } from "@/core/egov";
 import type { LawDocument, LawListResult, LawMetadata, LawRepository } from "@/core/egov";
-import { setBaseDate } from "@/core/settings";
+import { DISPLAY_PREFERENCES_STORAGE_KEYS, setBaseDate } from "@/core/settings";
 import { createJsonFetchStub, fixedTestNow as now, lawDataFixture } from "@/test/fixtures/egov";
 import type { StorageRepository } from "@/core/storage";
 import { createMemoryStorageRepository, createSavedLawDocument } from "@/test/fixtures/storage";
 import { setupScrollMocks } from "@/test/scrollMocks";
 
+import { DisplayPreferencesProvider } from "./display-preferences";
 import { LawViewerPage, LawViewerPageContent } from "./law-viewer-page";
 import { sampleLawViewerDocument } from "./law-viewer-sample";
 import { createAppRouter } from "./router";
@@ -28,8 +29,43 @@ import type { LawViewerState } from "./law-viewer-page";
 
 const scrollMocks = setupScrollMocks();
 
+const mediaListeners = new Set<(event: MediaQueryListEvent) => void>();
+
+const matchMedia = (query: string): MediaQueryList =>
+  ({
+    media: query,
+    matches: false,
+    onchange: null,
+    addEventListener: (_type: string, listener: (event: MediaQueryListEvent) => void) => {
+      mediaListeners.add(listener);
+    },
+    removeEventListener: (_type: string, listener: (event: MediaQueryListEvent) => void) => {
+      mediaListeners.delete(listener);
+    },
+    addListener: (listener: ((event: MediaQueryListEvent) => void) | null) => {
+      if (listener !== null) {
+        mediaListeners.add(listener);
+      }
+    },
+    removeListener: (listener: ((event: MediaQueryListEvent) => void) | null) => {
+      if (listener !== null) {
+        mediaListeners.delete(listener);
+      }
+    },
+    dispatchEvent: () => true,
+  }) as MediaQueryList;
+
+beforeEach(() => {
+  Object.defineProperty(window, "matchMedia", { configurable: true, value: matchMedia });
+});
+
 afterEach(() => {
   localStorage.clear();
+  mediaListeners.clear();
+  document.documentElement.className = "";
+  document.documentElement.removeAttribute("style");
+  document.documentElement.removeAttribute("data-font-size");
+  document.documentElement.removeAttribute("data-line-spacing");
 });
 
 const createFixtureRepository = () => {
@@ -108,6 +144,7 @@ const renderLawViewerContentRoute = (
   storageRepository: StorageRepository = createMemoryStorageRepository().repository,
   // 見比べダイアログの作成時版取得を含め、既定の実 e-Gov リポジトリへ通信させないための注入口。
   repository?: LawRepository,
+  withDisplayPreferences = false,
 ) => {
   const BaseLawViewerRoute = () => {
     const { lawId } = useParams({ from: "/laws/$lawId" });
@@ -148,14 +185,21 @@ const renderLawViewerContentRoute = (
     component: ArticleLawViewerRoute,
   });
   const history = createMemoryHistory({ initialEntries: [path] });
-
-  render(
+  const content = (
     <RouterProvider
       router={createRouter({
         history,
         routeTree: rootRoute.addChildren([baseRoute, articleRoute]),
       })}
-    />,
+    />
+  );
+
+  render(
+    withDisplayPreferences ? (
+      <DisplayPreferencesProvider>{content}</DisplayPreferencesProvider>
+    ) : (
+      content
+    ),
   );
 
   return {
@@ -426,6 +470,36 @@ describe("LawViewerPageContent", () => {
         ].join("\n"),
       );
       expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    });
+  });
+
+  it("表示設定を変えてもコピーする原文を変更しない", async () => {
+    localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.fontSize, "extra-large");
+    localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.lineSpacing, "wide");
+    const clipboard = vi.fn<(text: string) => Promise<void>>(() => Promise.resolve());
+    const { user } = renderLawViewerContentRoute(
+      "/laws/129AC0000000089/articles/1",
+      { status: "ready", ...sampleLawViewerDocument },
+      createMemoryStorageRepository().repository,
+      undefined,
+      true,
+    );
+
+    await withClipboard(clipboard, async () => {
+      const article = await screen.findByRole("article", { name: "第一条" });
+      const articleUrl = `${window.location.origin}/laws/129AC0000000089/articles/1`;
+
+      await user.click(within(article).getByRole("button", { name: "第一条をコピー" }));
+
+      expect(clipboard).toHaveBeenLastCalledWith(
+        [
+          "第一条",
+          "",
+          "私権は、公共の福祉（公共の利益を含む。）に適合しなければならない。",
+          "",
+          articleUrl,
+        ].join("\n"),
+      );
     });
   });
 

@@ -116,13 +116,13 @@ export const AnchorCompareDialog = ({
         <div className="grid gap-4 sm:grid-cols-2">
           <section>
             <h3 className="mb-1 text-sm font-semibold">作成時の版</h3>
-            <p className="whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground">
+            <p className="whitespace-pre-wrap break-words text-sm leading-display text-muted-foreground">
               {createdText ?? "読み込み中…"}
             </p>
           </section>
           <section>
             <h3 className="mb-1 text-sm font-semibold">現在の版</h3>
-            <p className="whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground">
+            <p className="whitespace-pre-wrap break-words text-sm leading-display text-muted-foreground">
               {status === "not_found"
                 ? "現在の版に該当する条が見つかりません"
                 : (currentNode?.plainText ?? "")}

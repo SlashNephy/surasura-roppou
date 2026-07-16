@@ -131,7 +131,7 @@ export const StudyReviewEvidencePanel = ({ card, loadDocument }: StudyReviewEvid
       {state.status === "loading" ? <Skeleton className="h-16 w-full" /> : null}
 
       {state.status === "fallback" ? (
-        <p className="text-sm leading-6 text-muted-foreground">
+        <p className="text-sm leading-display text-muted-foreground">
           条文を取得できませんでした。{" "}
           <Link className="text-primary underline-offset-4 hover:underline" {...viewerLinkProps}>
             ビューアで開く
@@ -149,11 +149,11 @@ export const StudyReviewEvidencePanel = ({ card, loadDocument }: StudyReviewEvid
             {articleLabel}
           </Link>
           {state.node === undefined ? (
-            <p className="text-sm leading-6 text-muted-foreground">
+            <p className="text-sm leading-display text-muted-foreground">
               この条は現在の版に見つかりません。
             </p>
           ) : (
-            <p className="whitespace-pre-wrap break-words text-sm leading-6 text-foreground">
+            <p className="whitespace-pre-wrap break-words text-sm leading-display text-foreground">
               {state.node.plainText}
             </p>
           )}

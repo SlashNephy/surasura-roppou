@@ -1,13 +1,140 @@
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
-import { fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { getBaseDate, setBaseDate } from "@/core/settings";
+import { DISPLAY_PREFERENCES_STORAGE_KEYS, getBaseDate, setBaseDate } from "@/core/settings";
 
+import { DisplayPreferencesProvider } from "./display-preferences";
 import { createAppRouter } from "./router";
+
+const mediaListeners = new Set<(event: MediaQueryListEvent) => void>();
+let prefersDark = false;
+
+const matchMedia = (query: string): MediaQueryList =>
+  ({
+    media: query,
+    get matches() {
+      return query === "(prefers-color-scheme: dark)" && prefersDark;
+    },
+    onchange: null,
+    addEventListener: (_type: string, listener: (event: MediaQueryListEvent) => void) => {
+      mediaListeners.add(listener);
+    },
+    removeEventListener: (_type: string, listener: (event: MediaQueryListEvent) => void) => {
+      mediaListeners.delete(listener);
+    },
+    addListener: (listener: ((event: MediaQueryListEvent) => void) | null) => {
+      if (listener !== null) {
+        mediaListeners.add(listener);
+      }
+    },
+    removeListener: (listener: ((event: MediaQueryListEvent) => void) | null) => {
+      if (listener !== null) {
+        mediaListeners.delete(listener);
+      }
+    },
+    dispatchEvent: () => true,
+  }) as MediaQueryList;
+
+beforeEach(() => {
+  prefersDark = false;
+  Object.defineProperty(window, "matchMedia", { configurable: true, value: matchMedia });
+});
 
 afterEach(() => {
   localStorage.clear();
+  mediaListeners.clear();
+  document.documentElement.className = "";
+  document.documentElement.removeAttribute("style");
+  document.documentElement.removeAttribute("data-font-size");
+  document.documentElement.removeAttribute("data-line-spacing");
+});
+
+describe("SettingsPage 表示", () => {
+  it("文字サイズと行間を選択して端末へ保存する", async () => {
+    const { user } = renderSettingsRoute();
+
+    await user.selectOptions(await screen.findByLabelText("文字サイズ"), "extra-large");
+    await user.selectOptions(screen.getByLabelText("行間"), "wide");
+
+    expect(screen.getByLabelText("文字サイズ")).toHaveValue("extra-large");
+    expect(screen.getByLabelText("行間")).toHaveValue("wide");
+    expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.fontSize)).toBe("extra-large");
+    expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.lineSpacing)).toBe("wide");
+    expect(document.documentElement).toHaveAttribute("data-font-size", "extra-large");
+    expect(document.documentElement).toHaveAttribute("data-line-spacing", "wide");
+  });
+
+  it("テーマをダークへ固定して説明と画面へ反映する", async () => {
+    const { user } = renderSettingsRoute();
+
+    expect(await screen.findByText("端末の外観設定に合わせます。")).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText("テーマ"), "dark");
+
+    expect(screen.getByText("端末の外観設定にかかわらずダークで表示します。")).toBeInTheDocument();
+    expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme)).toBe("dark");
+    await waitFor(() => expect(document.documentElement).toHaveClass("dark"));
+  });
+
+  it("reload 相当の再マウント後に選択値を復元する", async () => {
+    localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.fontSize, "large");
+    localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.lineSpacing, "relaxed");
+    localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme, "light");
+
+    renderSettingsRoute();
+
+    expect(await screen.findByLabelText("文字サイズ")).toHaveValue("large");
+    expect(screen.getByLabelText("行間")).toHaveValue("relaxed");
+    expect(screen.getByLabelText("テーマ")).toHaveValue("light");
+  });
+
+  it("ラベルから操作対象を特定しキーボードで選択できる", async () => {
+    const { user } = renderSettingsRoute();
+
+    const fontSize = await screen.findByRole("combobox", { name: "文字サイズ" });
+    const lineSpacing = screen.getByRole("combobox", { name: "行間" });
+    const theme = screen.getByRole("combobox", { name: "テーマ" });
+
+    expect(fontSize).toHaveAccessibleName("文字サイズ");
+    expect(lineSpacing).toHaveAccessibleName("行間");
+    expect(theme).toHaveAccessibleName("テーマ");
+
+    for (let tabCount = 0; tabCount < 20 && document.activeElement !== fontSize; tabCount += 1) {
+      await user.tab();
+    }
+    expect(fontSize).toHaveFocus();
+    let pressedKey: string | undefined;
+    fontSize.addEventListener(
+      "keydown",
+      (event) => {
+        pressedKey = event.key;
+      },
+      { once: true },
+    );
+    await user.keyboard("{ArrowDown}");
+    expect(pressedKey).toBe("ArrowDown");
+    await user.selectOptions(fontSize, "large");
+
+    expect(fontSize).toHaveValue("large");
+    expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.fontSize)).toBe("large");
+  });
+
+  it("システム、ライト、ダークの選択に応じた説明を表示する", async () => {
+    const { user } = renderSettingsRoute();
+    const theme = await screen.findByRole("combobox", { name: "テーマ" });
+
+    expect(screen.getByText("端末の外観設定に合わせます。")).toBeInTheDocument();
+
+    await user.selectOptions(theme, "light");
+    expect(screen.getByText("端末の外観設定にかかわらずライトで表示します。")).toBeInTheDocument();
+
+    await user.selectOptions(theme, "dark");
+    expect(screen.getByText("端末の外観設定にかかわらずダークで表示します。")).toBeInTheDocument();
+
+    await user.selectOptions(theme, "system");
+    expect(screen.getByText("端末の外観設定に合わせます。")).toBeInTheDocument();
+  });
 });
 
 describe("SettingsPage 基準日", () => {
@@ -124,6 +251,13 @@ describe("SettingsPage データ", () => {
 
 const renderSettingsRoute = () => {
   const history = createMemoryHistory({ initialEntries: ["/settings"] });
+  const user = userEvent.setup();
 
-  render(<RouterProvider router={createAppRouter({ history })} />);
+  render(
+    <DisplayPreferencesProvider>
+      <RouterProvider router={createAppRouter({ history })} />
+    </DisplayPreferencesProvider>,
+  );
+
+  return { history, user };
 };

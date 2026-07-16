@@ -52,7 +52,7 @@ export const PwaUpdatePrompt = ({ controller = pwaUpdateController }: PwaUpdateP
           <Wifi className="size-4 text-primary" aria-hidden="true" />
         )}
         <div className="min-w-0">
-          <p className="leading-6">{message}</p>
+          <p className="leading-display">{message}</p>
           {state.error ? <p className="text-xs text-muted-foreground">{state.error}</p> : null}
         </div>
       </div>

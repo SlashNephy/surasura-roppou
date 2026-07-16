@@ -160,7 +160,7 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
           <h1 className="text-3xl font-semibold tracking-normal text-foreground md:text-4xl">
             保存リスト
           </h1>
-          <p className="max-w-2xl text-base leading-7 text-muted-foreground">
+          <p className="max-w-2xl text-base leading-display text-muted-foreground">
             保存した法令、メモ付きの条文、学習用コレクションをまとめて管理します。
           </p>
         </div>
@@ -302,7 +302,7 @@ export const SavedCollectionPage = ({
           {collection.title}
         </h1>
         {collection.description === undefined ? null : (
-          <p className="max-w-2xl text-base leading-7 text-muted-foreground">
+          <p className="max-w-2xl text-base leading-display text-muted-foreground">
             {collection.description}
           </p>
         )}
@@ -372,7 +372,7 @@ const BookmarkList = ({
                 法令: {lawTitlesById?.get(bookmark.target.lawId) ?? bookmark.target.lawId}
               </p>
               {bookmark.note === undefined ? null : (
-                <p className="whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground">
+                <p className="whitespace-pre-wrap break-words text-sm leading-display text-muted-foreground">
                   {bookmark.note}
                 </p>
               )}
@@ -411,7 +411,9 @@ const CollectionList = ({ collections }: { collections: Collection[] }) => (
                 {collection.title}
               </Link>
               {collection.description === undefined ? null : (
-                <p className="text-sm leading-6 text-muted-foreground">{collection.description}</p>
+                <p className="text-sm leading-display text-muted-foreground">
+                  {collection.description}
+                </p>
               )}
               <p className="text-sm text-muted-foreground">
                 {collection.bookmarkIds.length.toLocaleString("ja-JP")} 件
@@ -715,7 +717,7 @@ const EmptyState = ({ children }: { children: string }) => <PanelMessage>{childr
 const StatusMessage = ({ children }: { children: string }) => (
   <p
     role="status"
-    className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm leading-6 text-primary"
+    className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm leading-display text-primary"
   >
     {children}
   </p>
@@ -724,7 +726,7 @@ const StatusMessage = ({ children }: { children: string }) => (
 const ErrorMessage = ({ children }: { children: string }) => (
   <p
     role="alert"
-    className="rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm leading-6 text-destructive"
+    className="rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm leading-display text-destructive"
   >
     {children}
   </p>

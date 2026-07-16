@@ -10,6 +10,8 @@ export {
   DEFAULT_DISPLAY_PREFERENCES,
   DISPLAY_PREFERENCES_STORAGE_KEYS,
   getDisplayPreferences,
+  isDisplayFontSize,
+  isDisplayLineSpacing,
   isDisplayTheme,
   sanitizeStoredDisplayTheme,
   setDisplayFontSize,
