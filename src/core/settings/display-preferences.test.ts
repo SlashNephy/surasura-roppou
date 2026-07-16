@@ -80,6 +80,33 @@ describe("getDisplayPreferences", () => {
       subscribeDisplayPreferences(() => undefined)();
     }).not.toThrow();
   });
+
+  it("同値の連続取得では同じ不変 snapshot を返し、値の変更時だけ参照を更新する", () => {
+    const initial = getDisplayPreferences();
+
+    expect(getDisplayPreferences()).toBe(initial);
+    expect(Object.isFrozen(initial)).toBe(true);
+
+    setDisplayFontSize("large");
+    const changed = getDisplayPreferences();
+
+    expect(changed).not.toBe(initial);
+    expect(getDisplayPreferences()).toBe(changed);
+    expect(Object.isFrozen(changed)).toBe(true);
+    expect(Reflect.set(changed, "fontSize", "extra-large")).toBe(false);
+    expect(changed.fontSize).toBe("large");
+  });
+
+  it("localStorage の読み取りが失敗した場合は既定値へ戻す", () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new DOMException("blocked", "SecurityError");
+    });
+
+    expect(getDisplayPreferences()).toEqual(DEFAULT_DISPLAY_PREFERENCES);
+    expect(() => {
+      sanitizeStoredDisplayTheme();
+    }).not.toThrow();
+  });
 });
 
 describe("display preference subscriptions", () => {
@@ -123,6 +150,44 @@ describe("display preference subscriptions", () => {
 
     expect(listener).not.toHaveBeenCalled();
   });
+
+  it("同じ callback の重複購読を片方ずつ独立して解除する", () => {
+    const listener = vi.fn();
+    const unsubscribeFirst = subscribeDisplayPreferences(listener);
+    const unsubscribeSecond = subscribeDisplayPreferences(listener);
+
+    setDisplayFontSize("large");
+    window.dispatchEvent(new StorageEvent("storage", { key: storageKeys.fontSize }));
+    expect(listener).toHaveBeenCalledTimes(4);
+
+    unsubscribeFirst();
+    setDisplayLineSpacing("relaxed");
+    window.dispatchEvent(new StorageEvent("storage", { key: storageKeys.lineSpacing }));
+    expect(listener).toHaveBeenCalledTimes(6);
+
+    unsubscribeSecond();
+    setDisplayTheme("dark");
+    window.dispatchEvent(new StorageEvent("storage", { key: storageKeys.theme }));
+    expect(listener).toHaveBeenCalledTimes(6);
+  });
+
+  it("localStorage への書き込みが失敗した場合は保存も通知もしない", () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeDisplayPreferences(listener);
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("blocked", "SecurityError");
+    });
+
+    expect(() => {
+      setDisplayFontSize("large");
+      setDisplayLineSpacing("relaxed");
+      setDisplayTheme("dark");
+    }).not.toThrow();
+    expect(getDisplayPreferences()).toEqual(DEFAULT_DISPLAY_PREFERENCES);
+    expect(listener).not.toHaveBeenCalled();
+
+    unsubscribe();
+  });
 });
 
 describe("sanitizeStoredDisplayTheme", () => {
@@ -146,5 +211,17 @@ describe("sanitizeStoredDisplayTheme", () => {
     expect(localStorage.getItem(storageKeys.fontSize)).toBe("large");
     expect(localStorage.getItem(storageKeys.lineSpacing)).toBe("relaxed");
     expect(localStorage.getItem(storageKeys.theme)).toBeNull();
+  });
+
+  it("localStorage からの削除が失敗しても例外を外へ出さない", () => {
+    localStorage.setItem(storageKeys.theme, "sepia");
+    vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
+      throw new DOMException("blocked", "SecurityError");
+    });
+
+    expect(() => {
+      sanitizeStoredDisplayTheme();
+    }).not.toThrow();
+    expect(localStorage.getItem(storageKeys.theme)).toBe("sepia");
   });
 });
