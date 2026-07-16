@@ -8,6 +8,7 @@ export {
 } from "./base-date";
 export {
   DEFAULT_DISPLAY_PREFERENCES,
+  DISPLAY_PREFERENCES_STORAGE_KEYS,
   getDisplayPreferences,
   sanitizeStoredDisplayTheme,
   setDisplayFontSize,

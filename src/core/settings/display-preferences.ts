@@ -27,7 +27,7 @@ export const DEFAULT_DISPLAY_PREFERENCES = createDisplayPreferences(
 );
 
 // 表示設定を保存データや分析対象から分離し、項目ごとの変更だけを永続化する。
-const storageKeys = {
+export const DISPLAY_PREFERENCES_STORAGE_KEYS = {
   fontSize: "surasura:display:font-size",
   lineSpacing: "surasura:display:line-spacing",
   theme: "surasura:display:theme",
@@ -89,17 +89,22 @@ export const getDisplayPreferences = (): DisplayPreferences => {
   const storage = getStorage();
   const fontSize = read(
     storage,
-    storageKeys.fontSize,
+    DISPLAY_PREFERENCES_STORAGE_KEYS.fontSize,
     displayFontSizes,
     DEFAULT_DISPLAY_PREFERENCES.fontSize,
   );
   const lineSpacing = read(
     storage,
-    storageKeys.lineSpacing,
+    DISPLAY_PREFERENCES_STORAGE_KEYS.lineSpacing,
     displayLineSpacings,
     DEFAULT_DISPLAY_PREFERENCES.lineSpacing,
   );
-  const theme = read(storage, storageKeys.theme, displayThemes, DEFAULT_DISPLAY_PREFERENCES.theme);
+  const theme = read(
+    storage,
+    DISPLAY_PREFERENCES_STORAGE_KEYS.theme,
+    displayThemes,
+    DEFAULT_DISPLAY_PREFERENCES.theme,
+  );
 
   // useSyncExternalStore の snapshot が、値の不変時に同じ参照を返す契約を保つ。
   if (
@@ -115,15 +120,15 @@ export const getDisplayPreferences = (): DisplayPreferences => {
 };
 
 export const setDisplayFontSize = (value: DisplayFontSize): void => {
-  write(getStorage(), storageKeys.fontSize, value);
+  write(getStorage(), DISPLAY_PREFERENCES_STORAGE_KEYS.fontSize, value);
 };
 
 export const setDisplayLineSpacing = (value: DisplayLineSpacing): void => {
-  write(getStorage(), storageKeys.lineSpacing, value);
+  write(getStorage(), DISPLAY_PREFERENCES_STORAGE_KEYS.lineSpacing, value);
 };
 
 export const setDisplayTheme = (value: DisplayTheme): void => {
-  write(getStorage(), storageKeys.theme, value);
+  write(getStorage(), DISPLAY_PREFERENCES_STORAGE_KEYS.theme, value);
 };
 
 export const subscribeDisplayPreferences = (listener: () => void): (() => void) => {
@@ -136,9 +141,9 @@ export const subscribeDisplayPreferences = (listener: () => void): (() => void) 
   const handleStorage = (event: StorageEvent) => {
     if (
       event.key === null ||
-      event.key === storageKeys.fontSize ||
-      event.key === storageKeys.lineSpacing ||
-      event.key === storageKeys.theme
+      event.key === DISPLAY_PREFERENCES_STORAGE_KEYS.fontSize ||
+      event.key === DISPLAY_PREFERENCES_STORAGE_KEYS.lineSpacing ||
+      event.key === DISPLAY_PREFERENCES_STORAGE_KEYS.theme
     ) {
       notify();
     }
@@ -163,10 +168,10 @@ export const sanitizeStoredDisplayTheme = (): void => {
   }
 
   try {
-    const stored = storage.getItem(storageKeys.theme);
+    const stored = storage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme);
     if (stored !== null && !includes(displayThemes, stored)) {
       // next-themes が未知のテーマ名を html class として扱う前に保存境界で除去する。
-      storage.removeItem(storageKeys.theme);
+      storage.removeItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme);
     }
   } catch {
     // ストレージ操作が拒否された場合は next-themes 側へ処理を委ね、起動自体は妨げない。
