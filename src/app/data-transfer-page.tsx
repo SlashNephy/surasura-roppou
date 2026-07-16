@@ -193,7 +193,7 @@ export const DataTransferPage = ({
         <h1 className="font-serif text-2xl font-semibold text-foreground">
           データのエクスポート / インポート
         </h1>
-        <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+        <p className="max-w-2xl text-sm leading-display text-muted-foreground">
           保存した法令本文と学習データをJSONファイルで別の端末へ移せます。JSONは端末内で処理し、外部へ送信しません。
         </p>
       </div>
@@ -201,7 +201,7 @@ export const DataTransferPage = ({
       {busy !== undefined || successMessage === undefined ? null : (
         <p
           aria-live="polite"
-          className="rounded-md border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-foreground"
+          className="rounded-md border border-primary/30 bg-primary/5 px-4 py-3 text-sm leading-display text-foreground"
           role="status"
         >
           {successMessage}
@@ -209,14 +209,18 @@ export const DataTransferPage = ({
       )}
       {error === undefined ? null : (
         <p
-          className="break-words rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm leading-6 text-destructive"
+          className="break-words rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm leading-display text-destructive"
           role="alert"
         >
           {error}
         </p>
       )}
       {busyMessage === undefined ? null : (
-        <p aria-live="polite" className="text-sm text-muted-foreground" role="status">
+        <p
+          aria-live="polite"
+          className="text-sm leading-display text-muted-foreground"
+          role="status"
+        >
           {busyMessage}
         </p>
       )}
@@ -227,7 +231,7 @@ export const DataTransferPage = ({
       >
         <div className="grid gap-1">
           <h2 className="text-lg font-semibold text-foreground">エクスポート</h2>
-          <p className="text-sm leading-6 text-muted-foreground">
+          <p className="text-sm leading-display text-muted-foreground">
             現在の7分類の保存データをversion 2のJSONとして書き出します。
           </p>
         </div>
@@ -252,7 +256,7 @@ export const DataTransferPage = ({
       >
         <div className="grid gap-1">
           <h2 className="text-lg font-semibold text-foreground">インポート</h2>
-          <p className="text-sm leading-6 text-muted-foreground">
+          <p className="text-sm leading-display text-muted-foreground">
             version 2のJSONを選択し、内容を確認してから取り込みます。
           </p>
         </div>
@@ -309,7 +313,7 @@ export const DataTransferPage = ({
                 </div>
               ))}
             </dl>
-            <p className="text-xs leading-5 text-muted-foreground">
+            <p className="text-xs leading-display text-muted-foreground">
               同じIDのデータは上書きされ、このファイルに含まれないデータはそのまま残ります。
             </p>
             <Button

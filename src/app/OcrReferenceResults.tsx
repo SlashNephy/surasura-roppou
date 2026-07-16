@@ -50,10 +50,10 @@ export const OcrReferenceResults = ({
   if (visible.length === 0) {
     return (
       <div className="grid gap-3 text-left">
-        <p className="text-sm text-muted-foreground" role="status">
+        <p className="text-sm leading-display text-muted-foreground" role="status">
           条文参照が見つかりませんでした。読み取ったテキストを確認し、必要なら手入力してください。
         </p>
-        <pre className="max-h-48 overflow-y-auto rounded-md border bg-muted p-3 text-sm break-words whitespace-pre-wrap">
+        <pre className="max-h-48 overflow-y-auto rounded-md border bg-muted p-3 text-sm leading-display break-words whitespace-pre-wrap">
           {sourceText.trim() !== "" ? sourceText : "テキストが検出されませんでした。"}
         </pre>
       </div>
@@ -84,7 +84,9 @@ export const OcrReferenceResults = ({
             </Button>
           </div>
           {reference.candidates.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{unresolvedMessage(reference)}</p>
+            <p className="text-sm leading-display text-muted-foreground">
+              {unresolvedMessage(reference)}
+            </p>
           ) : (
             <ul className="grid gap-2">
               {reference.candidates.map((candidate, index) => {
@@ -95,9 +97,11 @@ export const OcrReferenceResults = ({
                     key={`${candidate.lawId}-${String(index)}`}
                     className="grid gap-1 rounded-md bg-muted/50 p-2"
                   >
-                    <span className="text-sm font-medium text-foreground">{label}</span>
+                    <span className="text-sm leading-display font-medium text-foreground">
+                      {label}
+                    </span>
                     {candidate.reason.length > 0 ? (
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-xs leading-display text-muted-foreground">
                         {candidate.reason.join(" / ")}
                       </span>
                     ) : null}

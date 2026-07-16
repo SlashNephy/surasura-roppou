@@ -25,7 +25,7 @@ export const LawsPage = ({
         <h1 className="font-serif text-3xl font-semibold tracking-normal text-foreground md:text-4xl">
           法令を探す
         </h1>
-        <p className="max-w-2xl text-base leading-7 text-muted-foreground">
+        <p className="max-w-2xl text-base leading-display text-muted-foreground">
           法令名、略称、法令番号から目的の法令へ進むための入口です。
         </p>
       </div>
@@ -48,12 +48,12 @@ export const LawsPage = ({
         {savedLawsError !== undefined ? (
           <p
             role="status"
-            className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground"
+            className="rounded-md border border-dashed px-4 py-5 text-sm leading-display text-muted-foreground"
           >
             {savedLawsError}
           </p>
         ) : savedLaws.length === 0 ? (
-          <p className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground">
+          <p className="rounded-md border border-dashed px-4 py-5 text-sm leading-display text-muted-foreground">
             保存済み法令はまだありません。
           </p>
         ) : (
@@ -63,7 +63,7 @@ export const LawsPage = ({
                 <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
                   <div className="grid min-w-0 gap-2">
                     <Link
-                      className="font-serif text-base font-semibold text-foreground underline-offset-4 hover:underline"
+                      className="font-serif text-base leading-display font-semibold text-foreground underline-offset-4 hover:underline"
                       params={{ lawId: savedLaw.law.lawId }}
                       to="/laws/$lawId"
                     >
@@ -100,14 +100,14 @@ export const StudyPage = ({
         // 読み込み失敗時は savedLawsError と同型のバナーでエラーを明示する
         <p
           role="status"
-          className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground"
+          className="rounded-md border border-dashed px-4 py-5 text-sm leading-display text-muted-foreground"
         >
           {error}
         </p>
       ) : null}
       <div className="rounded-md bg-primary p-4 text-primary-foreground">
         <p className="font-semibold">今日の復習</p>
-        <p className="mt-1 text-xs opacity-75">
+        <p className="mt-1 text-xs leading-display opacity-75">
           {dashboard === undefined
             ? "復習するカードを確認しています"
             : dashboard.dueCount === 0
@@ -115,7 +115,7 @@ export const StudyPage = ({
               : `${dashboard.dueCount.toLocaleString("ja-JP")} 件のカードが復習期限です`}
         </p>
         {dashboard?.stats.accuracy !== undefined ? (
-          <p className="mt-1 text-xs opacity-75">
+          <p className="mt-1 text-xs leading-display opacity-75">
             通算正答率 {Math.round(dashboard.stats.accuracy * 100)}%（
             {dashboard.stats.totalReviews.toLocaleString("ja-JP")} 回答）
           </p>
@@ -132,7 +132,7 @@ export const StudyPage = ({
       <div className="grid gap-3 sm:grid-cols-2">
         <section className="rounded-md border bg-card p-4">
           <h2 className="text-sm font-medium text-foreground">新しく覚える</h2>
-          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+          <p className="mt-2 text-xs leading-display text-muted-foreground">
             {dashboard === undefined
               ? "未学習のカードから新しく覚えます"
               : `${dashboard.unscheduledCount.toLocaleString("ja-JP")} 件の未学習カード`}
@@ -149,7 +149,7 @@ export const StudyPage = ({
         </section>
         <section className="rounded-md border bg-card p-4">
           <h2 className="text-sm font-medium text-foreground">条文カード</h2>
-          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+          <p className="mt-2 text-xs leading-display text-muted-foreground">
             {dashboard === undefined
               ? "保存したカードを一覧できます"
               : `${dashboard.cardCount.toLocaleString("ja-JP")} 件のカード`}
@@ -166,11 +166,11 @@ export const StudyPage = ({
             苦手な条文
           </h2>
           {dashboard === undefined ? (
-            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            <p className="mt-2 text-xs leading-display text-muted-foreground">
               苦手な条文を集計しています
             </p>
           ) : dashboard.weakCards.length === 0 ? (
-            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            <p className="mt-2 text-xs leading-display text-muted-foreground">
               まだ苦手な条文はありません
             </p>
           ) : (

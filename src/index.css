@@ -48,6 +48,7 @@
 
 :root {
   --radius: 0.625rem;
+  --display-line-height: 1.5;
   --background: #fcfbf8;
   --foreground: #27272a;
   --card: #ffffff;
@@ -79,6 +80,22 @@
   --sidebar-accent-foreground: #14532d;
   --sidebar-border: #e7e0d3;
   --sidebar-ring: #166534;
+}
+
+:root[data-font-size="large"] {
+  font-size: 112.5%;
+}
+
+:root[data-font-size="extra-large"] {
+  font-size: 125%;
+}
+
+:root[data-line-spacing="relaxed"] {
+  --display-line-height: 1.75;
+}
+
+:root[data-line-spacing="wide"] {
+  --display-line-height: 2;
 }
 
 .dark {
@@ -121,11 +138,16 @@ html {
 
 body {
   margin: 0;
-  min-width: 320px;
+  min-width: 0;
   min-height: 100vh;
   background: var(--color-background);
   color: var(--color-foreground);
   font-family: var(--font-sans);
+  line-height: var(--display-line-height);
+}
+
+@utility leading-display {
+  line-height: var(--display-line-height);
 }
 
 button,

@@ -359,7 +359,7 @@ export const StudyReviewPage = ({
       {state.status === "error" ? (
         <div className="grid justify-items-start gap-2">
           <p
-            className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-6 text-destructive"
+            className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-display text-destructive"
             role="alert"
           >
             復習項目を読み込めませんでした。
@@ -380,7 +380,7 @@ export const StudyReviewPage = ({
         <div className="grid justify-items-start gap-2 rounded-md border bg-card p-4">
           {mode === "new" ? (
             <>
-              <p className="text-sm leading-6 text-muted-foreground">
+              <p className="text-sm leading-display text-muted-foreground">
                 未学習のカードがありません。
               </p>
               <Link
@@ -392,7 +392,9 @@ export const StudyReviewPage = ({
             </>
           ) : (
             <>
-              <p className="text-sm leading-6 text-muted-foreground">今日の復習はありません。</p>
+              <p className="text-sm leading-display text-muted-foreground">
+                今日の復習はありません。
+              </p>
               {state.unscheduledCount > 0 ? (
                 <Link
                   className="text-sm text-primary underline-offset-4 hover:underline"
@@ -415,7 +417,7 @@ export const StudyReviewPage = ({
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary">{studyCardTypeLabels[state.session.queue[0].type]}</Badge>
           </div>
-          <p className="whitespace-pre-wrap break-words text-lg font-semibold text-foreground">
+          <p className="whitespace-pre-wrap break-words text-lg leading-display font-semibold text-foreground">
             {state.session.queue[0].question}
           </p>
           {state.session.phase.kind === "question" ? (
@@ -438,11 +440,11 @@ export const StudyReviewPage = ({
                 <>
                   <div className="grid gap-1 rounded-md bg-muted p-4">
                     <p className="text-xs font-medium text-muted-foreground">答え</p>
-                    <p className="whitespace-pre-wrap break-words text-base text-foreground">
+                    <p className="whitespace-pre-wrap break-words text-base leading-display text-foreground">
                       {state.session.queue[0].answer}
                     </p>
                     {state.session.queue[0].explanation === undefined ? null : (
-                      <p className="whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground">
+                      <p className="whitespace-pre-wrap break-words text-sm leading-display text-muted-foreground">
                         {state.session.queue[0].explanation}
                       </p>
                     )}
@@ -454,7 +456,7 @@ export const StudyReviewPage = ({
                   />
                   {state.session.recordFailed ? (
                     <p
-                      className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-6 text-destructive"
+                      className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-display text-destructive"
                       role="alert"
                     >
                       回答を保存できませんでした。もう一度お試しください。

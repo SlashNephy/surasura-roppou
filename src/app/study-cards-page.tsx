@@ -148,7 +148,7 @@ export const StudyCardsPage = ({
 
       {state.status === "error" ? (
         <p
-          className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-6 text-destructive"
+          className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-display text-destructive"
           role="alert"
         >
           カードを読み込めませんでした。ページを再読み込みしてください。
@@ -157,7 +157,7 @@ export const StudyCardsPage = ({
 
       {state.status === "ready" ? (
         visibleCards.length === 0 ? (
-          <p className="rounded-md border border-dashed p-6 text-sm leading-6 text-muted-foreground">
+          <p className="rounded-md border border-dashed p-6 text-sm leading-display text-muted-foreground">
             {state.cards.length === 0
               ? // 真の空状態: カードが 1 件も存在しない
                 "カードはまだありません。法令ビューアの条文から作成できます。"
@@ -182,13 +182,13 @@ export const StudyCardsPage = ({
                     </span>
                   </div>
                   <Link
-                    className="line-clamp-2 whitespace-pre-wrap break-words text-base font-semibold text-foreground hover:underline underline-offset-4"
+                    className="line-clamp-2 whitespace-pre-wrap break-words text-base leading-display font-semibold text-foreground hover:underline underline-offset-4"
                     params={{ cardId: card.id }}
                     to="/study/cards/$cardId"
                   >
                     {card.question}
                   </Link>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm leading-display text-muted-foreground">
                     根拠:{" "}
                     {/* ビューア起点の作成フローでは article が必ず入るが、
                         データ不整合時に「第null条」がレンダリングされるのを防ぐため

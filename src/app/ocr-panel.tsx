@@ -54,7 +54,7 @@ export const OcrPanel = ({ blob, ocr, onDiscard }: OcrPanelProps) => {
   if (phase === "consent") {
     return (
       <div className="grid gap-3 rounded-md border p-4 text-left text-sm">
-        <p className="text-foreground">
+        <p className="leading-display text-foreground">
           日本語モデル（{formatModelSizeLabel(MODEL_SIZE_BYTES)}）をダウンロードします。
           以降はオフラインで使えます。
         </p>
@@ -80,7 +80,11 @@ export const OcrPanel = ({ blob, ocr, onDiscard }: OcrPanelProps) => {
     return (
       <div className="grid gap-3">
         {/* aria-live で進捗更新を支援技術に通知する */}
-        <p aria-live="polite" className="text-sm text-muted-foreground" role="status">
+        <p
+          aria-live="polite"
+          className="text-sm leading-display text-muted-foreground"
+          role="status"
+        >
           {phase === "recognizing" ? "読み取り中..." : "モデル読み込み中..."}
           <span className="ml-1 tabular-nums">{percent} %</span>
         </p>
@@ -113,7 +117,7 @@ export const OcrPanel = ({ blob, ocr, onDiscard }: OcrPanelProps) => {
     return (
       <div className="grid gap-3">
         <p
-          className="rounded-md border border-destructive/50 px-4 py-3 text-sm leading-6 text-destructive"
+          className="rounded-md border border-destructive/50 px-4 py-3 text-sm leading-display text-destructive"
           role="alert"
         >
           {ocrErrorMessage(errorKind ?? "unknown")}

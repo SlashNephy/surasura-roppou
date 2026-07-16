@@ -160,7 +160,7 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
           <h1 className="text-3xl font-semibold tracking-normal text-foreground md:text-4xl">
             保存リスト
           </h1>
-          <p className="max-w-2xl text-base leading-7 text-muted-foreground">
+          <p className="max-w-2xl text-base leading-display text-muted-foreground">
             保存した法令、メモ付きの条文、学習用コレクションをまとめて管理します。
           </p>
         </div>
@@ -298,11 +298,11 @@ export const SavedCollectionPage = ({
           <Link to="/saved">保存リストへ戻る</Link>
         </Button>
         <p className="text-sm font-medium text-primary">Collection</p>
-        <h1 className="text-3xl font-semibold tracking-normal text-foreground md:text-4xl">
+        <h1 className="min-w-0 break-words text-3xl font-semibold tracking-normal text-foreground md:text-4xl">
           {collection.title}
         </h1>
         {collection.description === undefined ? null : (
-          <p className="max-w-2xl text-base leading-7 text-muted-foreground">
+          <p className="max-w-2xl min-w-0 break-words text-base leading-display text-muted-foreground">
             {collection.description}
           </p>
         )}
@@ -329,7 +329,7 @@ const SavedLawList = ({ savedLaws }: { savedLaws: SavedLawSummary[] }) => (
             <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
               <div className="grid min-w-0 gap-2">
                 <Link
-                  className="text-base font-semibold text-foreground underline-offset-4 hover:underline"
+                  className="min-w-0 break-words text-base leading-display font-semibold text-foreground underline-offset-4 hover:underline"
                   params={{ lawId: savedLaw.law.lawId }}
                   to="/laws/$lawId"
                 >
@@ -368,11 +368,11 @@ const BookmarkList = ({
           <li key={bookmark.id} className="rounded-md border bg-card p-4">
             <div className="grid gap-2">
               <BookmarkLink bookmark={bookmark} />
-              <p className="text-sm text-muted-foreground">
+              <p className="min-w-0 break-words text-sm leading-display text-muted-foreground">
                 法令: {lawTitlesById?.get(bookmark.target.lawId) ?? bookmark.target.lawId}
               </p>
               {bookmark.note === undefined ? null : (
-                <p className="whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground">
+                <p className="whitespace-pre-wrap break-words text-sm leading-display text-muted-foreground">
                   {bookmark.note}
                 </p>
               )}
@@ -404,14 +404,16 @@ const CollectionList = ({ collections }: { collections: Collection[] }) => (
           <li key={collection.id} className="rounded-md border bg-card p-4">
             <div className="grid gap-2">
               <Link
-                className="text-base font-semibold text-foreground underline-offset-4 hover:underline"
+                className="min-w-0 break-words text-base leading-display font-semibold text-foreground underline-offset-4 hover:underline"
                 params={{ collectionId: collection.id }}
                 to="/saved/collections/$collectionId"
               >
                 {collection.title}
               </Link>
               {collection.description === undefined ? null : (
-                <p className="text-sm leading-6 text-muted-foreground">{collection.description}</p>
+                <p className="min-w-0 break-words text-sm leading-display text-muted-foreground">
+                  {collection.description}
+                </p>
               )}
               <p className="text-sm text-muted-foreground">
                 {collection.bookmarkIds.length.toLocaleString("ja-JP")} 件
@@ -657,21 +659,26 @@ const CollectionForm = ({
       <fieldset className="grid gap-2">
         <legend className="text-sm font-medium text-foreground">保存項目</legend>
         {bookmarks.length === 0 ? (
-          <p className="text-sm text-muted-foreground">保存項目を追加すると選択できます。</p>
+          <p className="text-sm leading-display text-muted-foreground">
+            保存項目を追加すると選択できます。
+          </p>
         ) : (
           <div className="grid max-h-48 gap-2 overflow-y-auto rounded-md border bg-background p-2 pr-3">
             {bookmarks.map((bookmark) => (
-              <label key={bookmark.id} className="flex items-center gap-2 text-sm text-foreground">
+              <label
+                key={bookmark.id}
+                className="flex min-w-0 items-center gap-2 text-sm text-foreground"
+              >
                 <input
                   checked={selectedBookmarkIds.includes(bookmark.id)}
-                  className="size-4 accent-primary"
+                  className="size-4 shrink-0 accent-primary"
                   disabled={isSubmitting}
                   onChange={() => {
                     toggleBookmark(bookmark.id);
                   }}
                   type="checkbox"
                 />
-                {bookmark.title}
+                <span className="min-w-0 break-words">{bookmark.title}</span>
               </label>
             ))}
           </div>
@@ -704,7 +711,7 @@ const SectionHeading = ({
 const PanelMessage = ({ children, role }: { children: string; role?: "status" }) => (
   <p
     role={role}
-    className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground"
+    className="rounded-md border border-dashed px-4 py-5 text-sm leading-display text-muted-foreground"
   >
     {children}
   </p>
@@ -715,7 +722,7 @@ const EmptyState = ({ children }: { children: string }) => <PanelMessage>{childr
 const StatusMessage = ({ children }: { children: string }) => (
   <p
     role="status"
-    className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm leading-6 text-primary"
+    className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm leading-display text-primary"
   >
     {children}
   </p>
@@ -724,7 +731,7 @@ const StatusMessage = ({ children }: { children: string }) => (
 const ErrorMessage = ({ children }: { children: string }) => (
   <p
     role="alert"
-    className="rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm leading-6 text-destructive"
+    className="rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm leading-display text-destructive"
   >
     {children}
   </p>
@@ -736,7 +743,7 @@ const BookmarkLink = ({ bookmark }: { bookmark: Bookmark }) => {
   if (article === undefined || article === "") {
     return (
       <Link
-        className="text-base font-semibold text-foreground underline-offset-4 hover:underline"
+        className="min-w-0 break-words text-base leading-display font-semibold text-foreground underline-offset-4 hover:underline"
         params={{ lawId: bookmark.target.lawId }}
         to="/laws/$lawId"
       >
@@ -747,7 +754,7 @@ const BookmarkLink = ({ bookmark }: { bookmark: Bookmark }) => {
 
   return (
     <Link
-      className="text-base font-semibold text-foreground underline-offset-4 hover:underline"
+      className="min-w-0 break-words text-base leading-display font-semibold text-foreground underline-offset-4 hover:underline"
       params={{ lawId: bookmark.target.lawId, article }}
       to="/laws/$lawId/articles/$article"
     >

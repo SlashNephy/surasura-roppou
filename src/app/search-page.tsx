@@ -19,7 +19,9 @@ const CandidateLink = ({ candidate }: { candidate: QuickSearchCandidate }) => {
   const content = (
     <>
       <span className="font-serif font-semibold">{label}</span>
-      <span className="text-xs text-muted-foreground">{candidate.reason.join(" / ")}</span>
+      <span className="text-xs leading-display text-muted-foreground">
+        {candidate.reason.join(" / ")}
+      </span>
     </>
   );
 
@@ -114,11 +116,13 @@ export const SearchPage = ({ quickSearch = defaultQuickSearch }: { quickSearch?:
     <section className="mx-auto grid w-full max-w-3xl gap-6 px-5 py-10">
       <header className="grid gap-1">
         <h1 className="font-serif text-xl font-semibold">検索</h1>
-        {trimmedQ !== "" ? <p className="text-sm text-muted-foreground">「{q}」の結果</p> : null}
+        {trimmedQ !== "" ? (
+          <p className="text-sm leading-display text-muted-foreground">「{q}」の結果</p>
+        ) : null}
       </header>
 
       {trimmedQ === "" ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm leading-display text-muted-foreground">
           法令名や条文参照（民709、国賠法1条 など）を入力してください。
         </p>
       ) : null}
@@ -135,7 +139,7 @@ export const SearchPage = ({ quickSearch = defaultQuickSearch }: { quickSearch?:
       {!isSearching && trimmedQ !== "" && outcome.status === "unresolved" ? (
         <p
           role="status"
-          className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground"
+          className="rounded-md border border-dashed px-4 py-5 text-sm leading-display text-muted-foreground"
         >
           {outcome.reason === "needs-context"
             ? "相対参照は前後の文脈が必要です。法令名を含めて入力してください。"
@@ -183,7 +187,7 @@ export const SearchPage = ({ quickSearch = defaultQuickSearch }: { quickSearch?:
       trimmedQ !== "" &&
       outcome.status === "candidates" &&
       outcome.candidates.length === 0 ? (
-        <p className="text-sm text-muted-foreground">該当する候補がありません。</p>
+        <p className="text-sm leading-display text-muted-foreground">該当する候補がありません。</p>
       ) : null}
 
       {!isSearching &&
@@ -191,7 +195,9 @@ export const SearchPage = ({ quickSearch = defaultQuickSearch }: { quickSearch?:
       outcome.status === "candidates" &&
       outcome.candidates.length > 0 &&
       visibleCandidates.length === 0 ? (
-        <p className="text-sm text-muted-foreground">この科目に該当する候補がありません。</p>
+        <p className="text-sm leading-display text-muted-foreground">
+          この科目に該当する候補がありません。
+        </p>
       ) : null}
     </section>
   );

@@ -41,7 +41,9 @@ export const HomePage = ({
         <h1 className="font-serif text-2xl font-semibold text-foreground md:text-3xl">
           撮って、開いて、すらすら読める。
         </h1>
-        <p className="text-sm text-muted-foreground">e-Gov 法令データに基づく法令ビューワー</p>
+        <p className="text-sm leading-display text-muted-foreground">
+          e-Gov 法令データに基づく法令ビューワー
+        </p>
         {/* クリックで検索パレットを開く。/laws へのナビゲーションは廃止した。 */}
         <Button
           type="button"
@@ -73,7 +75,7 @@ export const HomePage = ({
         // 読み込み失敗時は savedLawsError と同型のバナーでエラーを明示する
         <p
           role="status"
-          className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground"
+          className="rounded-md border border-dashed px-4 py-5 text-sm leading-display text-muted-foreground"
         >
           {error}
         </p>
@@ -115,7 +117,7 @@ export const HomePage = ({
                 </h3>
               </div>
               {dashboard.weakCards.length === 0 ? (
-                <p className="text-xs leading-5 text-muted-foreground">
+                <p className="text-xs leading-display text-muted-foreground">
                   まだ苦手な条文はありません
                 </p>
               ) : (
@@ -155,7 +157,7 @@ export const HomePage = ({
                 </h3>
               </div>
               {dashboard.recentItems.length === 0 ? (
-                <p className="text-xs leading-5 text-muted-foreground">
+                <p className="text-xs leading-display text-muted-foreground">
                   最近開いた項目はまだありません
                 </p>
               ) : (
@@ -197,7 +199,7 @@ export const HomePage = ({
         // ストレージ障害時は空状態（チップ）と区別できるようエラーを明示する
         <p
           role="status"
-          className="rounded-md border border-dashed px-4 py-5 text-sm text-muted-foreground"
+          className="rounded-md border border-dashed px-4 py-5 text-sm leading-display text-muted-foreground"
         >
           {savedLawsError}
         </p>
@@ -219,7 +221,7 @@ export const HomePage = ({
               {savedLaws.map((savedLaw) => (
                 <li key={savedLaw.law.lawId} className="rounded-md border bg-card p-4">
                   <Link
-                    className="font-serif text-base font-semibold text-foreground underline-offset-4 hover:underline"
+                    className="font-serif text-base leading-display font-semibold text-foreground underline-offset-4 hover:underline"
                     params={{ lawId: savedLaw.law.lawId }}
                     to="/laws/$lawId"
                   >

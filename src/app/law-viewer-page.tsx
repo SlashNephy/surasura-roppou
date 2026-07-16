@@ -505,7 +505,7 @@ const LawViewerReadyState = ({
     <p
       id={articleJumpErrorId}
       role="alert"
-      className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-6 text-destructive"
+      className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-display text-destructive"
     >
       指定された条文が見つかりません。
     </p>
@@ -517,11 +517,11 @@ const LawViewerReadyState = ({
         <aside aria-label="法令の目次" className="hidden border-r bg-muted/40 lg:block">
           <div className="sticky top-14 grid max-h-[calc(100dvh-3.5rem)] content-start gap-3 overflow-y-auto p-4">
             <div className="grid gap-1">
-              <p className="min-w-0 font-serif text-base font-semibold text-foreground break-words">
+              <p className="min-w-0 font-serif text-base leading-display font-semibold text-foreground break-words">
                 {state.law.title}
               </p>
               {state.law.lawNumber !== undefined ? (
-                <p className="min-w-0 text-xs text-muted-foreground break-words">
+                <p className="min-w-0 text-xs leading-display text-muted-foreground break-words">
                   {state.law.lawNumber}
                 </p>
               ) : null}
@@ -531,7 +531,9 @@ const LawViewerReadyState = ({
                 オフライン保存済み
               </Badge>
             ) : null}
-            <p className="text-[10px] font-medium tracking-widest text-muted-foreground">目次</p>
+            <p className="text-[0.625rem] font-medium tracking-widest text-muted-foreground">
+              目次
+            </p>
             <LawTableOfContents
               activeArticleNumber={activeArticleNumber}
               displayMode={displayMode}
@@ -547,12 +549,12 @@ const LawViewerReadyState = ({
               <span className="text-sm font-medium text-foreground">表示</span>
               <div
                 aria-label="表示モード"
-                className="inline-flex w-fit rounded-md border bg-background p-1"
+                className="flex w-full flex-col gap-1 rounded-md border bg-background p-1 sm:w-fit sm:flex-row sm:gap-0"
                 role="group"
               >
                 <Button
                   aria-pressed={displayMode === "readable"}
-                  className="h-8 px-3"
+                  className="h-8 w-full px-3 sm:w-auto"
                   onClick={() => {
                     setDisplayMode("readable");
                   }}
@@ -563,7 +565,7 @@ const LawViewerReadyState = ({
                 </Button>
                 <Button
                   aria-pressed={displayMode === "original"}
-                  className="h-8 px-3"
+                  className="h-8 w-full px-3 sm:w-auto"
                   onClick={() => {
                     setDisplayMode("original");
                   }}
@@ -695,7 +697,7 @@ const LawViewerReadyState = ({
 
             <div aria-label="基準日情報" className="grid min-w-0 gap-1 md:w-full" role="group">
               <span className="text-sm font-medium text-foreground">基準日</span>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm leading-display text-muted-foreground">
                 基準日 {formatBaseDateLabel(state)} ・ 施行日{" "}
                 {formatEffectiveDateLabel(state.revision)}{" "}
                 <Link className="text-primary underline-offset-4 hover:underline" to="/settings">
@@ -711,7 +713,7 @@ const LawViewerReadyState = ({
             <p
               id={saveErrorId}
               role="alert"
-              className="mb-4 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-6 text-destructive"
+              className="mb-4 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-display text-destructive"
             >
               {saveError}
             </p>
@@ -720,7 +722,7 @@ const LawViewerReadyState = ({
           {copyError !== undefined ? (
             <p
               role="alert"
-              className="mb-4 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-6 text-destructive"
+              className="mb-4 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-display text-destructive"
             >
               {copyError}
             </p>
@@ -771,7 +773,7 @@ const LawViewerReadyState = ({
             revision={state.revision}
           />
 
-          <p className="mt-6 border-t pt-4 text-xs leading-5 text-muted-foreground">
+          <p className="mt-6 border-t pt-4 text-xs leading-display text-muted-foreground">
             基準日 {formatBaseDateLabel(state)} ・ 施行日 {formatEffectiveDateLabel(state.revision)}{" "}
             ・ 取得日時 {formatIsoDateLabel(state.revision.fetchedAt)}
             {state.loadedFromStorage && state.requestedAsOf !== undefined
@@ -791,7 +793,7 @@ const LawViewerReadyState = ({
             {(["メモ", "定義語", "関連条文", "復習カード"] as const).map((panelTitle) => (
               <section key={panelTitle} className="rounded-md border bg-card p-3">
                 <h2 className="text-sm font-medium text-foreground">{panelTitle}</h2>
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">準備中</p>
+                <p className="mt-2 text-xs leading-display text-muted-foreground">準備中</p>
               </section>
             ))}
             <div className="grid gap-2 border-t pt-3">
@@ -938,7 +940,7 @@ const LawViewerErrorState = ({ message }: { message: string }) => (
   >
     <div className="grid gap-2">
       <h1 className="text-2xl font-semibold text-foreground">法令を表示できません</h1>
-      <p className="text-base leading-7 text-muted-foreground">{message}</p>
+      <p className="text-base leading-display text-muted-foreground">{message}</p>
     </div>
     <Button asChild className="w-fit">
       <Link to="/laws">法令検索へ戻る</Link>
@@ -952,9 +954,9 @@ const LawViewerOfflineState = ({ lawTitle }: { lawTitle: string }) => (
     className="mx-auto flex min-h-[calc(100dvh-10rem)] w-full max-w-2xl flex-col justify-center gap-4 px-4 py-10 md:px-6"
   >
     <div className="grid gap-2">
-      <p className="text-sm font-medium text-primary">{lawTitle}</p>
+      <p className="text-sm leading-display font-medium text-primary">{lawTitle}</p>
       <h1 className="text-2xl font-semibold text-foreground">この法令は端末に保存されていません</h1>
-      <p className="text-base leading-7 text-muted-foreground">
+      <p className="text-base leading-display text-muted-foreground">
         オフラインで表示するには、通信できる状態で法令本文を開いて保存してください。
       </p>
     </div>
