@@ -365,6 +365,8 @@ MVP ではクライアントサイド OCR を優先する。サーバー OCR は
 
 ## 8. Non-Functional Requirements
 
+具体的な最低基準、監査方法と結果、実装者チェックリストは[品質基準](./quality-baseline.md)に従い、この Design Doc はプロダクト要件と設計意図を保持する。
+
 ### 8.1 Performance
 
 - 初回表示はアプリシェルを軽くする。
@@ -372,6 +374,7 @@ MVP ではクライアントサイド OCR を優先する。サーバー OCR は
 - 法令本文は必要な単位で遅延ロードする。
 - 大きな法令では仮想リスト化を検討する。
 - 保存済み法令検索は 500ms 以内の応答を目標にする。
+- production build の成果物と民法の cold/warm 初回表示、操作、Long Task の判定は、[品質基準](./quality-baseline.md)の第 4 節と第 8.3 節に従う。
 
 ### 8.2 Accessibility
 
@@ -380,6 +383,7 @@ MVP ではクライアントサイド OCR を優先する。サーバー OCR は
 - 文字サイズ・行間・テーマを調整可能にする。
 - ダークモードに対応する。
 - スクリーンリーダーで条・項・号の構造が分かるようにする。
+- キーボード、フォーカス、リフロー、タッチターゲット、表示設定の基準と監査は、[品質基準](./quality-baseline.md)の第 2 節、第 3 節、第 8.2 節に従う。
 
 ### 8.3 Privacy
 
@@ -387,6 +391,7 @@ MVP ではクライアントサイド OCR を優先する。サーバー OCR は
 - サーバー OCR を使う場合は明示的な同意を取る。
 - 学習履歴・ブックマーク・メモはローカル優先。
 - 同期機能を入れる場合は、ユーザーが同期対象を選べるようにする。
+- OCR の段階的な読み込み、データ境界、analytics、全削除の基準と監査は、[品質基準](./quality-baseline.md)の第 5 節から第 7 節、および第 8.4 節に従う。
 
 ### 8.4 Legal/Safety
 
@@ -1031,16 +1036,18 @@ BFF は MVP では optional だが、AI・全法令検索・API proxy・sync を
 
 ## 19. Risks and Mitigations
 
-| Risk                      | Impact                    | Mitigation                                                  |
-| ------------------------- | ------------------------- | ----------------------------------------------------------- |
-| OCR 精度が低い            | 条文ジャンプ体験が壊れる  | 候補確認 UI、手入力 fallback、画像前処理                    |
-| 日本語 OCR モデルが重い   | 初回体験が重い            | OCR は lazy load、必要時 download、Web Worker               |
-| PWA storage eviction      | オフライン保存が消える    | 保存状態表示、export、再同期、StorageManager persisted 検討 |
-| e-Gov API 仕様変更        | 取得処理が壊れる          | BFF で吸収、schema validation、integration test             |
-| 加工表示の誤変換          | 法的正確性リスク          | 原文保持、変換対象制限、テスト、原文コピーを既定にする      |
-| AI 出力の誤り             | 学習上の誤解              | 根拠条文必須、AI は補助、ユーザー確認                       |
-| 通知を PWA で再現しすぎる | ブラウザ差で不安定        | 通知は Android 側に委譲、Web はアプリ内復習中心             |
-| スキャン画像の扱い        | プライバシー/著作権リスク | ローカル処理、デフォルト保存なし、同意制                    |
+| Risk                                         | Impact                         | Mitigation                                                                                                                                                                          |
+| -------------------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OCR 精度が低い                               | 条文ジャンプ体験が壊れる       | 候補確認 UI、手入力 fallback、画像前処理                                                                                                                                            |
+| 日本語 OCR モデルが重い                      | 初回体験が重い                 | OCR は lazy load、必要時 download、Web Worker。[品質基準](./quality-baseline.md)の第 5 節と第 8.4 節に従い、OCR または PWA を変更するときは Network と cache を段階別に監査する     |
+| PWA storage eviction                         | オフライン保存が消える         | 保存状態表示、export、再同期、StorageManager persisted 検討。[品質基準](./quality-baseline.md)の第 7 節と第 8.4 節に従い、storage schema を変更するときは export と全削除を監査する |
+| e-Gov API 仕様変更                           | 取得処理が壊れる               | BFF で吸収、schema validation、integration test                                                                                                                                     |
+| 加工表示の誤変換                             | 法的正確性リスク               | 原文保持、変換対象制限、テスト、原文コピーを既定にする                                                                                                                              |
+| AI 出力の誤り                                | 学習上の誤解                   | 根拠条文必須、AI は補助、ユーザー確認                                                                                                                                               |
+| 通知を PWA で再現しすぎる                    | ブラウザ差で不安定             | 通知は Android 側に委譲、Web はアプリ内復習中心                                                                                                                                     |
+| スキャン画像の扱い                           | プライバシー/著作権リスク      | ローカル処理、デフォルト保存なし、同意制。[品質基準](./quality-baseline.md)の第 6 節と第 8.4 節に従い、OCR または scanner を変更するときは Network と storage を段階別に監査する    |
+| 大規模法令と初期 main chunk                  | 初期表示と操作の応答が悪化する | [品質基準](./quality-baseline.md)の第 4 節と第 8.3 節で production 成果物を監査し、第 8.5 節の後続 Issue で改善する                                                                 |
+| 複雑な UI のキーボード、リフロー、タッチ操作 | 情報または操作へ到達できない   | [品質基準](./quality-baseline.md)の第 2 節、第 3 節、第 8.2 節で headed 監査し、第 8.5 節の後続 Issue で改善する                                                                    |
 
 ## 20. Open Questions
 
@@ -1063,3 +1070,4 @@ BFF は MVP では optional だが、AI・全法令検索・API proxy・sync を
 - MDN Push API: https://developer.mozilla.org/en-US/docs/Web/API/Push_API
 - MDN Web Periodic Background Synchronization API: https://developer.mozilla.org/en-US/docs/Web/API/Web_Periodic_Background_Synchronization_API
 - Tesseract.js: https://tesseract.projectnaptha.com/
+- Quality Baseline: [品質基準](./quality-baseline.md)
