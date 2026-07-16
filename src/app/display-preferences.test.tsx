@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { StrictMode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DISPLAY_PREFERENCES_STORAGE_KEYS } from "@/core/settings";
@@ -407,6 +408,75 @@ describe("DisplayPreferencesProvider", () => {
       }
     },
   );
+
+  it.each([
+    { storedTheme: "dark", osPrefersDark: false, expectedClass: "light" },
+    { storedTheme: "light", osPrefersDark: true, expectedClass: "dark" },
+  ] as const)(
+    "別タブの全消去で $storedTheme 固定から現在の OS テーマへ戻る",
+    async ({ expectedClass, osPrefersDark, storedTheme }) => {
+      localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.fontSize, "extra-large");
+      localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.lineSpacing, "wide");
+      localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme, storedTheme);
+      prefersDark = osPrefersDark;
+      renderProvider();
+
+      await waitFor(() =>
+        expect(screen.getByText(`extra-large/wide/${storedTheme}`)).toBeInTheDocument(),
+      );
+      const propagatedStorageEvent = vi.fn();
+      window.addEventListener("storage", propagatedStorageEvent);
+
+      try {
+        act(() => {
+          localStorage.clear();
+          window.dispatchEvent(new StorageEvent("storage", { key: null }));
+        });
+
+        await waitFor(() => {
+          expect(screen.getByText("standard/standard/system")).toBeInTheDocument();
+          expect(document.documentElement).toHaveAttribute("data-font-size", "standard");
+          expect(document.documentElement).toHaveAttribute("data-line-spacing", "standard");
+          expect(document.documentElement.className).toBe(expectedClass);
+          expect(document.documentElement.style.colorScheme).toBe(expectedClass);
+          expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.fontSize)).toBeNull();
+          expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.lineSpacing)).toBeNull();
+          expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme)).toBe("system");
+        });
+        expect(propagatedStorageEvent).toHaveBeenCalledTimes(1);
+      } finally {
+        window.removeEventListener("storage", propagatedStorageEvent);
+      }
+    },
+  );
+
+  it("StrictMode の解除後は全消去 event に反応する listener を残さない", async () => {
+    localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme, "dark");
+    prefersDark = false;
+    const { unmount } = render(
+      <StrictMode>
+        <DisplayPreferencesProvider>
+          <Probe />
+        </DisplayPreferencesProvider>
+      </StrictMode>,
+    );
+
+    await waitFor(() => expect(screen.getByText("standard/standard/dark")).toBeInTheDocument());
+    act(() => {
+      localStorage.clear();
+      window.dispatchEvent(new StorageEvent("storage", { key: null }));
+    });
+    await waitFor(() => {
+      expect(screen.getByText("standard/standard/system")).toBeInTheDocument();
+      expect(document.documentElement.className).toBe("light");
+    });
+
+    unmount();
+    localStorage.clear();
+    window.dispatchEvent(new StorageEvent("storage", { key: null }));
+
+    expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.theme)).toBeNull();
+  });
 
   it.each([
     { failingOperation: "removeItem", expectedStoredTheme: "system" },

@@ -52,6 +52,12 @@ const DisplayPreferencesBridge = ({
 
   useLayoutEffect(() => {
     const handleThemeStorage = (event: StorageEvent) => {
+      if (event.key === null) {
+        // 全消去は伝播を止めず、ほかの表示設定も各 subscriber に既定値へ戻させる。
+        setTheme(DEFAULT_DISPLAY_PREFERENCES.theme);
+        return;
+      }
+
       if (
         event.key !== DISPLAY_PREFERENCES_STORAGE_KEYS.theme ||
         event.newValue === null ||
