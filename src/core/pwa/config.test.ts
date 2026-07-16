@@ -11,8 +11,8 @@ describe("PWA configuration", () => {
       scope: "/",
       display: "standalone",
       lang: "ja",
-      theme_color: "#4f46e5",
-      background_color: "#fafafa",
+      theme_color: "#166534",
+      background_color: "#fcfbf8",
     });
     expect(surasuraPwaManifest.icons).toEqual([
       {
