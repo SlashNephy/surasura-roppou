@@ -26,7 +26,7 @@ interface DisplayPreferencesValue extends DisplayPreferences {
 const getServerDisplayPreferences = (): DisplayPreferences => DEFAULT_DISPLAY_PREFERENCES;
 
 export const useDisplayPreferences = (): DisplayPreferencesValue => {
-  const { fontSize, lineSpacing } = useSyncExternalStore(
+  const { fontSize, lineSpacing, textDisplayMode } = useSyncExternalStore(
     subscribeDisplayPreferences,
     getDisplayPreferences,
     getServerDisplayPreferences,
@@ -43,7 +43,7 @@ export const useDisplayPreferences = (): DisplayPreferencesValue => {
   return {
     fontSize,
     lineSpacing,
-    textDisplayMode: getDisplayPreferences().textDisplayMode,
+    textDisplayMode,
     theme,
     setFontSize: setDisplayFontSize,
     setLineSpacing: setDisplayLineSpacing,
