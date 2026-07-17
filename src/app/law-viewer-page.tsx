@@ -29,6 +29,7 @@ import type { LawTocItem } from "@/core/viewer";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/shared/ui/sheet";
 import { Skeleton } from "@/shared/ui/skeleton";
 import { formatIsoDateLabel } from "@/shared/utils/dates";
 
@@ -193,6 +194,8 @@ const LawViewerReadyState = ({
   const [saveError, setSaveError] = useState<string | undefined>();
   const [copyError, setCopyError] = useState<string | undefined>();
   const [isMobileTocOpen, setIsMobileTocOpen] = useState(false);
+  // モバイル用「この条文」シートの開閉状態。
+  const [isArticleSheetOpen, setIsArticleSheetOpen] = useState(false);
   const [jumpArticleNumber, setJumpArticleNumber] = useState("");
   const [hasJumpError, setHasJumpError] = useState(false);
   const [isCompareOpen, setIsCompareOpen] = useState(false);
@@ -602,20 +605,33 @@ const LawViewerReadyState = ({
         </aside>
 
         <div className="min-w-0 px-4 py-6 md:px-8">
-          {/* モバイル用の目次トグルボタン（デスクトップでは左レールがあるため非表示） */}
-          <Button
-            aria-controls={tocPanelId}
-            aria-expanded={isMobileTocOpen}
-            className="mb-4 w-fit gap-2 lg:hidden"
-            onClick={() => {
-              setIsMobileTocOpen((current) => !current);
-            }}
-            type="button"
-            variant="outline"
-          >
-            <ListTree className="size-4" />
-            目次
-          </Button>
+          {/* モバイル用サブバー（lg 以上は左右レールがあるため非表示） */}
+          <div className="mb-4 flex flex-wrap items-center gap-2 lg:hidden">
+            <Button
+              aria-controls={tocPanelId}
+              aria-expanded={isMobileTocOpen}
+              className="gap-2"
+              onClick={() => {
+                setIsMobileTocOpen(true);
+              }}
+              type="button"
+              variant="outline"
+            >
+              <ListTree className="size-4" aria-hidden="true" />
+              目次
+            </Button>
+            <Button
+              className="gap-2"
+              disabled={activeArticleNumber === undefined}
+              onClick={() => {
+                setIsArticleSheetOpen(true);
+              }}
+              type="button"
+              variant="outline"
+            >
+              この条文
+            </Button>
+          </div>
 
           {saveError !== undefined ? (
             <p
@@ -646,19 +662,6 @@ const LawViewerReadyState = ({
             {savedState.savedAt !== undefined ? (
               <span>保存日時: {formatIsoDateLabel(savedState.savedAt)}</span>
             ) : null}
-          </div>
-
-          <div
-            id={tocPanelId}
-            className="mb-4 rounded-md border bg-card p-3 shadow-xs lg:hidden"
-            hidden={!isMobileTocOpen}
-          >
-            <LawTableOfContents
-              activeArticleNumber={activeArticleNumber}
-              displayMode={displayMode}
-              items={tocItems}
-              onSelectArticle={navigateToArticle}
-            />
           </div>
 
           <LawDocumentView
@@ -774,6 +777,116 @@ const LawViewerReadyState = ({
           </div>
         </aside>
       </section>
+
+      {/* モバイル用目次シート（lg 未満でサブバーの「目次」ボタンから開く） */}
+      <Sheet onOpenChange={setIsMobileTocOpen} open={isMobileTocOpen}>
+        <SheetContent id={tocPanelId} side="bottom" className="max-h-[85dvh] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>目次と操作</SheetTitle>
+          </SheetHeader>
+          <div className="grid gap-3 px-4 pb-4">
+            {/* 条番号ジャンプ */}
+            <form className="grid gap-2" onSubmit={handleJumpSubmit}>
+              <label
+                className="grid min-w-0 gap-1 text-sm font-medium text-foreground"
+                htmlFor={`${articleInputId}-mobile`}
+              >
+                条番号
+                <Input
+                  autoComplete="off"
+                  id={`${articleInputId}-mobile`}
+                  name="article"
+                  onChange={(event) => {
+                    setJumpArticleNumber(event.target.value);
+                    setHasJumpError(false);
+                  }}
+                  placeholder="例: 1"
+                  value={jumpArticleNumber}
+                />
+              </label>
+              <Button className="w-fit" type="submit">
+                移動
+              </Button>
+            </form>
+            {/* オフライン保存 */}
+            <Button
+              className="w-fit gap-2"
+              disabled={isSaving}
+              onClick={() => {
+                void handleSaveToggle();
+              }}
+              type="button"
+              variant={savedState.isSaved ? "outline" : "default"}
+            >
+              {savedState.isSaved ? "保存解除" : "オフライン保存"}
+            </Button>
+            {/* 基準日情報 */}
+            <p className="text-sm leading-display text-muted-foreground">
+              基準日 {formatBaseDateLabel(state)} ・ 施行日{" "}
+              {formatEffectiveDateLabel(state.revision)}
+            </p>
+            <LawTableOfContents
+              activeArticleNumber={activeArticleNumber}
+              displayMode={displayMode}
+              items={tocItems}
+              onSelectArticle={navigateToArticle}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* モバイル用「この条文」シート（activeArticleNumber が定まるときのみ描画） */}
+      {activeArticleNumber !== undefined ? (
+        <Sheet onOpenChange={setIsArticleSheetOpen} open={isArticleSheetOpen}>
+          <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle>第{activeArticleNumber}条の操作</SheetTitle>
+            </SheetHeader>
+            <div className="grid gap-2 px-4 pb-4">
+              <Button
+                className="w-full"
+                onClick={() => {
+                  void handleSaveAnchor(activeArticleNumber);
+                  setIsArticleSheetOpen(false);
+                }}
+                type="button"
+                variant="ghost"
+                aria-label="この条文を保存"
+              >
+                この条文を保存
+              </Button>
+              {/* activeNode が undefined（条番号は分かるがノードが見つからない）ときは
+                  ダイアログを開けないためボタンを非表示にする */}
+              {activeNode !== undefined ? (
+                <>
+                  <Button
+                    className="w-full"
+                    onClick={() => {
+                      setIsArticleSheetOpen(false);
+                      setIsCardDialogOpen(true);
+                    }}
+                    type="button"
+                    variant="ghost"
+                  >
+                    カードを作る
+                  </Button>
+                  <Button
+                    className="w-full"
+                    onClick={() => {
+                      setIsArticleSheetOpen(false);
+                      setIsQuizDialogOpen(true);
+                    }}
+                    type="button"
+                    variant="ghost"
+                  >
+                    クイズを生成
+                  </Button>
+                </>
+              ) : null}
+            </div>
+          </SheetContent>
+        </Sheet>
+      ) : null}
 
       {isCompareOpen && verification !== undefined ? (
         <AnchorCompareDialog

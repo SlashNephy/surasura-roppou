@@ -391,10 +391,16 @@ describe("LawViewerPageContent", () => {
     localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.textMode, "original");
     const { user } = renderLawViewerRoute("/laws/129AC0000000089");
 
-    const lawArticle = await screen.findByRole("article", { name: "民法" });
+    await screen.findByRole("article", { name: "民法" });
+    // 目次ボタンを押してシートを開き、シート内の目次が原文表示になっているか確認する。
+    // シートが開くと radix Dialog がメインコンテンツに aria-hidden を設定するため、
+    // シート内（role="dialog"）を within でスコープして検証する。
     await user.click(screen.getByRole("button", { name: "目次" }));
 
-    expect(within(lawArticle).getByRole("heading", { name: /第一編\s+総則/u })).toBeInTheDocument();
+    const sheet = await screen.findByRole("dialog");
+    // 第一編ラベルは非インタラクティブな span として描画されるため findByText で確認する。
+    // 原文表示のときは「第一編 総則」（全角スペース区切り）、読みやすい表示のときは「第1編 総則」になる。
+    expect(await within(sheet).findByText(/第一編\s+総則/u)).toBeInTheDocument();
   });
 
   it("copies an article in the unified format from the article hover action", async () => {
@@ -631,22 +637,20 @@ describe("LawViewerPageContent", () => {
   it("opens the mobile table of contents from the toggle", async () => {
     const { user } = renderLawViewerRoute("/laws/129AC0000000089");
 
+    // サブバー内の目次ボタン（lg:hidden 親コンテナ内）を取得する。
+    // jsdom ではレスポンシブ class が効かないため、サブバーとレールが DOM 共存する。
+    // ボタンのコンテナは lg:hidden だが、ボタン自体はクラスを持たない。
     const tocToggle = await screen.findByRole("button", { name: "目次" });
-    const mobileTocPanel = document.querySelector("#law-viewer-mobile-toc");
 
+    // シート実装では open 前はシートが DOM にないため、aria-expanded で状態を確認する。
     expect(tocToggle).toHaveAttribute("aria-expanded", "false");
-    expect(tocToggle).toHaveClass("lg:hidden");
-    expect(tocToggle).not.toHaveClass("md:hidden");
-    expect(mobileTocPanel).toBeInTheDocument();
-    expect(mobileTocPanel).toHaveAttribute("hidden");
 
     await user.click(tocToggle);
 
     expect(tocToggle).toHaveAttribute("aria-expanded", "true");
-    expect(mobileTocPanel).not.toHaveAttribute("hidden");
-    expect(
-      within(mobileTocPanel as HTMLElement).getByRole("navigation", { name: "法令目次" }),
-    ).toBeInTheDocument();
+    // シートが開くと role="dialog" が現れ、その中に法令目次が入る。
+    const sheet = await screen.findByRole("dialog");
+    expect(within(sheet).getByRole("navigation", { name: "法令目次" })).toBeInTheDocument();
   });
 
   it("closes the mobile table of contents after selecting an article", async () => {
@@ -654,15 +658,19 @@ describe("LawViewerPageContent", () => {
 
     const tocToggle = await screen.findByRole("button", { name: "目次" });
     await user.click(tocToggle);
-    const mobileTocPanel = document.querySelector("#law-viewer-mobile-toc");
 
-    await user.click(within(mobileTocPanel as HTMLElement).getByRole("button", { name: "第2条" }));
+    // シートが開いた後、シート内の TOC から条を選択する。
+    const sheet = await screen.findByRole("dialog");
+    await user.click(within(sheet).getByRole("button", { name: "第2条" }));
 
     await waitFor(() => {
       expect(history.location.pathname).toBe("/laws/129AC0000000089/articles/2");
     });
+    // navigateToArticle が setIsMobileTocOpen(false) を呼ぶためシートが閉じる。
     expect(tocToggle).toHaveAttribute("aria-expanded", "false");
-    expect(mobileTocPanel).toHaveAttribute("hidden");
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
   });
 
   it("scrolls again when selecting the currently active article", async () => {
@@ -929,6 +937,31 @@ describe("LawViewerPageContent", () => {
     expect(
       within(rightRail).queryByRole("button", { name: "この条文を保存" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("モバイルの目次シートに文書操作と目次が入る", async () => {
+    const { user } = renderLawViewerRoute("/laws/129AC0000000089/articles/1");
+
+    await screen.findByRole("article", { name: "民法" });
+    await user.click(screen.getByRole("button", { name: "目次" }));
+
+    const sheet = await screen.findByRole("dialog");
+    expect(within(sheet).getByRole("button", { name: "移動" })).toBeInTheDocument();
+    expect(
+      within(sheet).getByRole("button", { name: /オフライン保存|保存解除/ }),
+    ).toBeInTheDocument();
+    expect(within(sheet).getByRole("navigation", { name: "法令目次" })).toBeInTheDocument();
+  });
+
+  it("モバイルのこの条文シートに条アクションが入る", async () => {
+    const { user } = renderLawViewerRoute("/laws/129AC0000000089/articles/1");
+
+    await screen.findByRole("article", { name: "民法" });
+    await user.click(screen.getByRole("button", { name: "この条文" }));
+
+    const sheet = await screen.findByRole("dialog");
+    expect(within(sheet).getByRole("button", { name: "カードを作る" })).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: "クイズを生成" })).toBeInTheDocument();
   });
 
   it("opens the study card dialog from the active article actions", async () => {
