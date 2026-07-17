@@ -900,6 +900,37 @@ describe("LawViewerPageContent", () => {
     });
   });
 
+  it("文書レベル操作を左レールに、選択条操作を右レールに配置する", async () => {
+    renderLawViewerRoute("/laws/129AC0000000089/articles/1");
+
+    await screen.findByRole("article", { name: "民法" });
+
+    const leftRail = screen.getByRole("complementary", { name: "法令の目次" });
+    // 条番号ジャンプ・オフライン保存は文書レベル操作として左レールに入る
+    expect(within(leftRail).getByRole("button", { name: "移動" })).toBeInTheDocument();
+    expect(
+      within(leftRail).getByRole("button", { name: /オフライン保存|保存解除/ }),
+    ).toBeInTheDocument();
+
+    const rightRail = screen.getByRole("complementary", { name: "学習コンテキスト" });
+    // 選択条があるとき、この条文の操作は右レールに入る
+    expect(within(rightRail).getByRole("button", { name: "この条文を保存" })).toBeInTheDocument();
+    expect(within(rightRail).getByRole("button", { name: "カードを作る" })).toBeInTheDocument();
+    expect(within(rightRail).getByRole("button", { name: "クイズを生成" })).toBeInTheDocument();
+  });
+
+  it("条が未選択のとき右レールは案内文を表示し操作を出さない", async () => {
+    renderLawViewerRoute("/laws/129AC0000000089");
+
+    await screen.findByRole("article", { name: "民法" });
+
+    const rightRail = screen.getByRole("complementary", { name: "学習コンテキスト" });
+    expect(within(rightRail).getByText("条を選ぶと操作が表示されます")).toBeInTheDocument();
+    expect(
+      within(rightRail).queryByRole("button", { name: "この条文を保存" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("opens the study card dialog from the active article actions", async () => {
     const user = userEvent.setup();
     renderLawViewerRoute("/laws/129AC0000000089/articles/1");

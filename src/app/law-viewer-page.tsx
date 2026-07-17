@@ -533,64 +533,34 @@ const LawViewerReadyState = ({
                 オフライン保存済み
               </Badge>
             ) : null}
-            <p className="text-[0.625rem] font-medium tracking-widest text-muted-foreground">
-              目次
-            </p>
-            <LawTableOfContents
-              activeArticleNumber={activeArticleNumber}
-              displayMode={displayMode}
-              items={tocItems}
-              onSelectArticle={navigateToArticle}
-            />
-          </div>
-        </aside>
 
-        <div className="min-w-0 px-4 py-6 md:px-8">
-          <div className="mb-4 grid gap-3 rounded-md border bg-card p-3 text-card-foreground shadow-xs md:flex md:flex-wrap md:items-end">
-            <form
-              className="grid gap-2 sm:grid-cols-[minmax(0,10rem)_auto]"
-              onSubmit={handleJumpSubmit}
-            >
-              <label
-                className="grid min-w-0 gap-1 text-sm font-medium text-foreground"
-                htmlFor={articleInputId}
-              >
-                条番号
-                <Input
-                  aria-describedby={hasJumpError ? articleJumpErrorId : undefined}
-                  aria-invalid={hasJumpError ? true : undefined}
-                  autoComplete="off"
-                  id={articleInputId}
-                  name="article"
-                  onChange={(event) => {
-                    setJumpArticleNumber(event.target.value);
-                    setHasJumpError(false);
-                  }}
-                  placeholder="例: 1"
-                  value={jumpArticleNumber}
-                />
-              </label>
-              <Button className="w-fit self-end" type="submit">
-                移動
-              </Button>
-            </form>
-
-            <Button
-              aria-controls={tocPanelId}
-              aria-expanded={isMobileTocOpen}
-              className="w-fit gap-2 lg:hidden"
-              onClick={() => {
-                setIsMobileTocOpen((current) => !current);
-              }}
-              type="button"
-              variant="outline"
-            >
-              <ListTree className="size-4" />
-              目次
-            </Button>
-
-            <div className="grid min-w-0 gap-2 md:ml-auto">
-              <span className="text-sm font-medium text-foreground">オフライン</span>
+            {/* 文書レベル操作: ジャンプ・オフライン保存・基準日 */}
+            <div className="grid gap-3 border-b pb-3">
+              <form className="grid gap-2" onSubmit={handleJumpSubmit}>
+                <label
+                  className="grid min-w-0 gap-1 text-sm font-medium text-foreground"
+                  htmlFor={articleInputId}
+                >
+                  条番号
+                  <Input
+                    aria-describedby={hasJumpError ? articleJumpErrorId : undefined}
+                    aria-invalid={hasJumpError ? true : undefined}
+                    autoComplete="off"
+                    id={articleInputId}
+                    name="article"
+                    onChange={(event) => {
+                      setJumpArticleNumber(event.target.value);
+                      setHasJumpError(false);
+                    }}
+                    placeholder="例: 1"
+                    value={jumpArticleNumber}
+                  />
+                </label>
+                <Button className="w-fit" type="submit">
+                  移動
+                </Button>
+              </form>
+              {hasArticleError ? notFoundAlert : null}
               <Button
                 aria-describedby={saveError === undefined ? undefined : saveErrorId}
                 className="w-fit gap-2"
@@ -608,65 +578,6 @@ const LawViewerReadyState = ({
                 )}
                 {savedState.isSaved ? "保存解除" : "オフライン保存"}
               </Button>
-            </div>
-
-            {activeArticleNumber !== undefined ? (
-              <div className="grid min-w-0 gap-2">
-                <span className="text-sm font-medium text-foreground">この条文</span>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    className="w-fit"
-                    onClick={() => {
-                      void handleSaveAnchor(activeArticleNumber);
-                    }}
-                    type="button"
-                    variant="ghost"
-                    aria-label="この条文を保存"
-                  >
-                    この条文を保存
-                  </Button>
-                  {/* activeNode が undefined（条番号は分かるがノードが見つからない）ときは
-                      ダイアログを開けないためボタンを非表示にする */}
-                  {activeNode !== undefined ? (
-                    <>
-                      <Button
-                        className="w-fit"
-                        onClick={() => {
-                          setIsCardDialogOpen(true);
-                        }}
-                        type="button"
-                        variant="ghost"
-                      >
-                        カードを作る
-                      </Button>
-                      <Button
-                        className="w-fit"
-                        onClick={() => {
-                          setIsQuizDialogOpen(true);
-                        }}
-                        type="button"
-                        variant="ghost"
-                      >
-                        クイズを生成
-                      </Button>
-                    </>
-                  ) : null}
-                  {verification !== undefined &&
-                  (verification.status !== "match" ||
-                    verification.bookmark.target.pinned === true) ? (
-                    <AnchorDriftBadge
-                      status={verification.status === "not_found" ? "not_found" : "drift"}
-                      onOpenCompare={() => {
-                        setIsCompareOpen(true);
-                      }}
-                    />
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
-
-            <div aria-label="基準日情報" className="grid min-w-0 gap-1 md:w-full" role="group">
-              <span className="text-sm font-medium text-foreground">基準日</span>
               <p className="text-sm leading-display text-muted-foreground">
                 基準日 {formatBaseDateLabel(state)} ・ 施行日{" "}
                 {formatEffectiveDateLabel(state.revision)}{" "}
@@ -676,8 +587,33 @@ const LawViewerReadyState = ({
               </p>
             </div>
 
-            {hasArticleError ? <div className="md:w-full">{notFoundAlert}</div> : null}
+            <p className="text-[0.625rem] font-medium tracking-widest text-muted-foreground">
+              目次
+            </p>
+            <LawTableOfContents
+              activeArticleNumber={activeArticleNumber}
+              displayMode={displayMode}
+              items={tocItems}
+              onSelectArticle={navigateToArticle}
+            />
           </div>
+        </aside>
+
+        <div className="min-w-0 px-4 py-6 md:px-8">
+          {/* モバイル用の目次トグルボタン（デスクトップでは左レールがあるため非表示） */}
+          <Button
+            aria-controls={tocPanelId}
+            aria-expanded={isMobileTocOpen}
+            className="mb-4 w-fit gap-2 lg:hidden"
+            onClick={() => {
+              setIsMobileTocOpen((current) => !current);
+            }}
+            type="button"
+            variant="outline"
+          >
+            <ListTree className="size-4" />
+            目次
+          </Button>
 
           {saveError !== undefined ? (
             <p
@@ -760,6 +696,65 @@ const LawViewerReadyState = ({
                 {activeArticleNumber === undefined ? "なし" : `第${activeArticleNumber}条`}
               </span>
             </p>
+
+            {/* 選択条レベル操作: 条が選択されているときのみ表示 */}
+            {activeArticleNumber !== undefined ? (
+              <div className="grid gap-2 border-b pb-3">
+                <Button
+                  className="w-full"
+                  onClick={() => {
+                    void handleSaveAnchor(activeArticleNumber);
+                  }}
+                  type="button"
+                  variant="ghost"
+                  aria-label="この条文を保存"
+                >
+                  この条文を保存
+                </Button>
+                {/* activeNode が undefined（条番号は分かるがノードが見つからない）ときは
+                    ダイアログを開けないためボタンを非表示にする */}
+                {activeNode !== undefined ? (
+                  <>
+                    <Button
+                      className="w-full"
+                      onClick={() => {
+                        setIsCardDialogOpen(true);
+                      }}
+                      type="button"
+                      variant="ghost"
+                    >
+                      カードを作る
+                    </Button>
+                    <Button
+                      className="w-full"
+                      onClick={() => {
+                        setIsQuizDialogOpen(true);
+                      }}
+                      type="button"
+                      variant="ghost"
+                    >
+                      クイズを生成
+                    </Button>
+                  </>
+                ) : null}
+                {verification !== undefined &&
+                (verification.status !== "match" ||
+                  verification.bookmark.target.pinned === true) ? (
+                  <AnchorDriftBadge
+                    status={verification.status === "not_found" ? "not_found" : "drift"}
+                    onOpenCompare={() => {
+                      setIsCompareOpen(true);
+                    }}
+                  />
+                ) : null}
+              </div>
+            ) : (
+              // 条が未選択のときは操作の代わりに案内文を表示する
+              <p className="border-b pb-3 text-xs leading-display text-muted-foreground">
+                条を選ぶと操作が表示されます
+              </p>
+            )}
+
             {(["メモ", "定義語", "関連条文", "復習カード"] as const).map((panelTitle) => (
               <section key={panelTitle} className="rounded-md border bg-card p-3">
                 <h2 className="text-sm font-medium text-foreground">{panelTitle}</h2>
