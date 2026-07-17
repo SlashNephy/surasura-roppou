@@ -6,6 +6,7 @@ import {
   earliestBaseDate,
   isDisplayFontSize,
   isDisplayLineSpacing,
+  isDisplayTextMode,
   isDisplayTheme,
   isValidBaseDate,
   listSelectableStudyYears,
@@ -101,10 +102,19 @@ const DisplaySelectRow = ({
 );
 
 const DisplaySettingsGroup = () => {
-  const { fontSize, lineSpacing, setFontSize, setLineSpacing, setTheme, theme } =
-    useDisplayPreferences();
+  const {
+    fontSize,
+    lineSpacing,
+    setFontSize,
+    setLineSpacing,
+    setTextDisplayMode,
+    setTheme,
+    textDisplayMode,
+    theme,
+  } = useDisplayPreferences();
   const fontSizeId = useId();
   const lineSpacingId = useId();
+  const textModeId = useId();
   const themeId = useId();
   const themeDescriptionId = useId();
 
@@ -172,10 +182,21 @@ const DisplaySettingsGroup = () => {
             <option value="dark">ダーク</option>
           </Select>
         </DisplaySelectRow>
-        <div className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
-          <span className="min-w-0 break-words text-foreground">既定の表示</span>
-          <span className="shrink-0 text-muted-foreground">読みやすい表示</span>
-        </div>
+        <DisplaySelectRow id={textModeId} label="既定の表示">
+          <Select
+            className="w-full"
+            id={textModeId}
+            onChange={(event) => {
+              if (isDisplayTextMode(event.target.value)) {
+                setTextDisplayMode(event.target.value);
+              }
+            }}
+            value={textDisplayMode}
+          >
+            <option value="readable">読みやすい表示</option>
+            <option value="original">原文表示</option>
+          </Select>
+        </DisplaySelectRow>
       </div>
     </section>
   );

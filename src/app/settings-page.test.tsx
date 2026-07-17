@@ -132,6 +132,18 @@ describe("SettingsPage 表示", () => {
     expect(screen.getByText("端末の外観設定に合わせます。")).toBeInTheDocument();
     expect(theme).toHaveAccessibleDescription("端末の外観設定に合わせます。");
   });
+
+  it("表示モードを原文表示に切り替えて保存する", async () => {
+    const { user } = renderSettingsRoute();
+
+    const select = await screen.findByLabelText("既定の表示");
+    expect(select).toHaveValue("readable");
+
+    await user.selectOptions(select, "original");
+
+    expect(screen.getByLabelText("既定の表示")).toHaveValue("original");
+    expect(localStorage.getItem("surasura:display:text-mode")).toBe("original");
+  });
 });
 
 describe("SettingsPage 基準日", () => {
