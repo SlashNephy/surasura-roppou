@@ -578,13 +578,15 @@ const LawViewerReadyState = ({
                 )}
                 {savedState.isSaved ? "保存解除" : "オフライン保存"}
               </Button>
-              <p className="text-sm leading-display text-muted-foreground">
-                基準日 {formatBaseDateLabel(state)} ・ 施行日{" "}
-                {formatEffectiveDateLabel(state.revision)}{" "}
-                <Link className="text-primary underline-offset-4 hover:underline" to="/settings">
-                  設定で変更
-                </Link>
-              </p>
+              <div aria-label="基準日情報" className="grid min-w-0 gap-1" role="group">
+                <p className="text-sm leading-display text-muted-foreground">
+                  基準日 {formatBaseDateLabel(state)} ・ 施行日{" "}
+                  {formatEffectiveDateLabel(state.revision)}{" "}
+                  <Link className="text-primary underline-offset-4 hover:underline" to="/settings">
+                    設定で変更
+                  </Link>
+                </p>
+              </div>
             </div>
 
             <p className="text-[0.625rem] font-medium tracking-widest text-muted-foreground">
