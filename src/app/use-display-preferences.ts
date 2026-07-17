@@ -7,16 +7,19 @@ import {
   isDisplayTheme,
   setDisplayFontSize,
   setDisplayLineSpacing,
+  setDisplayTextMode,
   subscribeDisplayPreferences,
   type DisplayFontSize,
   type DisplayLineSpacing,
   type DisplayPreferences,
+  type DisplayTextMode,
   type DisplayTheme,
 } from "@/core/settings";
 
 interface DisplayPreferencesValue extends DisplayPreferences {
   setFontSize: (value: DisplayFontSize) => void;
   setLineSpacing: (value: DisplayLineSpacing) => void;
+  setTextDisplayMode: (value: DisplayTextMode) => void;
   setTheme: (value: DisplayTheme) => void;
 }
 
@@ -40,9 +43,11 @@ export const useDisplayPreferences = (): DisplayPreferencesValue => {
   return {
     fontSize,
     lineSpacing,
+    textDisplayMode: getDisplayPreferences().textDisplayMode,
     theme,
     setFontSize: setDisplayFontSize,
     setLineSpacing: setDisplayLineSpacing,
+    setTextDisplayMode: setDisplayTextMode,
     setTheme,
   };
 };
