@@ -791,7 +791,16 @@ const LawViewerReadyState = ({
       </section>
 
       {/* モバイル用目次シート（lg 未満でサブバーの「目次」ボタンから開く） */}
-      <Sheet onOpenChange={setIsMobileTocOpen} open={isMobileTocOpen}>
+      <Sheet
+        onOpenChange={(open) => {
+          setIsMobileTocOpen(open);
+          // シートを閉じたら一時的なジャンプ誤り表示をリセットする（再オープン時に古いエラーを出さない）。
+          if (!open) {
+            setHasJumpError(false);
+          }
+        }}
+        open={isMobileTocOpen}
+      >
         <SheetContent id={tocPanelId} side="bottom" className="max-h-[85dvh] overflow-y-auto">
           <SheetHeader>
             <SheetTitle>目次と操作</SheetTitle>

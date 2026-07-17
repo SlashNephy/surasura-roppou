@@ -142,7 +142,7 @@ describe("SettingsPage 表示", () => {
     await user.selectOptions(select, "original");
 
     expect(screen.getByLabelText("既定の表示")).toHaveValue("original");
-    expect(localStorage.getItem("surasura:display:text-mode")).toBe("original");
+    expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.textMode)).toBe("original");
   });
 });
 
