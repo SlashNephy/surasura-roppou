@@ -556,8 +556,11 @@ describe("LawViewerPageContent", () => {
   it("navigates to an article from the jump form", async () => {
     const { history, user } = renderLawViewerRoute("/laws/129AC0000000089");
 
-    await user.type(await screen.findByLabelText("条番号"), "2");
-    await user.click(screen.getByRole("button", { name: "移動" }));
+    // 左レールに絞ることで、モバイルシート内の同名要素と衝突しないようにする。
+    await screen.findByRole("complementary", { name: "法令の目次" });
+    const leftRail = screen.getByRole("complementary", { name: "法令の目次" });
+    await user.type(within(leftRail).getByLabelText("条番号"), "2");
+    await user.click(within(leftRail).getByRole("button", { name: "移動" }));
 
     await waitFor(() => {
       expect(history.location.pathname).toBe("/laws/129AC0000000089/articles/2");
@@ -570,8 +573,11 @@ describe("LawViewerPageContent", () => {
       nonNumericArticleState,
     );
 
-    await user.type(await screen.findByLabelText("条番号"), "709の2");
-    await user.click(screen.getByRole("button", { name: "移動" }));
+    // 左レールに絞ることで、モバイルシート内の同名要素と衝突しないようにする。
+    await screen.findByRole("complementary", { name: "法令の目次" });
+    const leftRail = screen.getByRole("complementary", { name: "法令の目次" });
+    await user.type(within(leftRail).getByLabelText("条番号"), "709の2");
+    await user.click(within(leftRail).getByRole("button", { name: "移動" }));
 
     await waitFor(() => {
       expect(history.location.pathname).toBe("/laws/custom-law/articles/709%E3%81%AE2");
@@ -584,8 +590,11 @@ describe("LawViewerPageContent", () => {
       nonNumericArticleState,
     );
 
-    await user.type(await screen.findByLabelText("条番号"), "７０９ の ２");
-    await user.click(screen.getByRole("button", { name: "移動" }));
+    // 左レールに絞ることで、モバイルシート内の同名要素と衝突しないようにする。
+    await screen.findByRole("complementary", { name: "法令の目次" });
+    const leftRail = screen.getByRole("complementary", { name: "法令の目次" });
+    await user.type(within(leftRail).getByLabelText("条番号"), "７０９ の ２");
+    await user.click(within(leftRail).getByRole("button", { name: "移動" }));
 
     await waitFor(() => {
       expect(history.location.pathname).toBe("/laws/custom-law/articles/709%E3%81%AE2");
@@ -595,11 +604,15 @@ describe("LawViewerPageContent", () => {
   it("keeps the current law page and shows an alert for an unknown jump target", async () => {
     const { history, user } = renderLawViewerRoute("/laws/129AC0000000089");
 
-    await user.type(await screen.findByLabelText("条番号"), "999");
-    await user.click(screen.getByRole("button", { name: "移動" }));
+    // 左レールに絞ることで、モバイルシート内の同名要素と衝突しないようにする。
+    await screen.findByRole("complementary", { name: "法令の目次" });
+    const leftRail = screen.getByRole("complementary", { name: "法令の目次" });
+    await user.type(within(leftRail).getByLabelText("条番号"), "999");
+    await user.click(within(leftRail).getByRole("button", { name: "移動" }));
 
     expect(history.location.pathname).toBe("/laws/129AC0000000089");
-    const articleInput = screen.getByLabelText("条番号");
+    // 左レール内のジャンプ入力と aria 検証。id は左レール専用の article-jump-error を確認する。
+    const articleInput = within(leftRail).getByLabelText("条番号");
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("指定された条文が見つかりません。");
     expect(alert).toHaveAttribute("id", "article-jump-error");
@@ -617,7 +630,10 @@ describe("LawViewerPageContent", () => {
   it("does not mark the jump input invalid for an unknown route article before form submit", async () => {
     renderLawViewerRoute("/laws/129AC0000000089/articles/999");
 
-    const articleInput = await screen.findByLabelText("条番号");
+    // 左レールに絞ることで、モバイルシート内の同名要素と衝突しないようにする。
+    await screen.findByRole("complementary", { name: "法令の目次" });
+    const leftRail = screen.getByRole("complementary", { name: "法令の目次" });
+    const articleInput = within(leftRail).getByLabelText("条番号");
 
     expect(screen.getByRole("alert")).toHaveTextContent("指定された条文が見つかりません。");
     expect(articleInput).not.toHaveAttribute("aria-describedby");
@@ -627,8 +643,11 @@ describe("LawViewerPageContent", () => {
   it("keeps a single article error alert when route and jump targets are both unknown", async () => {
     const { user } = renderLawViewerRoute("/laws/129AC0000000089/articles/999");
 
-    await user.type(await screen.findByLabelText("条番号"), "998");
-    await user.click(screen.getByRole("button", { name: "移動" }));
+    // 左レールに絞ることで、モバイルシート内の同名要素と衝突しないようにする。
+    await screen.findByRole("complementary", { name: "法令の目次" });
+    const leftRail = screen.getByRole("complementary", { name: "法令の目次" });
+    await user.type(within(leftRail).getByLabelText("条番号"), "998");
+    await user.click(within(leftRail).getByRole("button", { name: "移動" }));
 
     expect(screen.getAllByRole("alert")).toHaveLength(1);
     expect(screen.getByRole("alert")).toHaveTextContent("指定された条文が見つかりません。");
@@ -962,6 +981,37 @@ describe("LawViewerPageContent", () => {
     const sheet = await screen.findByRole("dialog");
     expect(within(sheet).getByRole("button", { name: "カードを作る" })).toBeInTheDocument();
     expect(within(sheet).getByRole("button", { name: "クイズを生成" })).toBeInTheDocument();
+  });
+
+  it("activeArticleNumber が undefined になった後に戻ると this-article シートが勝手に開かない", async () => {
+    // 再現バグ: シートを開いた状態で activeArticleNumber が undefined になると isArticleSheetOpen
+    // が true のまま残り、次に条ルートへ戻ると勝手に開く。
+    // レンダー時同期（prevActiveArticleNumber）で修正されていることを確認する。
+    const { history, user } = renderLawViewerRoute("/laws/129AC0000000089/articles/1");
+
+    await screen.findByRole("article", { name: "民法" });
+    await user.click(screen.getByRole("button", { name: "この条文" }));
+
+    // シートが開いたことを確認する。
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+
+    // 条パラメータなしのルートへ遷移して activeArticleNumber を undefined にする。
+    act(() => {
+      history.push("/laws/129AC0000000089");
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    // 再度条ルートへ戻す。
+    act(() => {
+      history.push("/laws/129AC0000000089/articles/1");
+    });
+
+    // シートが自動で開かないことを確認する（state リセットが効いている）。
+    await screen.findByRole("article", { name: "第一条" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("opens the study card dialog from the active article actions", async () => {

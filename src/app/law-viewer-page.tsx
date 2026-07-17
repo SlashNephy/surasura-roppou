@@ -283,6 +283,17 @@ const LawViewerReadyState = ({
   const isRouteArticleKnown =
     routeArticleNumber === undefined || articleNumbers.has(routeArticleNumber);
   const activeArticleNumber = isRouteArticleKnown ? routeArticleNumber : undefined;
+
+  // 選択条が外れたらモバイルの「この条文」シートを閉じる。
+  // 条件マウントで state が残り再 mount 時に勝手に開くのを、effect ではなくレンダー時同期で防ぐ。
+  const [prevActiveArticleNumber, setPrevActiveArticleNumber] = useState(activeArticleNumber);
+  if (activeArticleNumber !== prevActiveArticleNumber) {
+    setPrevActiveArticleNumber(activeArticleNumber);
+    if (activeArticleNumber === undefined) {
+      setIsArticleSheetOpen(false);
+    }
+  }
+
   const articleInputId = useId();
   const tocPanelId = "law-viewer-mobile-toc";
   const articleJumpErrorId = "article-jump-error";
@@ -610,6 +621,7 @@ const LawViewerReadyState = ({
             <Button
               aria-controls={tocPanelId}
               aria-expanded={isMobileTocOpen}
+              aria-haspopup="dialog"
               className="gap-2"
               onClick={() => {
                 setIsMobileTocOpen(true);
@@ -793,6 +805,8 @@ const LawViewerReadyState = ({
               >
                 条番号
                 <Input
+                  aria-describedby={hasJumpError ? `${articleJumpErrorId}-mobile` : undefined}
+                  aria-invalid={hasJumpError ? true : undefined}
                   autoComplete="off"
                   id={`${articleInputId}-mobile`}
                   name="article"
@@ -808,6 +822,16 @@ const LawViewerReadyState = ({
                 移動
               </Button>
             </form>
+            {/* ジャンプ失敗エラー。左レールの notFoundAlert と同等だが id を分けて重複を回避する。 */}
+            {hasArticleError ? (
+              <p
+                id={`${articleJumpErrorId}-mobile`}
+                role="alert"
+                className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-display text-destructive"
+              >
+                指定された条文が見つかりません。
+              </p>
+            ) : null}
             {/* オフライン保存 */}
             <Button
               className="w-fit gap-2"
@@ -882,6 +906,18 @@ const LawViewerReadyState = ({
                     クイズを生成
                   </Button>
                 </>
+              ) : null}
+              {/* モバイルでもアンカードリフトの比較・修復へ到達できるよう、デスクトップ右レールと
+                  同等の AnchorDriftBadge をシート末尾に表示する。比較ダイアログはシート外の
+                  既存コンポーネントが描画する。 */}
+              {verification !== undefined &&
+              (verification.status !== "match" || verification.bookmark.target.pinned === true) ? (
+                <AnchorDriftBadge
+                  status={verification.status === "not_found" ? "not_found" : "drift"}
+                  onOpenCompare={() => {
+                    setIsCompareOpen(true);
+                  }}
+                />
               ) : null}
             </div>
           </SheetContent>
