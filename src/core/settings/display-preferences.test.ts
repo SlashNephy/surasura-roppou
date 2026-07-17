@@ -51,17 +51,32 @@ describe("getDisplayPreferences", () => {
     {
       key: storageKeys.fontSize,
       invalidValue: "huge",
-      expected: { fontSize: "standard", lineSpacing: "relaxed", theme: "dark", textDisplayMode: "readable" },
+      expected: {
+        fontSize: "standard",
+        lineSpacing: "relaxed",
+        theme: "dark",
+        textDisplayMode: "readable",
+      },
     },
     {
       key: storageKeys.lineSpacing,
       invalidValue: "narrow",
-      expected: { fontSize: "large", lineSpacing: "standard", theme: "dark", textDisplayMode: "readable" },
+      expected: {
+        fontSize: "large",
+        lineSpacing: "standard",
+        theme: "dark",
+        textDisplayMode: "readable",
+      },
     },
     {
       key: storageKeys.theme,
       invalidValue: "sepia",
-      expected: { fontSize: "large", lineSpacing: "relaxed", theme: "system", textDisplayMode: "readable" },
+      expected: {
+        fontSize: "large",
+        lineSpacing: "relaxed",
+        theme: "system",
+        textDisplayMode: "readable",
+      },
     },
   ] as const)("$key の不正値だけを既定値へ戻す", ({ key, invalidValue, expected }) => {
     localStorage.setItem(storageKeys.fontSize, "large");
