@@ -1,6 +1,7 @@
 const displayFontSizes = ["standard", "large", "extra-large"] as const;
 const displayLineSpacings = ["standard", "relaxed", "wide"] as const;
 const displayThemes = ["system", "light", "dark"] as const;
+const displayTextModes = ["readable", "original"] as const;
 
 export type DisplayFontSize = (typeof displayFontSizes)[number];
 
@@ -8,22 +9,28 @@ export type DisplayLineSpacing = (typeof displayLineSpacings)[number];
 
 export type DisplayTheme = (typeof displayThemes)[number];
 
+export type DisplayTextMode = (typeof displayTextModes)[number];
+
 export interface DisplayPreferences {
   readonly fontSize: DisplayFontSize;
   readonly lineSpacing: DisplayLineSpacing;
   readonly theme: DisplayTheme;
+  // 法令本文の表示モード（読みやすい表示 / 原文表示）。原文は常に保持し表示のみ切替。
+  readonly textDisplayMode: DisplayTextMode;
 }
 
 const createDisplayPreferences = (
   fontSize: DisplayFontSize,
   lineSpacing: DisplayLineSpacing,
   theme: DisplayTheme,
-): DisplayPreferences => Object.freeze({ fontSize, lineSpacing, theme });
+  textDisplayMode: DisplayTextMode,
+): DisplayPreferences => Object.freeze({ fontSize, lineSpacing, theme, textDisplayMode });
 
 export const DEFAULT_DISPLAY_PREFERENCES = createDisplayPreferences(
   "standard",
   "standard",
   "system",
+  "readable",
 );
 
 // 表示設定を保存データや分析対象から分離し、項目ごとの変更だけを永続化する。
@@ -31,6 +38,7 @@ export const DISPLAY_PREFERENCES_STORAGE_KEYS = {
   fontSize: "surasura:display:font-size",
   lineSpacing: "surasura:display:line-spacing",
   theme: "surasura:display:theme",
+  textMode: "surasura:display:text-mode",
 } as const;
 
 const listeners = new Set<() => void>();
@@ -44,7 +52,8 @@ const handleStorage = (event: StorageEvent): void => {
     event.key !== null &&
     event.key !== DISPLAY_PREFERENCES_STORAGE_KEYS.fontSize &&
     event.key !== DISPLAY_PREFERENCES_STORAGE_KEYS.lineSpacing &&
-    event.key !== DISPLAY_PREFERENCES_STORAGE_KEYS.theme
+    event.key !== DISPLAY_PREFERENCES_STORAGE_KEYS.theme &&
+    event.key !== DISPLAY_PREFERENCES_STORAGE_KEYS.textMode
   ) {
     return;
   }
@@ -79,6 +88,9 @@ export const isDisplayLineSpacing = (value: unknown): value is DisplayLineSpacin
 
 export const isDisplayTheme = (value: unknown): value is DisplayTheme =>
   typeof value === "string" && includes(displayThemes, value);
+
+export const isDisplayTextMode = (value: unknown): value is DisplayTextMode =>
+  typeof value === "string" && includes(displayTextModes, value);
 
 const getStorage = (): Storage | undefined => {
   try {
@@ -145,17 +157,24 @@ export const getDisplayPreferences = (): DisplayPreferences => {
     displayThemes,
     DEFAULT_DISPLAY_PREFERENCES.theme,
   );
+  const textDisplayMode = read(
+    storage,
+    DISPLAY_PREFERENCES_STORAGE_KEYS.textMode,
+    displayTextModes,
+    DEFAULT_DISPLAY_PREFERENCES.textDisplayMode,
+  );
 
   // useSyncExternalStore の snapshot が、値の不変時に同じ参照を返す契約を保つ。
   if (
     cachedPreferences.fontSize === fontSize &&
     cachedPreferences.lineSpacing === lineSpacing &&
-    cachedPreferences.theme === theme
+    cachedPreferences.theme === theme &&
+    cachedPreferences.textDisplayMode === textDisplayMode
   ) {
     return cachedPreferences;
   }
 
-  cachedPreferences = createDisplayPreferences(fontSize, lineSpacing, theme);
+  cachedPreferences = createDisplayPreferences(fontSize, lineSpacing, theme, textDisplayMode);
   return cachedPreferences;
 };
 
@@ -169,6 +188,10 @@ export const setDisplayLineSpacing = (value: DisplayLineSpacing): void => {
 
 export const setDisplayTheme = (value: DisplayTheme): void => {
   write(getStorage(), DISPLAY_PREFERENCES_STORAGE_KEYS.theme, value);
+};
+
+export const setDisplayTextMode = (value: DisplayTextMode): void => {
+  write(getStorage(), DISPLAY_PREFERENCES_STORAGE_KEYS.textMode, value);
 };
 
 export const subscribeDisplayPreferences = (listener: () => void): (() => void) => {

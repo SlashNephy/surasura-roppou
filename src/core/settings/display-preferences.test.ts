@@ -5,9 +5,11 @@ import {
   getDisplayPreferences,
   isDisplayFontSize,
   isDisplayLineSpacing,
+  isDisplayTextMode,
   sanitizeStoredDisplayTheme,
   setDisplayFontSize,
   setDisplayLineSpacing,
+  setDisplayTextMode,
   setDisplayTheme,
   subscribeDisplayPreferences,
 } from "./display-preferences";
@@ -16,6 +18,7 @@ const storageKeys = {
   fontSize: "surasura:display:font-size",
   lineSpacing: "surasura:display:line-spacing",
   theme: "surasura:display:theme",
+  textMode: "surasura:display:text-mode",
 } as const;
 
 afterEach(() => {
@@ -30,17 +33,17 @@ describe("getDisplayPreferences", () => {
   });
 
   it.each([
-    { fontSize: "standard", lineSpacing: "standard", theme: "system" },
-    { fontSize: "large", lineSpacing: "relaxed", theme: "light" },
-    { fontSize: "extra-large", lineSpacing: "wide", theme: "dark" },
+    { fontSize: "standard", lineSpacing: "standard", theme: "system", textDisplayMode: "readable" },
+    { fontSize: "large", lineSpacing: "relaxed", theme: "light", textDisplayMode: "readable" },
+    { fontSize: "extra-large", lineSpacing: "wide", theme: "dark", textDisplayMode: "readable" },
   ] as const)(
     "$fontSize / $lineSpacing / $theme を保存して復元する",
-    ({ fontSize, lineSpacing, theme }) => {
+    ({ fontSize, lineSpacing, theme, textDisplayMode }) => {
       setDisplayFontSize(fontSize);
       setDisplayLineSpacing(lineSpacing);
       setDisplayTheme(theme);
 
-      expect(getDisplayPreferences()).toEqual({ fontSize, lineSpacing, theme });
+      expect(getDisplayPreferences()).toEqual({ fontSize, lineSpacing, theme, textDisplayMode });
     },
   );
 
@@ -48,17 +51,17 @@ describe("getDisplayPreferences", () => {
     {
       key: storageKeys.fontSize,
       invalidValue: "huge",
-      expected: { fontSize: "standard", lineSpacing: "relaxed", theme: "dark" },
+      expected: { fontSize: "standard", lineSpacing: "relaxed", theme: "dark", textDisplayMode: "readable" },
     },
     {
       key: storageKeys.lineSpacing,
       invalidValue: "narrow",
-      expected: { fontSize: "large", lineSpacing: "standard", theme: "dark" },
+      expected: { fontSize: "large", lineSpacing: "standard", theme: "dark", textDisplayMode: "readable" },
     },
     {
       key: storageKeys.theme,
       invalidValue: "sepia",
-      expected: { fontSize: "large", lineSpacing: "relaxed", theme: "system" },
+      expected: { fontSize: "large", lineSpacing: "relaxed", theme: "system", textDisplayMode: "readable" },
     },
   ] as const)("$key の不正値だけを既定値へ戻す", ({ key, invalidValue, expected }) => {
     localStorage.setItem(storageKeys.fontSize, "large");
@@ -205,7 +208,7 @@ describe("display preference subscriptions", () => {
     }
     window.dispatchEvent(new StorageEvent("storage", { key: "unrelated" }));
 
-    expect(listener).toHaveBeenCalledTimes(3);
+    expect(listener).toHaveBeenCalledTimes(4);
 
     unsubscribe();
   });
@@ -293,5 +296,30 @@ describe("sanitizeStoredDisplayTheme", () => {
       sanitizeStoredDisplayTheme();
     }).not.toThrow();
     expect(localStorage.getItem(storageKeys.theme)).toBe("sepia");
+  });
+});
+
+describe("textDisplayMode", () => {
+  it("既定は readable", () => {
+    expect(getDisplayPreferences().textDisplayMode).toBe("readable");
+  });
+
+  it.each(["readable", "original"] as const)("%s を保存して復元する", (mode) => {
+    setDisplayTextMode(mode);
+    expect(getDisplayPreferences().textDisplayMode).toBe(mode);
+  });
+
+  it("不正な保存値は既定へフォールバックする", () => {
+    localStorage.setItem(storageKeys.textMode, "invalid");
+    expect(getDisplayPreferences().textDisplayMode).toBe("readable");
+  });
+
+  it.each([
+    { value: "readable", expected: true },
+    { value: "original", expected: true },
+    { value: "invalid", expected: false },
+    { value: undefined, expected: false },
+  ])("isDisplayTextMode($value) === $expected", ({ value, expected }) => {
+    expect(isDisplayTextMode(value)).toBe(expected);
   });
 });
