@@ -81,7 +81,7 @@ describe("app router", () => {
       "href",
       "/saved",
     );
-    expect(screen.getByText("最終取得: 2026-07-05")).toBeInTheDocument();
+    expect(screen.getByText("最終取得: 2026/07/05")).toBeInTheDocument();
     expect(screen.getByText("6 ノード")).toBeInTheDocument();
   });
 

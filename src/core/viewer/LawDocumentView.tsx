@@ -50,7 +50,7 @@ export const LawDocumentView = ({
         {revision.effectiveDate !== undefined ? (
           <div className="min-w-0 break-words">
             <dt className="sr-only">施行日</dt>
-            <dd>施行日: {revision.effectiveDate}</dd>
+            <dd>施行日: {formatIsoDateLabel(revision.effectiveDate)}</dd>
           </div>
         ) : null}
         <div className="min-w-0 break-words">

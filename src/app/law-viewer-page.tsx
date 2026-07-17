@@ -736,7 +736,7 @@ const LawViewerReadyState = ({
               </span>
             ) : null}
             {savedState.savedAt !== undefined ? (
-              <span>保存日時: {savedState.savedAt.slice(0, 10)}</span>
+              <span>保存日時: {formatIsoDateLabel(savedState.savedAt)}</span>
             ) : null}
           </div>
 
@@ -862,11 +862,11 @@ const collectTocArticleNumbers = (items: LawTocItem[]): string[] =>
 
 // 表示に使った基準日のラベル。未設定なら現行法である旨を示す。
 const formatBaseDateLabel = (state: Extract<LawViewerState, { status: "ready" }>): string =>
-  state.requestedAsOf ?? "未設定（現行法）";
+  state.requestedAsOf === undefined ? "未設定（現行法）" : formatIsoDateLabel(state.requestedAsOf);
 
 // 解決版の施行日ラベル。未施行版など施行日が無い場合は「不明」にする。
 const formatEffectiveDateLabel = (revision: LawRevision): string =>
-  !revision.effectiveDate ? "不明" : `${revision.effectiveDate} 版`;
+  !revision.effectiveDate ? "不明" : `${formatIsoDateLabel(revision.effectiveDate)} 版`;
 
 const normalizeArticleNumberInput = (articleNumber: string): string =>
   articleNumber.normalize("NFKC").replace(/\s+/g, "");

@@ -65,8 +65,8 @@ describe("LawDocumentView", () => {
     expect(within(document).getByRole("heading", { level: 1, name: "民法" })).toBeInTheDocument();
     expect(within(document).getByText("明治29年法律第89号")).toBeInTheDocument();
     expect(within(document).getByText("法律")).toBeInTheDocument();
-    expect(within(document).getByText("施行日: 2026-06-24")).toBeInTheDocument();
-    expect(within(document).getByText("取得: 2026-07-05")).toBeInTheDocument();
+    expect(within(document).getByText("施行日: 2026/06/24")).toBeInTheDocument();
+    expect(within(document).getByText("取得: 2026/07/05")).toBeInTheDocument();
     expect(within(document).getByText("未保存")).toBeInTheDocument();
 
     const article = within(document).getByRole("article", { name: "第一条" });

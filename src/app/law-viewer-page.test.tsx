@@ -365,7 +365,7 @@ describe("LawViewerPageContent", () => {
 
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
     expect(screen.getByText("保存済み本文を表示中")).toBeInTheDocument();
-    expect(screen.getByText("取得: 2026-07-05")).toBeInTheDocument();
+    expect(screen.getByText("取得: 2026/07/05")).toBeInTheDocument();
   });
 
   it("renders readable display mode by default", async () => {
@@ -762,7 +762,7 @@ describe("LawViewerPageContent", () => {
     // ルーターの初回マッチ解決は非同期のため、本文が描画されるまで待ってから検証する。
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
     expect(screen.getAllByText(/基準日 未設定（現行法）/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/施行日 2026-06-24/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/施行日 2026\/06\/24/).length).toBeGreaterThan(0);
   });
 
   it("shows the resolved base date when one is requested", async () => {
@@ -773,7 +773,7 @@ describe("LawViewerPageContent", () => {
     });
 
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
-    expect(screen.getAllByText(/基準日 2020-06-01/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/基準日 2020\/06\/01/).length).toBeGreaterThan(0);
   });
 
   it("notes that the base date is not applied to an offline saved body", async () => {
@@ -828,14 +828,14 @@ describe("LawViewerPageContent", () => {
     renderLawViewerRoute("/laws/129AC0000000089", repository);
 
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
-    expect(screen.getAllByText(/施行日 2026-06-24/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/施行日 2026\/06\/24/).length).toBeGreaterThan(0);
 
     act(() => {
       setBaseDate("2020-06-01");
     });
 
     await waitFor(() => {
-      expect(screen.getAllByText(/施行日 2020-04-01/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/施行日 2020\/04\/01/).length).toBeGreaterThan(0);
     });
   });
 
