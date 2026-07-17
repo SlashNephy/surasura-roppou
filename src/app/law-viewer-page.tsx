@@ -25,7 +25,7 @@ import {
   buildLawTableOfContents,
   findArticleNode,
 } from "@/core/viewer";
-import type { LawTextDisplayMode, LawTocItem } from "@/core/viewer";
+import type { LawTocItem } from "@/core/viewer";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
@@ -41,6 +41,7 @@ import { useOnlineStatus, useSavedViewerState } from "./law-viewer-hooks";
 import type { LawViewerDocument } from "./law-viewer-sample";
 import { useAnchorVerification } from "./use-anchor-verification";
 import { useBaseDate } from "./use-base-date";
+import { useDisplayPreferences } from "./use-display-preferences";
 
 const defaultStorageRepository = createStorageRepository();
 const defaultLawRepository = createEgovLawRepository();
@@ -185,7 +186,8 @@ const LawViewerReadyState = ({
     [storageRepository],
   );
   const isOnline = useOnlineStatus();
-  const [displayMode, setDisplayMode] = useState<LawTextDisplayMode>("readable");
+  // 表示モードは設定（DisplayPreferences）で永続管理し、ビューワーは読むだけにする。
+  const { textDisplayMode: displayMode } = useDisplayPreferences();
   const [savedState, setSavedState] = useSavedViewerState(baseState);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | undefined>();
@@ -545,38 +547,6 @@ const LawViewerReadyState = ({
 
         <div className="min-w-0 px-4 py-6 md:px-8">
           <div className="mb-4 grid gap-3 rounded-md border bg-card p-3 text-card-foreground shadow-xs md:flex md:flex-wrap md:items-end">
-            <div className="grid min-w-0 gap-2">
-              <span className="text-sm font-medium text-foreground">表示</span>
-              <div
-                aria-label="表示モード"
-                className="flex w-full flex-col gap-1 rounded-md border bg-background p-1 sm:w-fit sm:flex-row sm:gap-0"
-                role="group"
-              >
-                <Button
-                  aria-pressed={displayMode === "readable"}
-                  className="h-8 w-full px-3 sm:w-auto"
-                  onClick={() => {
-                    setDisplayMode("readable");
-                  }}
-                  type="button"
-                  variant={displayMode === "readable" ? "default" : "ghost"}
-                >
-                  読みやすい表示
-                </Button>
-                <Button
-                  aria-pressed={displayMode === "original"}
-                  className="h-8 w-full px-3 sm:w-auto"
-                  onClick={() => {
-                    setDisplayMode("original");
-                  }}
-                  type="button"
-                  variant={displayMode === "original" ? "default" : "ghost"}
-                >
-                  原文表示
-                </Button>
-              </div>
-            </div>
-
             <form
               className="grid gap-2 sm:grid-cols-[minmax(0,10rem)_auto]"
               onSubmit={handleJumpSubmit}
