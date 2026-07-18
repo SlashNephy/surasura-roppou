@@ -274,7 +274,9 @@ describe("LawViewerPageContent", () => {
     renderLawViewerRoute("/laws/129AC0000000089", repository);
 
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
-    expect(screen.getByText("未保存")).toBeInTheDocument();
+    // 未保存は左レールの保存ボタンが「オフライン保存」であることで判別する。
+    expect(screen.getByRole("button", { name: "オフライン保存" })).toBeInTheDocument();
+    expect(screen.queryByText("オフライン保存済み")).not.toBeInTheDocument();
     expect(calls).toEqual([
       {
         input:
@@ -296,7 +298,7 @@ describe("LawViewerPageContent", () => {
 
     await user.click(screen.getByRole("button", { name: "オフライン保存" }));
 
-    expect(screen.getByText("保存済み")).toBeInTheDocument();
+    expect(screen.getByText("オフライン保存済み")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "保存解除" })).toBeInTheDocument();
     expect(storage.getSavedDocument()?.law.title).toBe("民法");
   });
@@ -320,7 +322,7 @@ describe("LawViewerPageContent", () => {
       "オフライン保存を更新できませんでした。",
     );
     expect(screen.getByRole("button", { name: "オフライン保存" })).toBeEnabled();
-    expect(screen.getByText("未保存")).toBeInTheDocument();
+    expect(screen.queryByText("オフライン保存済み")).not.toBeInTheDocument();
   });
 
   it("removes a saved law document without leaving the viewer", async () => {
@@ -342,7 +344,7 @@ describe("LawViewerPageContent", () => {
     await user.click(screen.getByRole("button", { name: "保存解除" }));
 
     expect(screen.getByRole("button", { name: "オフライン保存" })).toBeInTheDocument();
-    expect(screen.getByText("未保存")).toBeInTheDocument();
+    expect(screen.queryByText("オフライン保存済み")).not.toBeInTheDocument();
     expect(storage.getSavedDocument()).toBeUndefined();
   });
 

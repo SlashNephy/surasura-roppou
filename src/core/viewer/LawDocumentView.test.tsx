@@ -9,7 +9,8 @@ const law: Law = {
   lawId: "129AC0000000089",
   title: "民法",
   lawNumber: "明治二十九年法律第八十九号",
-  lawType: "法律",
+  // e-Gov API は法令種別を英語 enum で返す。表示時に日本語（法律）へ変換する。
+  lawType: "Act",
   aliases: [],
   source: "egov",
 };
@@ -31,11 +32,10 @@ const node = (overrides: Partial<LawNode> & Pick<LawNode, "id" | "path" | "type"
 });
 
 describe("LawDocumentView", () => {
-  it("renders law metadata, unsaved state, and article body", () => {
+  it("renders law metadata, localized law type, and article body", () => {
     render(
       <LawDocumentView
         activeArticleNumber="1"
-        isSaved={false}
         law={law}
         nodes={[
           node({
@@ -64,10 +64,10 @@ describe("LawDocumentView", () => {
 
     expect(within(document).getByRole("heading", { level: 1, name: "民法" })).toBeInTheDocument();
     expect(within(document).getByText("明治29年法律第89号")).toBeInTheDocument();
+    // 法令種別 "Act" が日本語「法律」に変換されて表示される。
     expect(within(document).getByText("法律")).toBeInTheDocument();
     expect(within(document).getByText("施行日: 2026/06/24")).toBeInTheDocument();
     expect(within(document).getByText("取得: 2026/07/05")).toBeInTheDocument();
-    expect(within(document).getByText("未保存")).toBeInTheDocument();
 
     const article = within(document).getByRole("article", { name: "第一条" });
 
@@ -83,7 +83,6 @@ describe("LawDocumentView", () => {
     render(
       <LawDocumentView
         displayMode="original"
-        isSaved={false}
         law={law}
         nodes={[
           node({
@@ -113,15 +112,7 @@ describe("LawDocumentView", () => {
   });
 
   it("renders original law number when displayMode is original", () => {
-    render(
-      <LawDocumentView
-        displayMode="original"
-        isSaved={false}
-        law={law}
-        nodes={[]}
-        revision={revision}
-      />,
-    );
+    render(<LawDocumentView displayMode="original" law={law} nodes={[]} revision={revision} />);
 
     const document = screen.getByRole("article", { name: "民法" });
 
@@ -132,7 +123,6 @@ describe("LawDocumentView", () => {
   it("keeps rendering when fetchedAt is missing at runtime", () => {
     render(
       <LawDocumentView
-        isSaved
         law={law}
         nodes={[]}
         revision={{ ...revision, fetchedAt: undefined as never }}
@@ -147,7 +137,6 @@ describe("LawDocumentView", () => {
   it("formats law number without applying unrelated readable transforms", () => {
     render(
       <LawDocumentView
-        isSaved={false}
         law={{ ...law, lawNumber: "平成元年法律第十一号（抄）" }}
         nodes={[]}
         revision={revision}

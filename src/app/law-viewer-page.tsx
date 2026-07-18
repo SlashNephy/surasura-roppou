@@ -39,7 +39,7 @@ import { QuizGenerateDialog } from "./QuizGenerateDialog";
 import { StudyCardCreateDialog } from "./StudyCardCreateDialog";
 import { AnchorDriftBadge } from "./AnchorDriftBadge";
 import { loadLawViewerDocument } from "./law-viewer-loader";
-import { useOnlineStatus, useSavedViewerState } from "./law-viewer-hooks";
+import { useSavedViewerState } from "./law-viewer-hooks";
 import type { LawViewerDocument } from "./law-viewer-sample";
 import { useAnchorVerification } from "./use-anchor-verification";
 import { useBaseDate } from "./use-base-date";
@@ -187,7 +187,6 @@ const LawViewerReadyState = ({
     () => createSavedLawUseCase(storageRepository),
     [storageRepository],
   );
-  const isOnline = useOnlineStatus();
   // 表示モードは設定（DisplayPreferences）で永続管理し、ビューワーは読むだけにする。
   const { textDisplayMode: displayMode } = useDisplayPreferences();
   const [savedState, setSavedState] = useSavedViewerState(baseState);
@@ -668,22 +667,24 @@ const LawViewerReadyState = ({
             </p>
           ) : null}
 
-          <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            <span>{isOnline ? "オンライン" : "オフライン"}</span>
-            {savedState.loadedFromStorage ? (
-              <span className="rounded-md border border-primary/30 bg-primary/5 px-2 py-1 text-primary">
-                保存済み本文を表示中
-              </span>
-            ) : null}
-            {savedState.savedAt !== undefined ? (
-              <span>保存日時: {formatIsoDateLabel(savedState.savedAt)}</span>
-            ) : null}
-          </div>
+          {/* オンライン/オフラインは常時表示しない（保存状態は左レールの保存ボタンで判別できる）。
+              保存版を表示中・保存日時は保存版を見ているときだけ知らせる。 */}
+          {savedState.loadedFromStorage || savedState.savedAt !== undefined ? (
+            <div className="mb-4 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              {savedState.loadedFromStorage ? (
+                <span className="rounded-md border border-primary/30 bg-primary/5 px-2 py-1 text-primary">
+                  保存済み本文を表示中
+                </span>
+              ) : null}
+              {savedState.savedAt !== undefined ? (
+                <span>保存日時: {formatIsoDateLabel(savedState.savedAt)}</span>
+              ) : null}
+            </div>
+          ) : null}
 
           <LawDocumentView
             activeArticleNumber={activeArticleNumber}
             displayMode={displayMode}
-            isSaved={savedState.isSaved}
             law={state.law}
             nodes={state.nodes}
             renderArticleActions={(article) => (
