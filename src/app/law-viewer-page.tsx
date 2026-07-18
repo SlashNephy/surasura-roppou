@@ -529,7 +529,7 @@ const LawViewerReadyState = ({
 
   return (
     <>
-      <section className="mx-auto grid w-full max-w-7xl lg:grid-cols-[15rem_minmax(0,1fr)_16rem]">
+      <section className="mx-auto grid w-full max-w-[88rem] lg:grid-cols-[18rem_minmax(0,1fr)_16rem]">
         <aside aria-label="法令の目次" className="hidden border-r bg-muted/40 lg:block">
           <div className="sticky top-14 grid max-h-[calc(100dvh-3.5rem)] content-start gap-3 overflow-y-auto p-4">
             <div className="grid gap-1">
@@ -548,33 +548,8 @@ const LawViewerReadyState = ({
               </Badge>
             ) : null}
 
-            {/* 文書レベル操作: ジャンプ・オフライン保存・基準日 */}
+            {/* 文書レベル操作: オフライン保存・基準日（条番号ジャンプは目次の直下に置く） */}
             <div className="grid gap-3 border-b pb-3">
-              <form className="grid gap-2" onSubmit={handleJumpSubmit}>
-                <label
-                  className="grid min-w-0 gap-1 text-sm font-medium text-foreground"
-                  htmlFor={articleInputId}
-                >
-                  条番号
-                  <Input
-                    aria-describedby={hasJumpError ? articleJumpErrorId : undefined}
-                    aria-invalid={hasJumpError ? true : undefined}
-                    autoComplete="off"
-                    id={articleInputId}
-                    name="article"
-                    onChange={(event) => {
-                      setJumpArticleNumber(event.target.value);
-                      setHasJumpError(false);
-                    }}
-                    placeholder="例: 1"
-                    value={jumpArticleNumber}
-                  />
-                </label>
-                <Button className="w-fit" type="submit">
-                  移動
-                </Button>
-              </form>
-              {hasArticleError ? notFoundAlert : null}
               <Button
                 aria-describedby={saveError === undefined ? undefined : saveErrorId}
                 className="w-fit gap-2"
@@ -606,6 +581,29 @@ const LawViewerReadyState = ({
             <p className="text-[0.625rem] font-medium tracking-widest text-muted-foreground">
               目次
             </p>
+            {/* 条番号ジャンプは目次のナビ補助なので目次直下に置く。ラベルは省き
+                aria-label で名前を保ちつつ、Input と移動ボタンを1行に収める。 */}
+            <form className="flex gap-2" onSubmit={handleJumpSubmit}>
+              <Input
+                aria-describedby={hasJumpError ? articleJumpErrorId : undefined}
+                aria-invalid={hasJumpError ? true : undefined}
+                aria-label="条番号"
+                autoComplete="off"
+                className="min-w-0 flex-1"
+                id={articleInputId}
+                name="article"
+                onChange={(event) => {
+                  setJumpArticleNumber(event.target.value);
+                  setHasJumpError(false);
+                }}
+                placeholder="条番号..."
+                value={jumpArticleNumber}
+              />
+              <Button className="shrink-0" type="submit">
+                移動
+              </Button>
+            </form>
+            {hasArticleError ? notFoundAlert : null}
             <LawTableOfContents
               activeArticleNumber={activeArticleNumber}
               displayMode={displayMode}
