@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import type { Law, LawNode, LawRevision } from "@/core/domain";
 import { Badge } from "@/shared/ui/badge";
+import { cn } from "@/shared/utils/cn";
 import { formatIsoDateLabel } from "@/shared/utils/dates";
 
 import { applyLawTextDisplayMode } from "./displayMode";
@@ -30,7 +31,15 @@ export const LawDocumentView = ({
   const lawTypeLabel = formatLawTypeLabel(law.lawType);
 
   return (
-    <article aria-label={law.title} className="grid min-w-0 gap-6">
+    <article
+      aria-label={law.title}
+      className={cn(
+        "grid min-w-0 gap-6",
+        // 見やすい表示のときだけ、CJK と半角英数の間に自動で小さな空きを入れる。
+        // 原文表示は原文どおりの間隔を保つため無効化する（text-autospace は継承する）。
+        displayMode === "readable" ? "[text-autospace:normal]" : "[text-autospace:no-autospace]",
+      )}
+    >
       <header className="grid min-w-0 gap-4 border-b pb-5">
         <div className="grid min-w-0 gap-2">
           {/* 法令種別バッジはタイトルの右横に添える（民法 ［法律］の並び）。 */}
