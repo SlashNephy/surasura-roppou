@@ -94,8 +94,11 @@ const TocItem = ({
         >
           <span className="min-w-0 font-serif break-words">
             {displayTitle}
+            {/* 見出しは条番号より一段小さく（親フォントの約 2/3）控えめに見せる。 */}
             {displayCaption !== undefined ? (
-              <span className="ml-1.5 font-normal text-muted-foreground">{displayCaption}</span>
+              <span className="ml-1.5 text-[0.67em] font-normal text-muted-foreground">
+                {displayCaption}
+              </span>
             ) : null}
           </span>
         </Button>
