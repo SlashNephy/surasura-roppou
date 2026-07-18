@@ -179,7 +179,7 @@ const LawNodeBlock = ({
               )}
             >
               {displayMarker !== undefined ? (
-                <span className="inline-block w-[1.5em] text-muted-foreground">
+                <span className="inline-block min-w-[1.5em] text-muted-foreground">
                   {displayMarker}
                 </span>
               ) : null}

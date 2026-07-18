@@ -1016,6 +1016,24 @@ describe("LawViewerPageContent", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it("条から別の条へ直接遷移すると this-article シートが閉じる", async () => {
+    // 開いたシートが前の条のつもりで別の条の操作に化けたまま残るのを防ぐ。
+    const { history, user } = renderLawViewerRoute("/laws/129AC0000000089/articles/1");
+
+    await screen.findByRole("article", { name: "民法" });
+    await user.click(screen.getByRole("button", { name: "この条文" }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+
+    // 別の条へ直接遷移する（undefined を経由しない）。
+    act(() => {
+      history.push("/laws/129AC0000000089/articles/2");
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+  });
+
   it("opens the study card dialog from the active article actions", async () => {
     const user = userEvent.setup();
     renderLawViewerRoute("/laws/129AC0000000089/articles/1");

@@ -11,10 +11,15 @@ describe("formatIsoDateLabel", () => {
     expect(formatIsoDateLabel(value)).toBe(expected);
   });
 
-  it.each([{ value: undefined }, { value: "" }, { value: "2026" }])(
-    "壊れた値 $value は不明にする",
-    ({ value }) => {
-      expect(formatIsoDateLabel(value)).toBe("不明");
-    },
-  );
+  it.each([
+    { value: undefined },
+    { value: "" },
+    { value: "2026" },
+    { value: "not-a-date" },
+    { value: "2026/07/05" },
+    { value: "26-7-5" },
+    { value: "abcd-ef-gh" },
+  ])("壊れた値 $value は不明にする", ({ value }) => {
+    expect(formatIsoDateLabel(value)).toBe("不明");
+  });
 });

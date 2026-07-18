@@ -284,14 +284,13 @@ const LawViewerReadyState = ({
     routeArticleNumber === undefined || articleNumbers.has(routeArticleNumber);
   const activeArticleNumber = isRouteArticleKnown ? routeArticleNumber : undefined;
 
-  // 選択条が外れたらモバイルの「この条文」シートを閉じる。
-  // 条件マウントで state が残り再 mount 時に勝手に開くのを、effect ではなくレンダー時同期で防ぐ。
+  // 選択条が変わったらモバイルの「この条文」シートを閉じる。条→条の直接遷移でも、
+  // 前の条のつもりで開いたシートが別の条の操作に化けたまま残るのを防ぐ（誤操作回避）。
+  // effect ではなくレンダー時同期で行う（条件マウントで残った state の再 mount 時暴発も防ぐ）。
   const [prevActiveArticleNumber, setPrevActiveArticleNumber] = useState(activeArticleNumber);
   if (activeArticleNumber !== prevActiveArticleNumber) {
     setPrevActiveArticleNumber(activeArticleNumber);
-    if (activeArticleNumber === undefined) {
-      setIsArticleSheetOpen(false);
-    }
+    setIsArticleSheetOpen(false);
   }
 
   const articleInputId = useId();
@@ -619,8 +618,9 @@ const LawViewerReadyState = ({
         {/* 中央は本文カラム。lg 以上では左右パディングを広げ、両サイドバー（と
             アクティブ条の左端インジケーター）との間に余白を確保する。 */}
         <div className="min-w-0 px-4 py-6 md:px-8 lg:px-14">
-          {/* モバイル用サブバー（lg 以上は左右レールがあるため非表示） */}
-          <div className="mb-4 flex flex-wrap items-center gap-2 lg:hidden">
+          {/* モバイル用サブバー（lg 以上は左右レールがあるため非表示）。
+              本文スクロール中も導線を保つため、ヘッダ直下に sticky で固定する。 */}
+          <div className="sticky top-14 z-20 mb-4 flex flex-wrap items-center gap-2 bg-popover/95 py-2 backdrop-blur lg:hidden">
             <Button
               aria-controls={tocPanelId}
               aria-expanded={isMobileTocOpen}
@@ -848,6 +848,7 @@ const LawViewerReadyState = ({
             ) : null}
             {/* オフライン保存 */}
             <Button
+              aria-describedby={saveError === undefined ? undefined : `${saveErrorId}-mobile`}
               className="w-fit gap-2"
               disabled={isSaving}
               onClick={() => {
@@ -858,6 +859,16 @@ const LawViewerReadyState = ({
             >
               {savedState.isSaved ? "保存解除" : "オフライン保存"}
             </Button>
+            {/* 保存失敗はシート表示中だと本文側の alert が隠れるため、シート内にも通知する。 */}
+            {saveError !== undefined ? (
+              <p
+                id={`${saveErrorId}-mobile`}
+                role="alert"
+                className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm leading-display text-destructive"
+              >
+                {saveError}
+              </p>
+            ) : null}
             {/* 基準日情報（未設定=現行法なら基準日は省く） */}
             <p className="text-sm leading-display text-muted-foreground">
               {state.requestedAsOf !== undefined
