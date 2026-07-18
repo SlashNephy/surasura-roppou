@@ -148,6 +148,7 @@ const LawNodeBlock = ({
     case "Paragraph":
     case "Item":
     case "Subitem": {
+      const parent = node.parentId === undefined ? undefined : nodeById.get(node.parentId);
       const marker =
         node.type === "Paragraph"
           ? (node.title ?? getArticleParagraphMarker(node, nodeById))
@@ -157,6 +158,9 @@ const LawNodeBlock = ({
         stripTrailingChildPlainTexts(getDisplayText(node, displayMode), children, displayMode),
         displayMarker,
       );
+      // 複数項の条では番号列を確保し、第1項（番号なし）と第2項以降で本文開始位置を揃える。
+      const alignsParagraphColumn =
+        node.type === "Paragraph" && hasMultipleArticleParagraphs(parent, nodeById);
 
       return (
         <div
@@ -166,18 +170,25 @@ const LawNodeBlock = ({
             node.type === "Subitem" && "pl-8",
           )}
         >
-          <p className="flex min-w-0 gap-3 font-serif leading-display text-foreground">
-            {displayMarker !== undefined ? (
-              <span className="shrink-0 text-muted-foreground">{displayMarker}</span>
-            ) : null}
-            {/* 番号のない項（前文・第1項など）は先頭1文字を字下げして体裁を整える。
-                番号のある項は marker が行頭に立つので追加の字下げはしない。 */}
-            <span
-              className={cn("min-w-0 break-words", displayMarker === undefined && "indent-[1em]")}
-            >
-              {bodyText}
-            </span>
-          </p>
+          {alignsParagraphColumn ? (
+            <p className="flex min-w-0 font-serif leading-display text-foreground">
+              {/* 固定幅の番号列。番号がない第1項も同じ幅の空欄を置き、本文の頭を揃える。 */}
+              <span className="w-[1.5em] shrink-0 text-muted-foreground">{displayMarker}</span>
+              <span className="min-w-0 break-words">{bodyText}</span>
+            </p>
+          ) : (
+            <p className="flex min-w-0 gap-3 font-serif leading-display text-foreground">
+              {displayMarker !== undefined ? (
+                <span className="shrink-0 text-muted-foreground">{displayMarker}</span>
+              ) : null}
+              {/* 番号のない項（前文・単項の条など）は先頭1文字を字下げして体裁を整える。 */}
+              <span
+                className={cn("min-w-0 break-words", displayMarker === undefined && "indent-[1em]")}
+              >
+                {bodyText}
+              </span>
+            </p>
+          )}
           {renderChildBlocks({
             activeArticleNumber,
             children,
@@ -269,6 +280,23 @@ const getArticleParagraphMarker = (
   const parent = node.parentId === undefined ? undefined : nodeById.get(node.parentId);
 
   return parent?.type === "Article" ? node.number : undefined;
+};
+
+// 条直下に項が2つ以上あるときは、番号列を固定幅で確保して番号あり/なしの項で
+// 本文の開始位置を揃える。単項の条や前文は番号列を作らず先頭字下げにとどめる。
+const hasMultipleArticleParagraphs = (
+  parent: LawNode | undefined,
+  nodeById: Map<string, LawNode>,
+): boolean => {
+  if (parent?.type !== "Article") {
+    return false;
+  }
+
+  const paragraphCount = parent.children
+    .map((childId) => nodeById.get(childId))
+    .filter((child): child is LawNode => child?.type === "Paragraph").length;
+
+  return paragraphCount >= 2;
 };
 
 const stripTrailingChildPlainTexts = (
