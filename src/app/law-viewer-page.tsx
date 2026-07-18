@@ -20,6 +20,7 @@ import type { StorageRepository } from "@/core/storage";
 import {
   LawDocumentView,
   LawTableOfContents,
+  applyLawTextDisplayMode,
   articleAnchorId,
   buildArticleCopyText,
   buildLawTableOfContents,
@@ -538,9 +539,21 @@ const LawViewerReadyState = ({
               </p>
               {state.law.lawNumber !== undefined ? (
                 <p className="min-w-0 text-xs leading-display text-muted-foreground break-words">
-                  {state.law.lawNumber}
+                  {applyLawTextDisplayMode(state.law.lawNumber, displayMode, "law-number")}
                 </p>
               ) : null}
+              {/* 基準日情報は法令番号の直下に置く。基準日が未設定（現行法）のときは
+                  「基準日 未設定」を出さず施行日だけにする。変更は設定画面から行う。 */}
+              <div
+                aria-label="基準日情報"
+                className="min-w-0 text-xs leading-display text-muted-foreground"
+                role="group"
+              >
+                {state.requestedAsOf !== undefined
+                  ? `基準日 ${formatIsoDateLabel(state.requestedAsOf)} ・ `
+                  : ""}
+                施行日 {formatEffectiveDateLabel(state.revision)}
+              </div>
             </div>
             {savedState.isSaved ? (
               <Badge variant="secondary" className="w-fit">
@@ -548,7 +561,7 @@ const LawViewerReadyState = ({
               </Badge>
             ) : null}
 
-            {/* 文書レベル操作: オフライン保存・基準日（条番号ジャンプは目次の直下に置く） */}
+            {/* 文書レベル操作: オフライン保存（基準日は法令番号の直下、条番号ジャンプは目次直下に置く） */}
             <div className="grid gap-3 border-b pb-3">
               <Button
                 aria-describedby={saveError === undefined ? undefined : saveErrorId}
@@ -567,15 +580,6 @@ const LawViewerReadyState = ({
                 )}
                 {savedState.isSaved ? "保存解除" : "オフライン保存"}
               </Button>
-              <div aria-label="基準日情報" className="grid min-w-0 gap-1" role="group">
-                <p className="text-sm leading-display text-muted-foreground">
-                  基準日 {formatBaseDateLabel(state)} ・ 施行日{" "}
-                  {formatEffectiveDateLabel(state.revision)}{" "}
-                  <Link className="text-primary underline-offset-4 hover:underline" to="/settings">
-                    設定で変更
-                  </Link>
-                </p>
-              </div>
             </div>
 
             <p className="text-[0.625rem] font-medium tracking-widest text-muted-foreground">
@@ -853,10 +857,12 @@ const LawViewerReadyState = ({
             >
               {savedState.isSaved ? "保存解除" : "オフライン保存"}
             </Button>
-            {/* 基準日情報 */}
+            {/* 基準日情報（未設定=現行法なら基準日は省く） */}
             <p className="text-sm leading-display text-muted-foreground">
-              基準日 {formatBaseDateLabel(state)} ・ 施行日{" "}
-              {formatEffectiveDateLabel(state.revision)}
+              {state.requestedAsOf !== undefined
+                ? `基準日 ${formatIsoDateLabel(state.requestedAsOf)} ・ `
+                : ""}
+              施行日 {formatEffectiveDateLabel(state.revision)}
             </p>
             <LawTableOfContents
               activeArticleNumber={activeArticleNumber}
