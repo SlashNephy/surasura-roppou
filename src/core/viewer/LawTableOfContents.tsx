@@ -17,7 +17,14 @@ export const LawTableOfContents = ({
   displayMode = "readable",
   onSelectArticle,
 }: LawTableOfContentsProps) => (
-  <nav aria-label="法令目次" className="min-w-0">
+  <nav
+    aria-label="法令目次"
+    className={cn(
+      "min-w-0",
+      // 見やすい表示では目次でも CJK と半角英数の間に自動スペースを入れる。
+      displayMode === "readable" ? "[text-autospace:normal]" : "[text-autospace:no-autospace]",
+    )}
+  >
     {items.length > 0 ? (
       <TocItemList
         activeArticleNumber={activeArticleNumber}

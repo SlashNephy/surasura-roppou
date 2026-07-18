@@ -72,6 +72,14 @@ describe("readability", () => {
   });
 
   it.each([
+    ["２", "2"],
+    ["２０２４", "2024"],
+    ["第２項", "第2項"],
+  ])("normalizes full-width digits to half-width: %s", (input, expected) => {
+    expect(transformReadableText(input)).toBe(expected);
+  });
+
+  it.each([
     ["第一号の二", "第1号の2"],
     ["第十二条の二の二", "第12条の2の2"],
     ["令和元年五月一日", "令和元年5月1日"],
