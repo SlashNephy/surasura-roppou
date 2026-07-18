@@ -613,7 +613,9 @@ const LawViewerReadyState = ({
           </div>
         </aside>
 
-        <div className="min-w-0 px-4 py-6 md:px-8">
+        {/* 中央は本文カラム。lg 以上では左右パディングを広げ、両サイドバー（と
+            アクティブ条の左端インジケーター）との間に余白を確保する。 */}
+        <div className="min-w-0 px-4 py-6 md:px-8 lg:px-14">
           {/* モバイル用サブバー（lg 以上は左右レールがあるため非表示） */}
           <div className="mb-4 flex flex-wrap items-center gap-2 lg:hidden">
             <Button
