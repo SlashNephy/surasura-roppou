@@ -136,7 +136,7 @@ const LawNodeBlock = ({
                 renderArticleActions,
               })
             ) : (
-              <p className="font-serif leading-display text-foreground break-words">
+              <p className="indent-[1em] font-serif leading-display text-foreground break-words">
                 {displayText}
               </p>
             )}
@@ -148,7 +148,10 @@ const LawNodeBlock = ({
     case "Paragraph":
     case "Item":
     case "Subitem": {
-      const marker = node.type === "Paragraph" ? node.title : (node.title ?? node.number);
+      const marker =
+        node.type === "Paragraph"
+          ? (node.title ?? getArticleParagraphMarker(node, nodeById))
+          : (node.title ?? node.number);
       const displayMarker = getDisplayInlineText(marker, displayMode);
       const bodyText = stripLeadingMarker(
         stripTrailingChildPlainTexts(getDisplayText(node, displayMode), children, displayMode),
@@ -167,7 +170,13 @@ const LawNodeBlock = ({
             {displayMarker !== undefined ? (
               <span className="shrink-0 text-muted-foreground">{displayMarker}</span>
             ) : null}
-            <span className="min-w-0 break-words">{bodyText}</span>
+            {/* 番号のない項（前文・第1項など）は先頭1文字を字下げして体裁を整える。
+                番号のある項は marker が行頭に立つので追加の字下げはしない。 */}
+            <span
+              className={cn("min-w-0 break-words", displayMarker === undefined && "indent-[1em]")}
+            >
+              {bodyText}
+            </span>
           </p>
           {renderChildBlocks({
             activeArticleNumber,
@@ -245,6 +254,22 @@ const renderChildBlocks = ({
       renderArticleActions={renderArticleActions}
     />
   ));
+
+// 条（Article）直下の項は第2項以降で番号を示す。ただし ParagraphNum が空の旧番号形式
+// （例: 日本国憲法）は title を持たないため、Num 由来の number で番号を補完する。
+// 前文など Article 直下でない項は散文なので番号を付けない。
+const getArticleParagraphMarker = (
+  node: LawNode,
+  nodeById: Map<string, LawNode>,
+): string | undefined => {
+  if (node.number === undefined || node.number === "1") {
+    return undefined;
+  }
+
+  const parent = node.parentId === undefined ? undefined : nodeById.get(node.parentId);
+
+  return parent?.type === "Article" ? node.number : undefined;
+};
 
 const stripTrailingChildPlainTexts = (
   plainText: string,

@@ -448,4 +448,74 @@ describe("LawNodeList", () => {
     ).not.toBeInTheDocument();
     expect(screen.getByText("見出しを持たない節の本文。")).toBeInTheDocument();
   });
+
+  it("numbers second and later paragraphs of an article even without ParagraphNum", () => {
+    // 日本国憲法6条は ParagraphNum が空だが、条直下の第2項は Num 由来で番号を出す。
+    render(
+      <LawNodeList
+        nodes={[
+          node({
+            id: "article:6",
+            type: "Article",
+            path: "article:6",
+            number: "6",
+            title: "第六条",
+            children: ["article:6/paragraph:1", "article:6/paragraph:2"],
+          }),
+          node({
+            id: "article:6/paragraph:1",
+            type: "Paragraph",
+            path: "article:6/paragraph:1",
+            number: "1",
+            plainText: "天皇は、国会の指名に基いて、内閣総理大臣を任命する。",
+            parentId: "article:6",
+          }),
+          node({
+            id: "article:6/paragraph:2",
+            type: "Paragraph",
+            path: "article:6/paragraph:2",
+            number: "2",
+            plainText: "天皇は、内閣の指名に基いて、最高裁判所の長たる裁判官を任命する。",
+            parentId: "article:6",
+          }),
+        ]}
+      />,
+    );
+
+    const article = screen.getByRole("article", { name: "第六条" });
+
+    expect(within(article).getByText("2")).toBeInTheDocument();
+    expect(
+      within(article).getByText("天皇は、国会の指名に基いて、内閣総理大臣を任命する。"),
+    ).toBeInTheDocument();
+    expect(
+      within(article).getByText("天皇は、内閣の指名に基いて、最高裁判所の長たる裁判官を任命する。"),
+    ).toBeInTheDocument();
+  });
+
+  it("does not number preamble-style paragraphs outside an article", () => {
+    // 前文の段落は Article 直下ではないので番号を付けない（散文）。
+    render(
+      <LawNodeList
+        nodes={[
+          node({
+            id: "preamble:1",
+            type: "Paragraph",
+            path: "preamble:1",
+            number: "1",
+            plainText: "日本国民は、正当に選挙された国会における代表者を通じて行動し、",
+          }),
+          node({
+            id: "preamble:2",
+            type: "Paragraph",
+            path: "preamble:2",
+            number: "2",
+            plainText: "日本国民は、恒久の平和を念願し、",
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.queryByText("2")).not.toBeInTheDocument();
+  });
 });
