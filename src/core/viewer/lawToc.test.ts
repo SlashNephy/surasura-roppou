@@ -134,6 +134,31 @@ describe("lawToc", () => {
     ]);
   });
 
+  it("includes an article caption in the table of contents item", () => {
+    const toc = buildLawTableOfContents([
+      node({
+        id: "article:264",
+        type: "Article",
+        path: "article:264",
+        number: "264",
+        title: "第二百六十四条",
+        caption: "（親告罪）",
+      }),
+    ]);
+
+    expect(toc).toEqual([
+      {
+        id: "article:264",
+        title: "第二百六十四条",
+        caption: "（親告罪）",
+        type: "Article",
+        depth: 1,
+        articleNumber: "264",
+        children: [],
+      },
+    ]);
+  });
+
   it.each([
     {
       name: "returns an empty table of contents for empty input",

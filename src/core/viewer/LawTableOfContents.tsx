@@ -71,6 +71,11 @@ const TocItem = ({
   const isArticle = articleNumber !== undefined;
   const isActiveArticle = articleNumber === activeArticleNumber;
   const displayTitle = applyLawHeadingTextDisplayMode(item.title, displayMode);
+  // 条見出し（例:「（親告罪）」）。条番号の隣に控えめに添える。
+  const displayCaption =
+    item.caption === undefined
+      ? undefined
+      : applyLawHeadingTextDisplayMode(item.caption, displayMode);
 
   return (
     <div className="grid min-w-0 gap-1">
@@ -87,7 +92,12 @@ const TocItem = ({
           type="button"
           variant="ghost"
         >
-          <span className="min-w-0 font-serif break-words">{displayTitle}</span>
+          <span className="min-w-0 font-serif break-words">
+            {displayTitle}
+            {displayCaption !== undefined ? (
+              <span className="ml-1.5 font-normal text-muted-foreground">{displayCaption}</span>
+            ) : null}
+          </span>
         </Button>
       ) : (
         <span className="block min-w-0 px-2 py-1.5 font-serif text-sm leading-display font-medium text-foreground break-words">

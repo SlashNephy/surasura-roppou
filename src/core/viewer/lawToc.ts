@@ -21,6 +21,8 @@ const nonUrlAddressableArticleContainerTypes = new Set<LawNodeType>([
 export interface LawTocItem {
   id: string;
   title: string;
+  // 条の見出し（例:「（親告罪）」）。目次で条番号の隣に添える。条以外では付かない。
+  caption?: string;
   type: LawNodeType;
   depth: number;
   articleNumber?: string;
@@ -66,11 +68,14 @@ const buildTocItems = (
   const title = node.title ?? node.number ?? node.path;
   const articleNumber =
     node.type === "Article" && isUrlAddressableArticleContext ? node.number : undefined;
+  // 見出し（caption）は条にのみ付く。本文の条見出し表示と揃えて目次にも添える。
+  const caption = node.type === "Article" ? node.caption : undefined;
 
   return [
     {
       id: node.id,
       title,
+      ...(caption === undefined ? {} : { caption }),
       type: node.type,
       depth,
       ...(articleNumber === undefined ? {} : { articleNumber }),
