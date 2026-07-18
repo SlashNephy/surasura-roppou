@@ -32,22 +32,19 @@ export const LawDocumentView = ({
   return (
     <article aria-label={law.title} className="grid min-w-0 gap-6">
       <header className="grid min-w-0 gap-4 border-b pb-5">
-        <div className="grid min-w-0 gap-3">
-          {lawTypeLabel !== undefined ? (
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <Badge variant="secondary">{lawTypeLabel}</Badge>
-            </div>
-          ) : null}
-          <div className="grid min-w-0 gap-2">
+        <div className="grid min-w-0 gap-2">
+          {/* 法令種別バッジはタイトルの右横に添える（民法 ［法律］の並び）。 */}
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
             <h1 className="min-w-0 font-serif text-2xl font-semibold text-foreground break-words md:text-3xl">
               {law.title}
             </h1>
-            {law.lawNumber !== undefined ? (
-              <p className="text-sm leading-display text-muted-foreground break-words">
-                {getDisplayLawNumber(law.lawNumber, displayMode)}
-              </p>
-            ) : null}
+            {lawTypeLabel !== undefined ? <Badge variant="secondary">{lawTypeLabel}</Badge> : null}
           </div>
+          {law.lawNumber !== undefined ? (
+            <p className="text-sm leading-display text-muted-foreground break-words">
+              {getDisplayLawNumber(law.lawNumber, displayMode)}
+            </p>
+          ) : null}
         </div>
 
         <dl className="flex min-w-0 flex-wrap gap-x-4 gap-y-2 text-sm leading-display text-muted-foreground">
