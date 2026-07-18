@@ -136,7 +136,7 @@ const LawNodeBlock = ({
                 renderArticleActions,
               })
             ) : (
-              <p className="font-serif leading-display text-foreground break-words">
+              <p className="indent-[1em] font-serif leading-display text-foreground break-words">
                 {displayText}
               </p>
             )}
@@ -148,12 +148,18 @@ const LawNodeBlock = ({
     case "Paragraph":
     case "Item":
     case "Subitem": {
-      const marker = node.type === "Paragraph" ? node.title : (node.title ?? node.number);
+      const parent = node.parentId === undefined ? undefined : nodeById.get(node.parentId);
+      const marker =
+        node.type === "Paragraph"
+          ? (node.title ?? getArticleParagraphMarker(node, nodeById))
+          : (node.title ?? node.number);
       const displayMarker = getDisplayInlineText(marker, displayMode);
       const bodyText = stripLeadingMarker(
         stripTrailingChildPlainTexts(getDisplayText(node, displayMode), children, displayMode),
         displayMarker,
       );
+      // 条直下の項は、1行目を字下げして第1項・第2項以降の本文頭を揃える。
+      const isArticleParagraph = node.type === "Paragraph" && parent?.type === "Article";
 
       return (
         <div
@@ -163,12 +169,35 @@ const LawNodeBlock = ({
             node.type === "Subitem" && "pl-8",
           )}
         >
-          <p className="flex min-w-0 gap-3 font-serif leading-display text-foreground">
-            {displayMarker !== undefined ? (
-              <span className="shrink-0 text-muted-foreground">{displayMarker}</span>
-            ) : null}
-            <span className="min-w-0 break-words">{bodyText}</span>
-          </p>
+          {isArticleParagraph ? (
+            <p
+              className={cn(
+                "font-serif leading-display break-words text-foreground",
+                // 番号のない項は1行目を字下げ。番号のある項は番号欄（下の span）が字下げ幅を担う。
+                // 折り返し行は行頭に戻す（天付き）ので、1行目だけが下がる伝統的な字下げになる。
+                displayMarker === undefined && "indent-[1.5em]",
+              )}
+            >
+              {displayMarker !== undefined ? (
+                <span className="inline-block min-w-[1.5em] text-muted-foreground">
+                  {displayMarker}
+                </span>
+              ) : null}
+              <span>{bodyText}</span>
+            </p>
+          ) : (
+            <p className="flex min-w-0 gap-3 font-serif leading-display text-foreground">
+              {displayMarker !== undefined ? (
+                <span className="shrink-0 text-muted-foreground">{displayMarker}</span>
+              ) : null}
+              {/* 前文など条直下でない項は、番号がなければ先頭1文字を字下げして体裁を整える。 */}
+              <span
+                className={cn("min-w-0 break-words", displayMarker === undefined && "indent-[1em]")}
+              >
+                {bodyText}
+              </span>
+            </p>
+          )}
           {renderChildBlocks({
             activeArticleNumber,
             children,
@@ -245,6 +274,22 @@ const renderChildBlocks = ({
       renderArticleActions={renderArticleActions}
     />
   ));
+
+// 条（Article）直下の項は第2項以降で番号を示す。ただし ParagraphNum が空の旧番号形式
+// （例: 日本国憲法）は title を持たないため、Num 由来の number で番号を補完する。
+// 前文など Article 直下でない項は散文なので番号を付けない。
+const getArticleParagraphMarker = (
+  node: LawNode,
+  nodeById: Map<string, LawNode>,
+): string | undefined => {
+  if (node.number === undefined || node.number === "1") {
+    return undefined;
+  }
+
+  const parent = node.parentId === undefined ? undefined : nodeById.get(node.parentId);
+
+  return parent?.type === "Article" ? node.number : undefined;
+};
 
 const stripTrailingChildPlainTexts = (
   plainText: string,

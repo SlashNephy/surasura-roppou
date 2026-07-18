@@ -17,7 +17,14 @@ export const LawTableOfContents = ({
   displayMode = "readable",
   onSelectArticle,
 }: LawTableOfContentsProps) => (
-  <nav aria-label="法令目次" className="min-w-0">
+  <nav
+    aria-label="法令目次"
+    className={cn(
+      "min-w-0",
+      // 見やすい表示では目次でも CJK と半角英数の間に自動スペースを入れる。
+      displayMode === "readable" ? "[text-autospace:normal]" : "[text-autospace:no-autospace]",
+    )}
+  >
     {items.length > 0 ? (
       <TocItemList
         activeArticleNumber={activeArticleNumber}
@@ -71,6 +78,11 @@ const TocItem = ({
   const isArticle = articleNumber !== undefined;
   const isActiveArticle = articleNumber === activeArticleNumber;
   const displayTitle = applyLawHeadingTextDisplayMode(item.title, displayMode);
+  // 条見出し（例:「（親告罪）」）。条番号の隣に控えめに添える。
+  const displayCaption =
+    item.caption === undefined
+      ? undefined
+      : applyLawHeadingTextDisplayMode(item.caption, displayMode);
 
   return (
     <div className="grid min-w-0 gap-1">
@@ -87,7 +99,15 @@ const TocItem = ({
           type="button"
           variant="ghost"
         >
-          <span className="min-w-0 font-serif break-words">{displayTitle}</span>
+          <span className="min-w-0 font-serif break-words">
+            {displayTitle}
+            {/* 見出しは条番号より一段小さく（親フォントの約 2/3）控えめに見せる。 */}
+            {displayCaption !== undefined ? (
+              <span className="ml-1.5 text-[0.67em] font-normal text-muted-foreground">
+                {displayCaption}
+              </span>
+            ) : null}
+          </span>
         </Button>
       ) : (
         <span className="block min-w-0 px-2 py-1.5 font-serif text-sm leading-display font-medium text-foreground break-words">

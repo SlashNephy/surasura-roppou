@@ -92,6 +92,11 @@ const replaceKanjiNumber = (kanjiNumber: string): string => {
 const transformParentheses = (text: string): string =>
   text.replaceAll("（", "(").replaceAll("）", ")");
 
+// 全角のアラビア数字（０-９）を半角に揃える。民法の項番号「２」と憲法の「2」など、
+// 出典で全角/半角が混在する数字を見やすい表示で統一する。
+const transformFullWidthDigits = (text: string): string =>
+  text.replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xff10 + 0x30));
+
 const replaceLegalNumber = (_match: string, kanjiNumber: string, suffix: string): string => {
   return `第${replaceKanjiNumber(kanjiNumber)}${suffix}`;
 };
@@ -152,8 +157,8 @@ export const transformReadableText = (
     case "unchanged":
       return text;
     case "all":
-      return transformArticleNumbers(
-        transformDates(transformLawNumbers(transformParentheses(text))),
+      return transformFullWidthDigits(
+        transformArticleNumbers(transformDates(transformLawNumbers(transformParentheses(text)))),
       );
   }
 };

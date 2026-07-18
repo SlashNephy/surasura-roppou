@@ -117,6 +117,31 @@ describe("LawTableOfContents", () => {
     expect(onSelectArticle).toHaveBeenCalledExactlyOnceWith("1");
   });
 
+  it("renders an article caption next to the number", () => {
+    const captionedItems: LawTocItem[] = [
+      {
+        id: "article:264",
+        title: "第二百六十四条",
+        caption: "（親告罪）",
+        type: "Article",
+        depth: 1,
+        articleNumber: "264",
+        children: [],
+      },
+    ];
+
+    render(<LawTableOfContents items={captionedItems} onSelectArticle={noopSelectArticle} />);
+
+    const navigation = screen.getByRole("navigation", { name: "法令目次" });
+
+    // 読みやすい表示（既定）では全角括弧が半角化される（（親告罪）→ (親告罪)）。
+    expect(within(navigation).getByText("(親告罪)")).toBeInTheDocument();
+    // 見出しは条番号ボタンのアクセシブル名にも含まれる（読みやすい表示で第264条）。
+    expect(
+      within(navigation).getByRole("button", { name: /第264条.*\(親告罪\)/u }),
+    ).toBeInTheDocument();
+  });
+
   it("renders an empty state when no items are available", () => {
     render(<LawTableOfContents items={[]} onSelectArticle={noopSelectArticle} />);
 

@@ -274,7 +274,9 @@ describe("LawViewerPageContent", () => {
     renderLawViewerRoute("/laws/129AC0000000089", repository);
 
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
-    expect(screen.getByText("未保存")).toBeInTheDocument();
+    // 未保存は左レールの保存ボタンが「オフライン保存」であることで判別する。
+    expect(screen.getByRole("button", { name: "オフライン保存" })).toBeInTheDocument();
+    expect(screen.queryByText("オフライン保存済み")).not.toBeInTheDocument();
     expect(calls).toEqual([
       {
         input:
@@ -296,7 +298,7 @@ describe("LawViewerPageContent", () => {
 
     await user.click(screen.getByRole("button", { name: "オフライン保存" }));
 
-    expect(screen.getByText("保存済み")).toBeInTheDocument();
+    expect(screen.getByText("オフライン保存済み")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "保存解除" })).toBeInTheDocument();
     expect(storage.getSavedDocument()?.law.title).toBe("民法");
   });
@@ -320,7 +322,7 @@ describe("LawViewerPageContent", () => {
       "オフライン保存を更新できませんでした。",
     );
     expect(screen.getByRole("button", { name: "オフライン保存" })).toBeEnabled();
-    expect(screen.getByText("未保存")).toBeInTheDocument();
+    expect(screen.queryByText("オフライン保存済み")).not.toBeInTheDocument();
   });
 
   it("removes a saved law document without leaving the viewer", async () => {
@@ -342,7 +344,7 @@ describe("LawViewerPageContent", () => {
     await user.click(screen.getByRole("button", { name: "保存解除" }));
 
     expect(screen.getByRole("button", { name: "オフライン保存" })).toBeInTheDocument();
-    expect(screen.getByText("未保存")).toBeInTheDocument();
+    expect(screen.queryByText("オフライン保存済み")).not.toBeInTheDocument();
     expect(storage.getSavedDocument()).toBeUndefined();
   });
 
@@ -365,86 +367,42 @@ describe("LawViewerPageContent", () => {
 
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
     expect(screen.getByText("保存済み本文を表示中")).toBeInTheDocument();
-    expect(screen.getByText("取得: 2026-07-05")).toBeInTheDocument();
+    expect(screen.getByText("取得: 2026/07/05")).toBeInTheDocument();
   });
 
-  it("renders readable display mode by default", async () => {
+  it("既定は読みやすい表示で本文を描画する", async () => {
     renderLawViewerRoute("/laws/129AC0000000089");
 
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "読みやすい表示" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
 
     const article = screen.getByRole("article", { name: "第一条" });
-
     expect(within(article).getByRole("heading", { name: "第1条" })).toBeInTheDocument();
-    expect(
-      within(article).getByText("私権は、公共の福祉に適合しなければならない。"),
-    ).toBeInTheDocument();
   });
 
-  it("switches between readable and original display modes", async () => {
+  it("設定が原文表示のとき原文で描画する", async () => {
+    localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.textMode, "original");
+    renderLawViewerRoute("/laws/129AC0000000089");
+
+    await screen.findByRole("article", { name: "民法" });
+
+    const article = screen.getByRole("article", { name: "第一条" });
+    expect(within(article).getByRole("heading", { name: "第一条" })).toBeInTheDocument();
+  });
+
+  it("原文表示の設定で構造見出しと目次が原文になる", async () => {
+    localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.textMode, "original");
     const { user } = renderLawViewerRoute("/laws/129AC0000000089");
 
     await screen.findByRole("article", { name: "民法" });
-    await user.click(screen.getByRole("button", { name: "原文表示" }));
-
-    expect(screen.getByRole("button", { name: "原文表示" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-
-    const article = screen.getByRole("article", { name: "第一条" });
-
-    expect(within(article).getByRole("heading", { name: "第一条" })).toBeInTheDocument();
-    expect(
-      within(article).getByText("私権は、公共の福祉に適合しなければならない。"),
-    ).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "読みやすい表示" }));
-
-    expect(screen.getByRole("button", { name: "読みやすい表示" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(within(article).getByRole("heading", { name: "第1条" })).toBeInTheDocument();
-  });
-
-  it("switches structural headings and both table of contents with display mode", async () => {
-    const { user } = renderLawViewerRoute("/laws/129AC0000000089");
-
-    const lawArticle = await screen.findByRole("article", { name: "民法" });
-    const desktopToc = within(screen.getByRole("complementary", { name: "法令の目次" })).getByRole(
-      "navigation",
-      { name: "法令目次" },
-    );
-
+    // 目次ボタンを押してシートを開き、シート内の目次が原文表示になっているか確認する。
+    // シートが開くと radix Dialog がメインコンテンツに aria-hidden を設定するため、
+    // シート内（role="dialog"）を within でスコープして検証する。
     await user.click(screen.getByRole("button", { name: "目次" }));
 
-    const tableOfContents = screen.getAllByRole("navigation", { name: "法令目次" });
-    expect(tableOfContents).toHaveLength(2);
-    const mobileToc = tableOfContents.find((navigation) => navigation !== desktopToc);
-
-    if (mobileToc === undefined) {
-      throw new Error("Mobile table of contents was not rendered");
-    }
-
-    expect(within(lawArticle).getByRole("heading", { name: /第1編\s+総則/u })).toBeInTheDocument();
-    expect(within(desktopToc).getByText(/第1編\s+総則/u)).toBeInTheDocument();
-    expect(within(mobileToc).getByText(/第1編\s+総則/u)).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "原文表示" }));
-
-    expect(within(lawArticle).getByRole("heading", { name: /第一編\s+総則/u })).toBeInTheDocument();
-    expect(within(desktopToc).getByText(/第一編\s+総則/u)).toBeInTheDocument();
-    expect(within(mobileToc).getByText(/第一編\s+総則/u)).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "読みやすい表示" }));
-
-    expect(within(desktopToc).getByText(/第1章\s+通則/u)).toBeInTheDocument();
-    expect(within(mobileToc).getByRole("button", { name: "第1条" })).toBeInTheDocument();
+    const sheet = await screen.findByRole("dialog");
+    // 第一編ラベルは非インタラクティブな span として描画されるため findByText で確認する。
+    // 原文表示のときは「第一編 総則」（全角スペース区切り）、読みやすい表示のときは「第1編 総則」になる。
+    expect(await within(sheet).findByText(/第一編\s+総則/u)).toBeInTheDocument();
   });
 
   it("copies an article in the unified format from the article hover action", async () => {
@@ -600,8 +558,11 @@ describe("LawViewerPageContent", () => {
   it("navigates to an article from the jump form", async () => {
     const { history, user } = renderLawViewerRoute("/laws/129AC0000000089");
 
-    await user.type(await screen.findByLabelText("条番号"), "2");
-    await user.click(screen.getByRole("button", { name: "移動" }));
+    // 左レールに絞ることで、モバイルシート内の同名要素と衝突しないようにする。
+    await screen.findByRole("complementary", { name: "法令の目次" });
+    const leftRail = screen.getByRole("complementary", { name: "法令の目次" });
+    await user.type(within(leftRail).getByLabelText("条番号"), "2");
+    await user.click(within(leftRail).getByRole("button", { name: "移動" }));
 
     await waitFor(() => {
       expect(history.location.pathname).toBe("/laws/129AC0000000089/articles/2");
@@ -614,8 +575,11 @@ describe("LawViewerPageContent", () => {
       nonNumericArticleState,
     );
 
-    await user.type(await screen.findByLabelText("条番号"), "709の2");
-    await user.click(screen.getByRole("button", { name: "移動" }));
+    // 左レールに絞ることで、モバイルシート内の同名要素と衝突しないようにする。
+    await screen.findByRole("complementary", { name: "法令の目次" });
+    const leftRail = screen.getByRole("complementary", { name: "法令の目次" });
+    await user.type(within(leftRail).getByLabelText("条番号"), "709の2");
+    await user.click(within(leftRail).getByRole("button", { name: "移動" }));
 
     await waitFor(() => {
       expect(history.location.pathname).toBe("/laws/custom-law/articles/709%E3%81%AE2");
@@ -628,8 +592,11 @@ describe("LawViewerPageContent", () => {
       nonNumericArticleState,
     );
 
-    await user.type(await screen.findByLabelText("条番号"), "７０９ の ２");
-    await user.click(screen.getByRole("button", { name: "移動" }));
+    // 左レールに絞ることで、モバイルシート内の同名要素と衝突しないようにする。
+    await screen.findByRole("complementary", { name: "法令の目次" });
+    const leftRail = screen.getByRole("complementary", { name: "法令の目次" });
+    await user.type(within(leftRail).getByLabelText("条番号"), "７０９ の ２");
+    await user.click(within(leftRail).getByRole("button", { name: "移動" }));
 
     await waitFor(() => {
       expect(history.location.pathname).toBe("/laws/custom-law/articles/709%E3%81%AE2");
@@ -639,11 +606,15 @@ describe("LawViewerPageContent", () => {
   it("keeps the current law page and shows an alert for an unknown jump target", async () => {
     const { history, user } = renderLawViewerRoute("/laws/129AC0000000089");
 
-    await user.type(await screen.findByLabelText("条番号"), "999");
-    await user.click(screen.getByRole("button", { name: "移動" }));
+    // 左レールに絞ることで、モバイルシート内の同名要素と衝突しないようにする。
+    await screen.findByRole("complementary", { name: "法令の目次" });
+    const leftRail = screen.getByRole("complementary", { name: "法令の目次" });
+    await user.type(within(leftRail).getByLabelText("条番号"), "999");
+    await user.click(within(leftRail).getByRole("button", { name: "移動" }));
 
     expect(history.location.pathname).toBe("/laws/129AC0000000089");
-    const articleInput = screen.getByLabelText("条番号");
+    // 左レール内のジャンプ入力と aria 検証。id は左レール専用の article-jump-error を確認する。
+    const articleInput = within(leftRail).getByLabelText("条番号");
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("指定された条文が見つかりません。");
     expect(alert).toHaveAttribute("id", "article-jump-error");
@@ -661,7 +632,10 @@ describe("LawViewerPageContent", () => {
   it("does not mark the jump input invalid for an unknown route article before form submit", async () => {
     renderLawViewerRoute("/laws/129AC0000000089/articles/999");
 
-    const articleInput = await screen.findByLabelText("条番号");
+    // 左レールに絞ることで、モバイルシート内の同名要素と衝突しないようにする。
+    await screen.findByRole("complementary", { name: "法令の目次" });
+    const leftRail = screen.getByRole("complementary", { name: "法令の目次" });
+    const articleInput = within(leftRail).getByLabelText("条番号");
 
     expect(screen.getByRole("alert")).toHaveTextContent("指定された条文が見つかりません。");
     expect(articleInput).not.toHaveAttribute("aria-describedby");
@@ -671,8 +645,11 @@ describe("LawViewerPageContent", () => {
   it("keeps a single article error alert when route and jump targets are both unknown", async () => {
     const { user } = renderLawViewerRoute("/laws/129AC0000000089/articles/999");
 
-    await user.type(await screen.findByLabelText("条番号"), "998");
-    await user.click(screen.getByRole("button", { name: "移動" }));
+    // 左レールに絞ることで、モバイルシート内の同名要素と衝突しないようにする。
+    await screen.findByRole("complementary", { name: "法令の目次" });
+    const leftRail = screen.getByRole("complementary", { name: "法令の目次" });
+    await user.type(within(leftRail).getByLabelText("条番号"), "998");
+    await user.click(within(leftRail).getByRole("button", { name: "移動" }));
 
     expect(screen.getAllByRole("alert")).toHaveLength(1);
     expect(screen.getByRole("alert")).toHaveTextContent("指定された条文が見つかりません。");
@@ -681,22 +658,20 @@ describe("LawViewerPageContent", () => {
   it("opens the mobile table of contents from the toggle", async () => {
     const { user } = renderLawViewerRoute("/laws/129AC0000000089");
 
+    // サブバー内の目次ボタン（lg:hidden 親コンテナ内）を取得する。
+    // jsdom ではレスポンシブ class が効かないため、サブバーとレールが DOM 共存する。
+    // ボタンのコンテナは lg:hidden だが、ボタン自体はクラスを持たない。
     const tocToggle = await screen.findByRole("button", { name: "目次" });
-    const mobileTocPanel = document.querySelector("#law-viewer-mobile-toc");
 
+    // シート実装では open 前はシートが DOM にないため、aria-expanded で状態を確認する。
     expect(tocToggle).toHaveAttribute("aria-expanded", "false");
-    expect(tocToggle).toHaveClass("lg:hidden");
-    expect(tocToggle).not.toHaveClass("md:hidden");
-    expect(mobileTocPanel).toBeInTheDocument();
-    expect(mobileTocPanel).toHaveAttribute("hidden");
 
     await user.click(tocToggle);
 
     expect(tocToggle).toHaveAttribute("aria-expanded", "true");
-    expect(mobileTocPanel).not.toHaveAttribute("hidden");
-    expect(
-      within(mobileTocPanel as HTMLElement).getByRole("navigation", { name: "法令目次" }),
-    ).toBeInTheDocument();
+    // シートが開くと role="dialog" が現れ、その中に法令目次が入る。
+    const sheet = await screen.findByRole("dialog");
+    expect(within(sheet).getByRole("navigation", { name: "法令目次" })).toBeInTheDocument();
   });
 
   it("closes the mobile table of contents after selecting an article", async () => {
@@ -704,15 +679,19 @@ describe("LawViewerPageContent", () => {
 
     const tocToggle = await screen.findByRole("button", { name: "目次" });
     await user.click(tocToggle);
-    const mobileTocPanel = document.querySelector("#law-viewer-mobile-toc");
 
-    await user.click(within(mobileTocPanel as HTMLElement).getByRole("button", { name: "第2条" }));
+    // シートが開いた後、シート内の TOC から条を選択する。
+    const sheet = await screen.findByRole("dialog");
+    await user.click(within(sheet).getByRole("button", { name: "第2条" }));
 
     await waitFor(() => {
       expect(history.location.pathname).toBe("/laws/129AC0000000089/articles/2");
     });
+    // navigateToArticle が setIsMobileTocOpen(false) を呼ぶためシートが閉じる。
     expect(tocToggle).toHaveAttribute("aria-expanded", "false");
-    expect(mobileTocPanel).toHaveAttribute("hidden");
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
   });
 
   it("scrolls again when selecting the currently active article", async () => {
@@ -762,7 +741,7 @@ describe("LawViewerPageContent", () => {
     // ルーターの初回マッチ解決は非同期のため、本文が描画されるまで待ってから検証する。
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
     expect(screen.getAllByText(/基準日 未設定（現行法）/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/施行日 2026-06-24/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/施行日 2026\/06\/24/).length).toBeGreaterThan(0);
   });
 
   it("shows the resolved base date when one is requested", async () => {
@@ -773,7 +752,7 @@ describe("LawViewerPageContent", () => {
     });
 
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
-    expect(screen.getAllByText(/基準日 2020-06-01/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/基準日 2020\/06\/01/).length).toBeGreaterThan(0);
   });
 
   it("notes that the base date is not applied to an offline saved body", async () => {
@@ -828,14 +807,14 @@ describe("LawViewerPageContent", () => {
     renderLawViewerRoute("/laws/129AC0000000089", repository);
 
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
-    expect(screen.getAllByText(/施行日 2026-06-24/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/施行日 2026\/06\/24/).length).toBeGreaterThan(0);
 
     act(() => {
       setBaseDate("2020-06-01");
     });
 
     await waitFor(() => {
-      expect(screen.getAllByText(/施行日 2020-04-01/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/施行日 2020\/04\/01/).length).toBeGreaterThan(0);
     });
   });
 
@@ -947,6 +926,111 @@ describe("LawViewerPageContent", () => {
     expect(await screen.findByRole("article", { name: "第一条" })).toBeInTheDocument();
     await waitFor(() => {
       expect(screen.queryByText("改正の可能性")).not.toBeInTheDocument();
+    });
+  });
+
+  it("文書レベル操作を左レールに、選択条操作を右レールに配置する", async () => {
+    renderLawViewerRoute("/laws/129AC0000000089/articles/1");
+
+    await screen.findByRole("article", { name: "民法" });
+
+    const leftRail = screen.getByRole("complementary", { name: "法令の目次" });
+    // 条番号ジャンプ・オフライン保存は文書レベル操作として左レールに入る
+    expect(within(leftRail).getByRole("button", { name: "移動" })).toBeInTheDocument();
+    expect(
+      within(leftRail).getByRole("button", { name: /オフライン保存|保存解除/ }),
+    ).toBeInTheDocument();
+
+    const rightRail = screen.getByRole("complementary", { name: "学習コンテキスト" });
+    // 選択条があるとき、この条文の操作は右レールに入る
+    expect(within(rightRail).getByRole("button", { name: "この条文を保存" })).toBeInTheDocument();
+    expect(within(rightRail).getByRole("button", { name: "カードを作る" })).toBeInTheDocument();
+    expect(within(rightRail).getByRole("button", { name: "クイズを生成" })).toBeInTheDocument();
+  });
+
+  it("条が未選択のとき右レールは案内文を表示し操作を出さない", async () => {
+    renderLawViewerRoute("/laws/129AC0000000089");
+
+    await screen.findByRole("article", { name: "民法" });
+
+    const rightRail = screen.getByRole("complementary", { name: "学習コンテキスト" });
+    expect(within(rightRail).getByText("条を選ぶと操作が表示されます")).toBeInTheDocument();
+    expect(
+      within(rightRail).queryByRole("button", { name: "この条文を保存" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("モバイルの目次シートに文書操作と目次が入る", async () => {
+    const { user } = renderLawViewerRoute("/laws/129AC0000000089/articles/1");
+
+    await screen.findByRole("article", { name: "民法" });
+    await user.click(screen.getByRole("button", { name: "目次" }));
+
+    const sheet = await screen.findByRole("dialog");
+    expect(within(sheet).getByRole("button", { name: "移動" })).toBeInTheDocument();
+    expect(
+      within(sheet).getByRole("button", { name: /オフライン保存|保存解除/ }),
+    ).toBeInTheDocument();
+    expect(within(sheet).getByRole("navigation", { name: "法令目次" })).toBeInTheDocument();
+  });
+
+  it("モバイルのこの条文シートに条アクションが入る", async () => {
+    const { user } = renderLawViewerRoute("/laws/129AC0000000089/articles/1");
+
+    await screen.findByRole("article", { name: "民法" });
+    await user.click(screen.getByRole("button", { name: "この条文" }));
+
+    const sheet = await screen.findByRole("dialog");
+    expect(within(sheet).getByRole("button", { name: "カードを作る" })).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: "クイズを生成" })).toBeInTheDocument();
+  });
+
+  it("activeArticleNumber が undefined になった後に戻ると this-article シートが勝手に開かない", async () => {
+    // 再現バグ: シートを開いた状態で activeArticleNumber が undefined になると isArticleSheetOpen
+    // が true のまま残り、次に条ルートへ戻ると勝手に開く。
+    // レンダー時同期（prevActiveArticleNumber）で修正されていることを確認する。
+    const { history, user } = renderLawViewerRoute("/laws/129AC0000000089/articles/1");
+
+    await screen.findByRole("article", { name: "民法" });
+    await user.click(screen.getByRole("button", { name: "この条文" }));
+
+    // シートが開いたことを確認する。
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+
+    // 条パラメータなしのルートへ遷移して activeArticleNumber を undefined にする。
+    act(() => {
+      history.push("/laws/129AC0000000089");
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    // 再度条ルートへ戻す。
+    act(() => {
+      history.push("/laws/129AC0000000089/articles/1");
+    });
+
+    // シートが自動で開かないことを確認する（state リセットが効いている）。
+    await screen.findByRole("article", { name: "第一条" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("条から別の条へ直接遷移すると this-article シートが閉じる", async () => {
+    // 開いたシートが前の条のつもりで別の条の操作に化けたまま残るのを防ぐ。
+    const { history, user } = renderLawViewerRoute("/laws/129AC0000000089/articles/1");
+
+    await screen.findByRole("article", { name: "民法" });
+    await user.click(screen.getByRole("button", { name: "この条文" }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+
+    // 別の条へ直接遷移する（undefined を経由しない）。
+    act(() => {
+      history.push("/laws/129AC0000000089/articles/2");
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
   });
 
