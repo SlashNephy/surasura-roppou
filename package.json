@@ -15,7 +15,7 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
-  "packageManager": "pnpm@11.13.0",
+  "packageManager": "pnpm@11.13.1",
   "dependencies": {
     "@tanstack/react-router": "^1.170.17",
     "ajv": "^8.17.1",
