@@ -112,7 +112,7 @@ const LawNodeBlock = ({
             />
           ) : null}
           <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
-            <Heading className="min-w-0 font-serif text-lg font-semibold text-foreground break-words">
+            <Heading className="min-w-0 font-law text-lg font-semibold text-foreground break-words">
               {displayTitle}
               {displayCaption === undefined ? null : (
                 <span className="ml-2 text-base font-normal text-secondary-foreground">
@@ -136,7 +136,7 @@ const LawNodeBlock = ({
                 renderArticleActions,
               })
             ) : (
-              <p className="indent-[1em] font-serif leading-display text-foreground break-words">
+              <p className="indent-[1em] font-law leading-display text-foreground break-words">
                 {displayText}
               </p>
             )}
@@ -172,7 +172,7 @@ const LawNodeBlock = ({
           {isArticleParagraph ? (
             <p
               className={cn(
-                "font-serif leading-display break-words text-foreground",
+                "font-law leading-display break-words text-foreground",
                 // 番号のない項は1行目を字下げ。番号のある項は番号欄（下の span）が字下げ幅を担う。
                 // 折り返し行は行頭に戻す（天付き）ので、1行目だけが下がる伝統的な字下げになる。
                 displayMarker === undefined && "indent-[1.5em]",
@@ -186,7 +186,7 @@ const LawNodeBlock = ({
               <span>{bodyText}</span>
             </p>
           ) : (
-            <p className="flex min-w-0 gap-3 font-serif leading-display text-foreground">
+            <p className="flex min-w-0 gap-3 font-law leading-display text-foreground">
               {displayMarker !== undefined ? (
                 <span className="shrink-0 text-muted-foreground">{displayMarker}</span>
               ) : null}
@@ -225,12 +225,12 @@ const LawNodeBlock = ({
   return (
     <section className="grid gap-3">
       {displayTitle !== undefined ? (
-        <Heading className={cn("font-serif text-foreground break-words", headingClassName)}>
+        <Heading className={cn("font-law text-foreground break-words", headingClassName)}>
           {displayTitle}
         </Heading>
       ) : null}
       {bodyText !== "" ? (
-        <p className="font-serif leading-display text-foreground break-words">{bodyText}</p>
+        <p className="font-law leading-display text-foreground break-words">{bodyText}</p>
       ) : null}
       {renderChildBlocks({
         activeArticleNumber,
