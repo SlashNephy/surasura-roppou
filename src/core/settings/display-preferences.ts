@@ -1,9 +1,21 @@
 const displayFontSizes = ["standard", "large", "extra-large"] as const;
 const displayLineSpacings = ["standard", "relaxed", "wide"] as const;
+// 本文・UI フォントの選択肢。system は現行のシステムフォントスタックを指し、
+// それ以外は Fontsource で同梱する Web フォントの内部名。CSS の data 属性値と一致させる。
+const displayFonts = [
+  "system",
+  "noto-serif-jp",
+  "biz-udmincho",
+  "zen-old-mincho",
+  "noto-sans-jp",
+  "biz-udgothic",
+] as const;
 const displayThemes = ["system", "light", "dark"] as const;
 const displayTextModes = ["readable", "original"] as const;
 
 export type DisplayFontSize = (typeof displayFontSizes)[number];
+
+export type DisplayFont = (typeof displayFonts)[number];
 
 export type DisplayLineSpacing = (typeof displayLineSpacings)[number];
 
@@ -14,31 +26,42 @@ export type DisplayTextMode = (typeof displayTextModes)[number];
 export interface DisplayPreferences {
   readonly fontSize: DisplayFontSize;
   readonly lineSpacing: DisplayLineSpacing;
+  // 条文を読む領域（法令本文・目次）の本文フォント。
+  readonly lawFont: DisplayFont;
   readonly theme: DisplayTheme;
   // 法令本文の表示モード（読みやすい表示 / 原文表示）。原文は常に保持し表示のみ切替。
   readonly textDisplayMode: DisplayTextMode;
+  // アプリ全体の UI フォント。見出しの font-serif には適用しない。
+  readonly uiFont: DisplayFont;
 }
 
 const createDisplayPreferences = (
   fontSize: DisplayFontSize,
   lineSpacing: DisplayLineSpacing,
+  lawFont: DisplayFont,
   theme: DisplayTheme,
   textDisplayMode: DisplayTextMode,
-): DisplayPreferences => Object.freeze({ fontSize, lineSpacing, theme, textDisplayMode });
+  uiFont: DisplayFont,
+): DisplayPreferences =>
+  Object.freeze({ fontSize, lineSpacing, lawFont, theme, textDisplayMode, uiFont });
 
 export const DEFAULT_DISPLAY_PREFERENCES = createDisplayPreferences(
   "standard",
   "standard",
   "system",
+  "system",
   "readable",
+  "system",
 );
 
 // 表示設定を保存データや分析対象から分離し、項目ごとの変更だけを永続化する。
 export const DISPLAY_PREFERENCES_STORAGE_KEYS = {
   fontSize: "surasura:display:font-size",
+  lawFont: "surasura:display:law-font",
   lineSpacing: "surasura:display:line-spacing",
-  theme: "surasura:display:theme",
   textMode: "surasura:display:text-mode",
+  theme: "surasura:display:theme",
+  uiFont: "surasura:display:ui-font",
 } as const;
 
 const listeners = new Set<() => void>();
@@ -51,9 +74,11 @@ const handleStorage = (event: StorageEvent): void => {
   if (
     event.key !== null &&
     event.key !== DISPLAY_PREFERENCES_STORAGE_KEYS.fontSize &&
+    event.key !== DISPLAY_PREFERENCES_STORAGE_KEYS.lawFont &&
     event.key !== DISPLAY_PREFERENCES_STORAGE_KEYS.lineSpacing &&
+    event.key !== DISPLAY_PREFERENCES_STORAGE_KEYS.textMode &&
     event.key !== DISPLAY_PREFERENCES_STORAGE_KEYS.theme &&
-    event.key !== DISPLAY_PREFERENCES_STORAGE_KEYS.textMode
+    event.key !== DISPLAY_PREFERENCES_STORAGE_KEYS.uiFont
   ) {
     return;
   }
@@ -79,6 +104,9 @@ const stopStorageSubscription = (): void => {
 
 const includes = <Value extends string>(values: readonly Value[], value: string): value is Value =>
   values.includes(value as Value);
+
+export const isDisplayFont = (value: unknown): value is DisplayFont =>
+  typeof value === "string" && includes(displayFonts, value);
 
 export const isDisplayFontSize = (value: unknown): value is DisplayFontSize =>
   typeof value === "string" && includes(displayFontSizes, value);
@@ -145,6 +173,12 @@ export const getDisplayPreferences = (): DisplayPreferences => {
     displayFontSizes,
     DEFAULT_DISPLAY_PREFERENCES.fontSize,
   );
+  const lawFont = read(
+    storage,
+    DISPLAY_PREFERENCES_STORAGE_KEYS.lawFont,
+    displayFonts,
+    DEFAULT_DISPLAY_PREFERENCES.lawFont,
+  );
   const lineSpacing = read(
     storage,
     DISPLAY_PREFERENCES_STORAGE_KEYS.lineSpacing,
@@ -163,18 +197,33 @@ export const getDisplayPreferences = (): DisplayPreferences => {
     displayTextModes,
     DEFAULT_DISPLAY_PREFERENCES.textDisplayMode,
   );
+  const uiFont = read(
+    storage,
+    DISPLAY_PREFERENCES_STORAGE_KEYS.uiFont,
+    displayFonts,
+    DEFAULT_DISPLAY_PREFERENCES.uiFont,
+  );
 
   // useSyncExternalStore の snapshot が、値の不変時に同じ参照を返す契約を保つ。
   if (
     cachedPreferences.fontSize === fontSize &&
+    cachedPreferences.lawFont === lawFont &&
     cachedPreferences.lineSpacing === lineSpacing &&
     cachedPreferences.theme === theme &&
-    cachedPreferences.textDisplayMode === textDisplayMode
+    cachedPreferences.textDisplayMode === textDisplayMode &&
+    cachedPreferences.uiFont === uiFont
   ) {
     return cachedPreferences;
   }
 
-  cachedPreferences = createDisplayPreferences(fontSize, lineSpacing, theme, textDisplayMode);
+  cachedPreferences = createDisplayPreferences(
+    fontSize,
+    lineSpacing,
+    lawFont,
+    theme,
+    textDisplayMode,
+    uiFont,
+  );
   return cachedPreferences;
 };
 
@@ -192,6 +241,14 @@ export const setDisplayTheme = (value: DisplayTheme): void => {
 
 export const setDisplayTextMode = (value: DisplayTextMode): void => {
   write(getStorage(), DISPLAY_PREFERENCES_STORAGE_KEYS.textMode, value);
+};
+
+export const setDisplayLawFont = (value: DisplayFont): void => {
+  write(getStorage(), DISPLAY_PREFERENCES_STORAGE_KEYS.lawFont, value);
+};
+
+export const setDisplayUiFont = (value: DisplayFont): void => {
+  write(getStorage(), DISPLAY_PREFERENCES_STORAGE_KEYS.uiFont, value);
 };
 
 export const subscribeDisplayPreferences = (listener: () => void): (() => void) => {

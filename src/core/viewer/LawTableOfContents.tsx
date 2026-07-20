@@ -99,7 +99,7 @@ const TocItem = ({
           type="button"
           variant="ghost"
         >
-          <span className="min-w-0 font-serif break-words">
+          <span className="min-w-0 font-law break-words">
             {displayTitle}
             {/* 見出しは条番号より一段小さく（親フォントの約 2/3）控えめに見せる。 */}
             {displayCaption !== undefined ? (
@@ -110,7 +110,7 @@ const TocItem = ({
           </span>
         </Button>
       ) : (
-        <span className="block min-w-0 px-2 py-1.5 font-serif text-sm leading-display font-medium text-foreground break-words">
+        <span className="block min-w-0 px-2 py-1.5 font-law text-sm leading-display font-medium text-foreground break-words">
           {displayTitle}
         </span>
       )}

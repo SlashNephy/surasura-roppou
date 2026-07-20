@@ -532,7 +532,7 @@ const LawViewerReadyState = ({
         <aside aria-label="法令の目次" className="hidden border-r bg-muted/40 lg:block">
           <div className="sticky top-14 grid max-h-[calc(100dvh-3.5rem)] content-start gap-3 overflow-y-auto p-4">
             <div className="grid gap-1">
-              <p className="min-w-0 font-serif text-base leading-display font-semibold text-foreground break-words">
+              <p className="min-w-0 font-law text-base leading-display font-semibold text-foreground break-words">
                 {state.law.title}
               </p>
               {state.law.lawNumber !== undefined ? (

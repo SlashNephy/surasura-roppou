@@ -49,6 +49,8 @@ afterEach(() => {
   document.documentElement.removeAttribute("style");
   document.documentElement.removeAttribute("data-font-size");
   document.documentElement.removeAttribute("data-line-spacing");
+  document.documentElement.removeAttribute("data-law-font");
+  document.documentElement.removeAttribute("data-ui-font");
 });
 
 describe("SettingsPage 表示", () => {
@@ -143,6 +145,44 @@ describe("SettingsPage 表示", () => {
 
     expect(screen.getByLabelText("既定の表示")).toHaveValue("original");
     expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.textMode)).toBe("original");
+  });
+
+  it("本文フォントと UI フォントを選択して端末へ保存する", async () => {
+    const { user } = renderSettingsRoute();
+
+    await user.selectOptions(await screen.findByLabelText("本文フォント"), "biz-udmincho");
+    await user.selectOptions(screen.getByLabelText("UI フォント"), "noto-sans-jp");
+
+    expect(screen.getByLabelText("本文フォント")).toHaveValue("biz-udmincho");
+    expect(screen.getByLabelText("UI フォント")).toHaveValue("noto-sans-jp");
+    expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.lawFont)).toBe("biz-udmincho");
+    expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.uiFont)).toBe("noto-sans-jp");
+    expect(document.documentElement).toHaveAttribute("data-law-font", "biz-udmincho");
+    expect(document.documentElement).toHaveAttribute("data-ui-font", "noto-sans-jp");
+  });
+
+  it("本文フォントのプレビュー文を表示する", async () => {
+    renderSettingsRoute();
+
+    expect(
+      await screen.findByText("日本国民は、正当に選挙された国会における代表者を通じて行動し、"),
+    ).toBeInTheDocument();
+  });
+
+  it("reload 相当の再マウント後にフォント選択値を復元する", async () => {
+    const firstRender = renderSettingsRoute();
+
+    await firstRender.user.selectOptions(
+      await screen.findByLabelText("本文フォント"),
+      "zen-old-mincho",
+    );
+    await firstRender.user.selectOptions(screen.getByLabelText("UI フォント"), "biz-udgothic");
+
+    firstRender.unmount();
+    renderSettingsRoute();
+
+    expect(await screen.findByLabelText("本文フォント")).toHaveValue("zen-old-mincho");
+    expect(screen.getByLabelText("UI フォント")).toHaveValue("biz-udgothic");
   });
 });
 

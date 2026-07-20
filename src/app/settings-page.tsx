@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 import {
   baseDateToStudyYear,
   earliestBaseDate,
+  isDisplayFont,
   isDisplayFontSize,
   isDisplayLineSpacing,
   isDisplayTextMode,
@@ -28,6 +29,19 @@ interface SettingsGroup {
   heading: string;
   rows: SettingsRow[];
 }
+
+// 表示フォントの選択肢。value は display-preferences の DisplayFont と一致させる。
+const displayFontOptions = [
+  { value: "system", label: "システム標準" },
+  { value: "noto-serif-jp", label: "Noto 明朝" },
+  { value: "biz-udmincho", label: "BIZ UD 明朝" },
+  { value: "zen-old-mincho", label: "ZEN オールド明朝" },
+  { value: "noto-sans-jp", label: "Noto ゴシック" },
+  { value: "biz-udgothic", label: "BIZ UD ゴシック" },
+] as const;
+
+// 本文フォントのプレビュー文。日本国憲法前文の冒頭で、選んだ書体の見え方をその場で確認する。
+const lawFontPreviewText = "日本国民は、正当に選挙された国会における代表者を通じて行動し、";
 
 // 表示設定と基準日以外はまだ静的表示のグループ。後続 issue で順次実体化する。
 const staticGroups: SettingsGroup[] = [
@@ -104,19 +118,27 @@ const DisplaySelectRow = ({
 const DisplaySettingsGroup = () => {
   const {
     fontSize,
+    lawFont,
     lineSpacing,
     setFontSize,
+    setLawFont,
     setLineSpacing,
     setTextDisplayMode,
     setTheme,
+    setUiFont,
     textDisplayMode,
     theme,
+    uiFont,
   } = useDisplayPreferences();
   const fontSizeId = useId();
+  const lawFontId = useId();
+  const lawFontDescriptionId = useId();
   const lineSpacingId = useId();
   const textModeId = useId();
   const themeId = useId();
   const themeDescriptionId = useId();
+  const uiFontId = useId();
+  const uiFontDescriptionId = useId();
 
   const themeDescription = {
     system: "端末の外観設定に合わせます。",
@@ -158,6 +180,61 @@ const DisplaySettingsGroup = () => {
             <option value="standard">標準</option>
             <option value="relaxed">ゆったり</option>
             <option value="wide">広い</option>
+          </Select>
+        </DisplaySelectRow>
+        <DisplaySelectRow
+          description="法令本文と目次に適用します。"
+          descriptionId={lawFontDescriptionId}
+          id={lawFontId}
+          label="本文フォント"
+        >
+          <Select
+            aria-describedby={lawFontDescriptionId}
+            className="w-full"
+            id={lawFontId}
+            onChange={(event) => {
+              if (isDisplayFont(event.target.value)) {
+                setLawFont(event.target.value);
+              }
+            }}
+            value={lawFont}
+          >
+            {displayFontOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </Select>
+          {/* 書体見本という視覚専用の情報のため、スクリーンリーダーには読み上げさせない。 */}
+          <p
+            aria-hidden="true"
+            className="font-law leading-display min-w-0 break-words text-sm text-foreground"
+          >
+            {lawFontPreviewText}
+          </p>
+        </DisplaySelectRow>
+        <DisplaySelectRow
+          description="アプリ全体の画面表示に適用します。見出しの書体は変わりません。"
+          descriptionId={uiFontDescriptionId}
+          id={uiFontId}
+          label="UI フォント"
+        >
+          <Select
+            aria-describedby={uiFontDescriptionId}
+            className="w-full"
+            id={uiFontId}
+            onChange={(event) => {
+              if (isDisplayFont(event.target.value)) {
+                setUiFont(event.target.value);
+              }
+            }}
+            value={uiFont}
+          >
+            {displayFontOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </Select>
         </DisplaySelectRow>
         <DisplaySelectRow

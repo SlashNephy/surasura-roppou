@@ -35,7 +35,7 @@ const DisplayPreferencesBridge = ({
   children,
   onInitialThemeReady,
 }: DisplayPreferencesBridgeProps): ReactElement => {
-  const { fontSize, lineSpacing } = useSyncExternalStore(
+  const { fontSize, lawFont, lineSpacing, uiFont } = useSyncExternalStore(
     subscribeDisplayPreferences,
     getDisplayPreferences,
     getServerDisplayPreferences,
@@ -48,7 +48,9 @@ const DisplayPreferencesBridge = ({
   useLayoutEffect(() => {
     document.documentElement.dataset.fontSize = fontSize;
     document.documentElement.dataset.lineSpacing = lineSpacing;
-  }, [fontSize, lineSpacing]);
+    document.documentElement.dataset.lawFont = lawFont;
+    document.documentElement.dataset.uiFont = uiFont;
+  }, [fontSize, lawFont, lineSpacing, uiFont]);
 
   useLayoutEffect(() => {
     const handleThemeStorage = (event: StorageEvent) => {

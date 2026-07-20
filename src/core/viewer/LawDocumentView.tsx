@@ -44,7 +44,7 @@ export const LawDocumentView = ({
         <div className="grid min-w-0 gap-2">
           {/* 法令種別バッジはタイトルの右横に添える（民法 ［法律］の並び）。 */}
           <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-            <h1 className="min-w-0 font-serif text-2xl font-semibold text-foreground break-words md:text-3xl">
+            <h1 className="min-w-0 font-law text-2xl font-semibold text-foreground break-words md:text-3xl">
               {law.title}
             </h1>
             {lawTypeLabel !== undefined ? <Badge variant="secondary">{lawTypeLabel}</Badge> : null}
