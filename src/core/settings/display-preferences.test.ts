@@ -3,14 +3,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_DISPLAY_PREFERENCES,
   getDisplayPreferences,
+  isDisplayFont,
   isDisplayFontSize,
   isDisplayLineSpacing,
   isDisplayTextMode,
   sanitizeStoredDisplayTheme,
   setDisplayFontSize,
+  setDisplayLawFont,
   setDisplayLineSpacing,
   setDisplayTextMode,
   setDisplayTheme,
+  setDisplayUiFont,
   subscribeDisplayPreferences,
 } from "./display-preferences";
 
@@ -19,6 +22,8 @@ const storageKeys = {
   lineSpacing: "surasura:display:line-spacing",
   theme: "surasura:display:theme",
   textMode: "surasura:display:text-mode",
+  lawFont: "surasura:display:law-font",
+  uiFont: "surasura:display:ui-font",
 } as const;
 
 afterEach(() => {
@@ -43,7 +48,14 @@ describe("getDisplayPreferences", () => {
       setDisplayLineSpacing(lineSpacing);
       setDisplayTheme(theme);
 
-      expect(getDisplayPreferences()).toEqual({ fontSize, lineSpacing, theme, textDisplayMode });
+      expect(getDisplayPreferences()).toEqual({
+        fontSize,
+        lineSpacing,
+        theme,
+        textDisplayMode,
+        lawFont: "system",
+        uiFont: "system",
+      });
     },
   );
 
@@ -56,6 +68,8 @@ describe("getDisplayPreferences", () => {
         lineSpacing: "relaxed",
         theme: "dark",
         textDisplayMode: "readable",
+        lawFont: "system",
+        uiFont: "system",
       },
     },
     {
@@ -66,6 +80,8 @@ describe("getDisplayPreferences", () => {
         lineSpacing: "standard",
         theme: "dark",
         textDisplayMode: "readable",
+        lawFont: "system",
+        uiFont: "system",
       },
     },
     {
@@ -76,6 +92,8 @@ describe("getDisplayPreferences", () => {
         lineSpacing: "relaxed",
         theme: "system",
         textDisplayMode: "readable",
+        lawFont: "system",
+        uiFont: "system",
       },
     },
   ] as const)("$key の不正値だけを既定値へ戻す", ({ key, invalidValue, expected }) => {
@@ -223,7 +241,7 @@ describe("display preference subscriptions", () => {
     }
     window.dispatchEvent(new StorageEvent("storage", { key: "unrelated" }));
 
-    expect(listener).toHaveBeenCalledTimes(4);
+    expect(listener).toHaveBeenCalledTimes(6);
 
     unsubscribe();
   });
@@ -336,5 +354,63 @@ describe("textDisplayMode", () => {
     { value: undefined, expected: false },
   ])("isDisplayTextMode($value) === $expected", ({ value, expected }) => {
     expect(isDisplayTextMode(value)).toBe(expected);
+  });
+});
+
+describe("フォント設定", () => {
+  it("既定はどちらも system", () => {
+    expect(getDisplayPreferences().lawFont).toBe("system");
+    expect(getDisplayPreferences().uiFont).toBe("system");
+  });
+
+  it.each([
+    "system",
+    "noto-serif-jp",
+    "biz-udmincho",
+    "zen-old-mincho",
+    "noto-sans-jp",
+    "biz-udgothic",
+  ] as const)("%s を保存して復元する", (font) => {
+    setDisplayLawFont(font);
+    setDisplayUiFont(font);
+
+    expect(getDisplayPreferences().lawFont).toBe(font);
+    expect(getDisplayPreferences().uiFont).toBe(font);
+  });
+
+  it("不正な保存値は項目単位で既定へフォールバックする", () => {
+    localStorage.setItem(storageKeys.lawFont, "comic-sans");
+    localStorage.setItem(storageKeys.uiFont, "noto-sans-jp");
+
+    expect(getDisplayPreferences().lawFont).toBe("system");
+    expect(getDisplayPreferences().uiFont).toBe("noto-sans-jp");
+  });
+
+  it("setter の保存直後に同一タブの購読者へ通知する", () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeDisplayPreferences(listener);
+
+    setDisplayLawFont("noto-serif-jp");
+    setDisplayUiFont("biz-udgothic");
+
+    expect(localStorage.getItem(storageKeys.lawFont)).toBe("noto-serif-jp");
+    expect(localStorage.getItem(storageKeys.uiFont)).toBe("biz-udgothic");
+    expect(listener).toHaveBeenCalledTimes(2);
+
+    unsubscribe();
+  });
+
+  it.each([
+    { value: "system", expected: true },
+    { value: "noto-serif-jp", expected: true },
+    { value: "biz-udmincho", expected: true },
+    { value: "zen-old-mincho", expected: true },
+    { value: "noto-sans-jp", expected: true },
+    { value: "biz-udgothic", expected: true },
+    { value: "comic-sans", expected: false },
+    { value: undefined, expected: false },
+    { value: 1, expected: false },
+  ])("isDisplayFont($value) === $expected", ({ value, expected }) => {
+    expect(isDisplayFont(value)).toBe(expected);
   });
 });

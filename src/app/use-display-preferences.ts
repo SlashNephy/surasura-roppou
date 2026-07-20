@@ -7,8 +7,11 @@ import {
   isDisplayTheme,
   setDisplayFontSize,
   setDisplayLineSpacing,
+  setDisplayLawFont,
   setDisplayTextMode,
+  setDisplayUiFont,
   subscribeDisplayPreferences,
+  type DisplayFont,
   type DisplayFontSize,
   type DisplayLineSpacing,
   type DisplayPreferences,
@@ -18,15 +21,17 @@ import {
 
 interface DisplayPreferencesValue extends DisplayPreferences {
   setFontSize: (value: DisplayFontSize) => void;
+  setLawFont: (value: DisplayFont) => void;
   setLineSpacing: (value: DisplayLineSpacing) => void;
   setTextDisplayMode: (value: DisplayTextMode) => void;
   setTheme: (value: DisplayTheme) => void;
+  setUiFont: (value: DisplayFont) => void;
 }
 
 const getServerDisplayPreferences = (): DisplayPreferences => DEFAULT_DISPLAY_PREFERENCES;
 
 export const useDisplayPreferences = (): DisplayPreferencesValue => {
-  const { fontSize, lineSpacing, textDisplayMode } = useSyncExternalStore(
+  const { fontSize, lawFont, lineSpacing, textDisplayMode, uiFont } = useSyncExternalStore(
     subscribeDisplayPreferences,
     getDisplayPreferences,
     getServerDisplayPreferences,
@@ -42,12 +47,16 @@ export const useDisplayPreferences = (): DisplayPreferencesValue => {
 
   return {
     fontSize,
+    lawFont,
     lineSpacing,
     textDisplayMode,
     theme,
+    uiFont,
     setFontSize: setDisplayFontSize,
+    setLawFont: setDisplayLawFont,
     setLineSpacing: setDisplayLineSpacing,
     setTextDisplayMode: setDisplayTextMode,
     setTheme,
+    setUiFont: setDisplayUiFont,
   };
 };
