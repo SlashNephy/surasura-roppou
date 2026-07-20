@@ -52,8 +52,9 @@
   --font-stack-gothic-system:
     "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, ui-sans-serif, system-ui,
     sans-serif;
-  --font-stack-mincho-system:
-    "Hiragino Mincho ProN", "Yu Mincho", "BIZ UDMincho", "Noto Serif JP", ui-serif, serif;
+  /* "BIZ UDMincho" は同梱 @font-face と同名のためスタックに置くと Web フォント側に解決され、
+     既定設定(system)の表示・通信量が変わってしまう。システムスタックからは外す。 */
+  --font-stack-mincho-system: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", ui-serif, serif;
   --font-stack-noto-serif-jp: "Noto Serif JP Variable", var(--font-stack-mincho-system);
   --font-stack-biz-udmincho: "BIZ UDMincho", var(--font-stack-mincho-system);
   --font-stack-zen-old-mincho: "Zen Old Mincho", var(--font-stack-mincho-system);
