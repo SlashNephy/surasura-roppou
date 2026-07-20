@@ -4,11 +4,12 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans:
-    "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, ui-sans-serif, system-ui,
-    sans-serif;
-  --font-serif:
-    "Hiragino Mincho ProN", "Yu Mincho", "BIZ UDMincho", "Noto Serif JP", ui-serif, serif;
+  /* @theme inline は utility へ「値」を inline 展開するため、実行時にフォントを切り替えるには
+     色トークンと同様、:root で定義した変数を参照させる二段構えにする。
+     --font-serif は設定で切り替えない（見出しは現行デザイン維持）。 */
+  --font-sans: var(--ui-font-family);
+  --font-serif: var(--font-stack-mincho-system);
+  --font-law: var(--law-font-family);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -47,6 +48,20 @@
 }
 
 :root {
+  /* フォント設定の選択肢ごとのスタック。Web フォント欠落時はシステム書体へ退避する。 */
+  --font-stack-gothic-system:
+    "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, ui-sans-serif, system-ui,
+    sans-serif;
+  --font-stack-mincho-system:
+    "Hiragino Mincho ProN", "Yu Mincho", "BIZ UDMincho", "Noto Serif JP", ui-serif, serif;
+  --font-stack-noto-serif-jp: "Noto Serif JP Variable", var(--font-stack-mincho-system);
+  --font-stack-biz-udmincho: "BIZ UDMincho", var(--font-stack-mincho-system);
+  --font-stack-zen-old-mincho: "Zen Old Mincho", var(--font-stack-mincho-system);
+  --font-stack-noto-sans-jp: "Noto Sans JP Variable", var(--font-stack-gothic-system);
+  --font-stack-biz-udgothic: "BIZ UDGothic", var(--font-stack-gothic-system);
+  /* data-ui-font / data-law-font が下の規則で差し替える現在値。既定はシステム書体。 */
+  --ui-font-family: var(--font-stack-gothic-system);
+  --law-font-family: var(--font-stack-mincho-system);
   --radius: 0.625rem;
   --display-line-height: 1.5;
   --background: #fcfbf8;
@@ -96,6 +111,46 @@
 
 :root[data-line-spacing="wide"] {
   --display-line-height: 2;
+}
+
+:root[data-law-font="noto-serif-jp"] {
+  --law-font-family: var(--font-stack-noto-serif-jp);
+}
+
+:root[data-law-font="biz-udmincho"] {
+  --law-font-family: var(--font-stack-biz-udmincho);
+}
+
+:root[data-law-font="zen-old-mincho"] {
+  --law-font-family: var(--font-stack-zen-old-mincho);
+}
+
+:root[data-law-font="noto-sans-jp"] {
+  --law-font-family: var(--font-stack-noto-sans-jp);
+}
+
+:root[data-law-font="biz-udgothic"] {
+  --law-font-family: var(--font-stack-biz-udgothic);
+}
+
+:root[data-ui-font="noto-serif-jp"] {
+  --ui-font-family: var(--font-stack-noto-serif-jp);
+}
+
+:root[data-ui-font="biz-udmincho"] {
+  --ui-font-family: var(--font-stack-biz-udmincho);
+}
+
+:root[data-ui-font="zen-old-mincho"] {
+  --ui-font-family: var(--font-stack-zen-old-mincho);
+}
+
+:root[data-ui-font="noto-sans-jp"] {
+  --ui-font-family: var(--font-stack-noto-sans-jp);
+}
+
+:root[data-ui-font="biz-udgothic"] {
+  --ui-font-family: var(--font-stack-biz-udgothic);
 }
 
 .dark {
