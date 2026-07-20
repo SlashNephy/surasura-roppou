@@ -94,6 +94,22 @@ const Probe = () => {
       >
         ダークへ固定する
       </button>
+      <button
+        onClick={() => {
+          preferences.setLawFont("noto-serif-jp");
+        }}
+        type="button"
+      >
+        本文を Noto 明朝にする
+      </button>
+      <button
+        onClick={() => {
+          preferences.setUiFont("noto-sans-jp");
+        }}
+        type="button"
+      >
+        UI を Noto ゴシックにする
+      </button>
     </>
   );
 };
@@ -122,6 +138,8 @@ afterEach(() => {
   document.documentElement.style.colorScheme = "";
   document.documentElement.removeAttribute("data-font-size");
   document.documentElement.removeAttribute("data-line-spacing");
+  document.documentElement.removeAttribute("data-law-font");
+  document.documentElement.removeAttribute("data-ui-font");
 });
 
 describe("DisplayPreferencesProvider", () => {
@@ -147,6 +165,28 @@ describe("DisplayPreferencesProvider", () => {
     expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.lineSpacing)).toBe("wide");
     expect(document.documentElement).toHaveAttribute("data-font-size", "extra-large");
     expect(document.documentElement).toHaveAttribute("data-line-spacing", "wide");
+  });
+
+  it("保存済みの本文・UI フォントを html 属性へ反映する", () => {
+    localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.lawFont, "biz-udmincho");
+    localStorage.setItem(DISPLAY_PREFERENCES_STORAGE_KEYS.uiFont, "biz-udgothic");
+
+    renderProvider();
+
+    expect(document.documentElement).toHaveAttribute("data-law-font", "biz-udmincho");
+    expect(document.documentElement).toHaveAttribute("data-ui-font", "biz-udgothic");
+  });
+
+  it("hook の setter で本文・UI フォントを保存し、html 属性を更新する", () => {
+    renderProvider();
+
+    fireEvent.click(screen.getByRole("button", { name: "本文を Noto 明朝にする" }));
+    fireEvent.click(screen.getByRole("button", { name: "UI を Noto ゴシックにする" }));
+
+    expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.lawFont)).toBe("noto-serif-jp");
+    expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.uiFont)).toBe("noto-sans-jp");
+    expect(document.documentElement).toHaveAttribute("data-law-font", "noto-serif-jp");
+    expect(document.documentElement).toHaveAttribute("data-ui-font", "noto-sans-jp");
   });
 
   it("未設定のシステムテーマは OS のダーク・ライト変更へ追従する", async () => {
