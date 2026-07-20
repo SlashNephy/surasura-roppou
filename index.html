@@ -45,6 +45,31 @@
         root.classList.remove("light", "dark");
         root.classList.add(resolvedTheme);
         root.style.colorScheme = resolvedTheme;
+
+        // フォント設定も theme と同様に初回 paint 前へ反映し、書体の切り替わりを見せない。
+        // 保存キーと値の一覧は display-preferences.ts の契約と意図的に重複させている。
+        const validFonts = [
+          "system",
+          "noto-serif-jp",
+          "biz-udmincho",
+          "zen-old-mincho",
+          "noto-sans-jp",
+          "biz-udgothic",
+        ];
+        const fontSettings = [
+          ["surasura:display:law-font", "lawFont"],
+          ["surasura:display:ui-font", "uiFont"],
+        ];
+        for (const [fontStorageKey, datasetName] of fontSettings) {
+          try {
+            const storedFont = window.localStorage.getItem(fontStorageKey);
+            if (validFonts.includes(storedFont)) {
+              root.dataset[datasetName] = storedFont;
+            }
+          } catch {
+            // storage へアクセスできない環境は、既定のフォントで表示する。
+          }
+        }
       })();
     </script>
     <meta
