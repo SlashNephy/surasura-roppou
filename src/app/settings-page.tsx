@@ -205,7 +205,11 @@ const DisplaySettingsGroup = () => {
               </option>
             ))}
           </Select>
-          <p className="font-law leading-display min-w-0 break-words text-sm text-foreground">
+          {/* 書体見本という視覚専用の情報のため、スクリーンリーダーには読み上げさせない。 */}
+          <p
+            aria-hidden="true"
+            className="font-law leading-display min-w-0 break-words text-sm text-foreground"
+          >
             {lawFontPreviewText}
           </p>
         </DisplaySelectRow>
