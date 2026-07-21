@@ -15,7 +15,7 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
-  "packageManager": "pnpm@11.13.1",
+  "packageManager": "pnpm@11.14.0",
   "dependencies": {
     "@fontsource-variable/noto-sans-jp": "^5.3.0",
     "@fontsource-variable/noto-serif-jp": "^5.3.0",
