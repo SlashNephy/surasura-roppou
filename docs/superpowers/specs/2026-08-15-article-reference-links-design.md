@@ -53,6 +53,40 @@ URL のハッシュとして公開していないため互換性の問題は生�
 項 id は「Article 直下の Paragraph」かつ URL 到達可能文脈のときだけ振る。
 号アンカーは作らず、`前項第三号` のような参照は項に着地させる。
 
+## 枝番条の表記の割れ（実データ検証で判明）
+
+枝番条（`第876条の9` のような「の」で連結された条）の番号表記は、由来によって 2 系統に割れる。
+
+- **`LawNode.number`（アプリ正準表記）**: `src/core/egov/lawText.ts` の `getNodeNumber` は e-Gov API の `Num` 属性を最優先する。
+  e-Gov は枝番を **`_`（アンダースコア）** で表記する（例: `876_9`）。`Num` 属性を持たない条だけ、フォールバックの
+  `extractNumberFromTitle` / `normalizeNumberSegments` が title から抽出し、こちらは **`-`（ハイフン）** で連結する
+  （例: `12-2`）。実データ（民法など）はほぼ全条が `Num` 属性を持つため、実際の `LawNode.number` は
+  `876_9` のようなアンダースコア表記になる。
+- **参照パーサーの出力**: `src/core/jump/reference-parser.ts` の `readBranches` は、本文中の「第876条の9」を
+  常に **`-`（ハイフン）** で連結して `876-9` を返す。
+
+この割れにより、`segmentReferenceLinks` が `parseReference` から受け取る `876-9` と、
+`buildArticleLinkEntries` が `LawNode.number` から作る `876_9` が単純な文字列比較では一致せず、
+枝番条への絶対参照（`第876条の9第1項` 等）がリンクにならない不具合があった。
+相対参照（`前条` `次条`）は一覧の索引で解決してエントリ自身の値を返すため、この不一致の影響を受けず動いていた。
+
+**パーサー側（`lawText.ts` の `getNodeNumber`、`reference-parser.ts` の `readBranches`）は変更しない。**
+`LawNode.number` はアンカー id・URL・ブックマークの保存値・条文指紋の基準になっており、
+表記を変えると保存済みデータとの互換性が壊れる。`readBranches` のハイフン連結を変えても、
+`Num` 属性由来のアンダースコア表記とは別の理由（title 由来か Num 属性由来か）で今度は逆方向に割れるだけで、
+根本解決にならない。
+
+代わりに **`src/core/viewer/reference-links.ts` の突き合わせ側で正規化する**。
+`resolveArticleNumber` の具体値の分岐で、比較用に `_` と `-` を同一視する正規化関数
+（`normalizeArticleNumberForMatch`）を通してから `context.articles` を検索し、
+見つかったエントリ自身の `articleNumber`（アプリ正準表記）を返す。`parsed.article`（パーサーの表記）を
+そのまま返すと、アンダースコア表記の条でアンカー id と URL が着地しなくなるため、必ずエントリ側の値を採用する。
+
+項番号（`paragraphNumbers` との突き合わせ）には、この正規化を適用していない。
+`ParagraphNum`（e-Gov API）は条のような枝番連結の対象ではなく、単純な整数表記のみを持つため、
+条と同じ理由で表記が割れる可能性が実データ上ない。将来 e-Gov 側の項番号表記に枝番相当の揺れが
+確認された場合は、同じ根拠（Num 属性由来かフォールバック由来かの割れ）で同じ正規化を適用してよい。
+
 ## 構成
 
 ### `src/core/jump/reference-pattern.ts`（新規）

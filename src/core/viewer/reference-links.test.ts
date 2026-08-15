@@ -380,6 +380,80 @@ describe("segmentReferenceLinks", () => {
   });
 });
 
+// e-Gov API の Num 属性は枝番を "_" で表記する（例: 876_9）が、reference-parser の
+// readBranches は "-" で連結する（876-9）。実データの LawNode.number はアンダースコア
+// 表記のため、このフィクスチャもそれに合わせる（ハイフン表記のフィクスチャでは
+// 実データで起きている不一致を再現できない）。
+const branchNumberLawNodes: LawNode[] = [
+  node({
+    id: "chapter:1",
+    type: "Chapter",
+    path: "chapter:1",
+    number: "1",
+    title: "第一章　通則",
+    children: ["article:876_9", "article:12-2"],
+  }),
+  node({
+    id: "article:876_9",
+    type: "Article",
+    path: "chapter:1/article:876_9",
+    number: "876_9",
+    title: "第八百七十六条の九",
+    caption: "（審判前の保全処分）",
+    children: ["article:876_9/paragraph:1"],
+    parentId: "chapter:1",
+  }),
+  node({
+    id: "article:876_9/paragraph:1",
+    type: "Paragraph",
+    path: "chapter:1/article:876_9/paragraph:1",
+    number: "1",
+    parentId: "article:876_9",
+  }),
+  node({
+    id: "article:12-2",
+    type: "Article",
+    path: "chapter:1/article:12-2",
+    number: "12-2",
+    title: "第十二条の二",
+    parentId: "chapter:1",
+  }),
+];
+
+describe("segmentReferenceLinks with branch article numbers", () => {
+  const articles = buildArticleLinkEntries(branchNumberLawNodes);
+
+  it("resolves an absolute reference to an underscore-formatted branch article number", () => {
+    const [segment] = segmentReferenceLinks("第876条の9第1項の審判", {
+      articles,
+      currentArticleNumber: "12-2",
+    });
+
+    expect(segment).toMatchObject({ kind: "link", text: "第876条の9第1項" });
+    expect(segment).toHaveProperty("target.articleNumber", "876_9");
+  });
+
+  it("resolves a kanji formatted reference to an underscore-formatted branch article number", () => {
+    const [segment] = segmentReferenceLinks("第八百七十六条の九の規定による。", {
+      articles,
+      currentArticleNumber: "12-2",
+    });
+
+    expect(segment).toMatchObject({ kind: "link", text: "第八百七十六条の九" });
+    expect(segment).toHaveProperty("target.articleNumber", "876_9");
+  });
+
+  it("still resolves a hyphen-formatted branch article number entry", () => {
+    const [segment] = segmentReferenceLinks("第12条の2の規定による。", {
+      articles,
+      currentArticleNumber: "876_9",
+    });
+
+    expect(segment).toMatchObject({ kind: "link", text: "第12条の2" });
+    expect(segment).toHaveProperty("target.articleNumber", "12-2");
+  });
+});
+
 describe("segmentReferenceLinks with a multi paragraph article", () => {
   const articles = buildArticleLinkEntries(numberedLawNodes);
 

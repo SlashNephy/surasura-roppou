@@ -305,6 +305,15 @@ const resolveTarget = (
     : { articleNumber, paragraphNumber };
 };
 
+// 条番号の枝番区切りは、由来によって表記が割れる。e-Gov API の Num 属性は
+// 枝番を "_" で表記する（876_9）が、Num 属性を持たない条は title から
+// フォールバックで抽出され "-" 連結になる（12-2）。一方 reference-parser の
+// readBranches は本文中の「第876条の9」のような参照を常に "-" で連結する。
+// LawNode.number（アプリ正準表記）はアンカー id・URL・保存済みブックマークの
+// 基準になっているため変更できない。したがって比較時にここで正規化する。
+const normalizeArticleNumberForMatch = (articleNumber: string): string =>
+  articleNumber.replaceAll("_", "-");
+
 const resolveArticleNumber = (
   parsed: ParsedReference,
   context: ArticleLinkContext,
@@ -315,9 +324,16 @@ const resolveArticleNumber = (
   }
 
   if (parsed.article !== "previous" && parsed.article !== "next") {
-    return context.articles.some((entry) => entry.articleNumber === parsed.article)
-      ? parsed.article
-      : undefined;
+    // parsed.article はパーサーの表記（ハイフン連結）。articles 側の表記が
+    // アンダースコアでも一致するよう正規化して突き合わせ、見つかった場合は
+    // articles 側のエントリが持つアプリ正準表記を返す（parsed.article をそのまま
+    // 返すと、アンダースコア表記の条でアンカー id・URL が着地しなくなる）。
+    const normalizedTarget = normalizeArticleNumberForMatch(parsed.article);
+    const entry = context.articles.find(
+      (candidate) => normalizeArticleNumberForMatch(candidate.articleNumber) === normalizedTarget,
+    );
+
+    return entry?.articleNumber;
   }
 
   if (context.currentArticleNumber === undefined) {
