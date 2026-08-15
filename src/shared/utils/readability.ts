@@ -41,11 +41,13 @@ const lawNumberRegex = new RegExp(
   `(令和|平成|昭和|大正|明治)(${eraYearPattern})年法律第(${kanjiNumberPattern})号`,
   "g",
 );
-const quantityLimitPattern = "以上|以下|以内|未満|を超え|を越え";
+const quantityLimitPattern = "以上|以下|以内|未満|を超え|を越え|をこえ|を経過";
 // 助数詞は許可リストで持つ。裸の漢数字を一律に変換すると「一般」「一部」「一切」などを壊すため。
 // 「一通り」は数量ではないので除き、「月」は「三月以内」のように限度表現が続く場合だけ期間として扱う
 // （「四月一日」のような日付は monthDayRegex 側で処理する）。
 const quantityUnitPattern = [
+  "労働日",
+  "親等",
   "年間",
   "箇年",
   "箇月",
@@ -54,10 +56,20 @@ const quantityUnitPattern = [
   "カ月",
   "ケ月",
   "週間",
+  "時間",
+  "月間",
+  "単元",
   "年",
+  "株",
   "週",
   "日",
   "人",
+  "歳",
+  "回",
+  "個",
+  "倍",
+  "棟",
+  "割",
   "通(?!り)",
   "トン",
   `月(?=${quantityLimitPattern})`,
@@ -66,9 +78,19 @@ const quantityUnitPattern = [
 // 「第」に続く数字は条番号・構造番号として別の変換が扱うため、ここでは対象にしない。
 const nonQuantityPrefixPattern = "(?<![同唯第])";
 const fractionRegex = new RegExp(`(${kanjiNumberPattern})分の(${kanjiNumberPattern})`, "g");
+// 歩合の「二割五分」は割と分をまとめて扱う。「分」を単独の助数詞にすると「十分な」「十分に」を壊すため。
+const rateRegex = new RegExp(
+  `${nonQuantityPrefixPattern}(${kanjiNumberPattern})割(${kanjiNumberPattern})分`,
+  "g",
+);
 const monthDayRegex = new RegExp(`(${kanjiNumberPattern})月(${kanjiNumberPattern})日`, "g");
 const quantityUnitRegex = new RegExp(
   `${nonQuantityPrefixPattern}(${kanjiNumberPattern})(${quantityUnitPattern})`,
+  "g",
+);
+// 「一又は二以上」は後半だけ変換すると「一又は2以上」と不揃いになるため、対にして扱う。
+const pairedBoundedQuantityRegex = new RegExp(
+  `${nonQuantityPrefixPattern}(${kanjiNumberPattern})(又は|若しくは|及び|、)(${kanjiNumberPattern})(?=${quantityLimitPattern})`,
   "g",
 );
 // 「二以上」のような助数詞を伴わない数量。「第四章の二以下」は枝番号なので直前の構造名で除外する。
@@ -176,7 +198,7 @@ const transformLawNumbers = (text: string): string =>
     return `${era}${replaceKanjiNumber(year)}年法律第${replaceKanjiNumber(lawNumber)}号`;
   });
 
-// 分数 → 月日 → 助数詞 → 裸の数量の順に適用する。
+// 分数 → 歩合 → 月日 → 助数詞 → 裸の数量の順に適用する。
 // 「三分の二以上」は分数を先に処理しないと「三分の2以上」で止まり、
 // 「四月一日」は月日を先に処理しないと「四月1日」と揃わない。
 // 「前三条」「前二項」のような条項の相対参照は、法律書の慣行に合わせて漢数字のまま残す。
@@ -188,6 +210,11 @@ const transformQuantities = (text: string): string =>
         `${replaceKanjiNumber(denominator)}分の${replaceKanjiNumber(numerator)}`,
     )
     .replace(
+      rateRegex,
+      (_match, tenths: string, hundredths: string) =>
+        `${replaceKanjiNumber(tenths)}割${replaceKanjiNumber(hundredths)}分`,
+    )
+    .replace(
       monthDayRegex,
       (_match, month: string, day: string) =>
         `${replaceKanjiNumber(month)}月${replaceKanjiNumber(day)}日`,
@@ -195,6 +222,11 @@ const transformQuantities = (text: string): string =>
     .replace(
       quantityUnitRegex,
       (_match, kanjiNumber: string, unit: string) => `${replaceKanjiNumber(kanjiNumber)}${unit}`,
+    )
+    .replace(
+      pairedBoundedQuantityRegex,
+      (_match, first: string, conjunction: string, second: string) =>
+        `${replaceKanjiNumber(first)}${conjunction}${replaceKanjiNumber(second)}`,
     )
     .replace(boundedQuantityRegex, (_match, kanjiNumber: string) =>
       replaceKanjiNumber(kanjiNumber),
