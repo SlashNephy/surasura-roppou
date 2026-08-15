@@ -1,5 +1,5 @@
 export type ReadabilityTransformMode =
-  "article-number" | "date" | "law-number" | "parentheses" | "unchanged" | "all";
+  "article-number" | "date" | "law-number" | "parentheses" | "quantity" | "unchanged" | "all";
 
 const digitByKanji = new Map([
   ["一", 1],
@@ -39,6 +39,41 @@ const eraDateRegex = new RegExp(
 );
 const lawNumberRegex = new RegExp(
   `(令和|平成|昭和|大正|明治)(${eraYearPattern})年法律第(${kanjiNumberPattern})号`,
+  "g",
+);
+const quantityLimitPattern = "以上|以下|以内|未満";
+// 助数詞は許可リストで持つ。裸の漢数字を一律に変換すると「一般」「一部」「一切」などを壊すため。
+// 「一通り」は数量ではないので除き、「月」は「三月以内」のように限度表現が続く場合だけ期間として扱う
+// （「四月一日」のような日付は monthDayRegex 側で処理する）。
+const quantityUnitPattern = [
+  "年間",
+  "箇年",
+  "箇月",
+  "か月",
+  "ヶ月",
+  "カ月",
+  "ケ月",
+  "週間",
+  "年",
+  "週",
+  "日",
+  "人",
+  "通(?!り)",
+  "トン",
+  `月(?=${quantityLimitPattern})`,
+].join("|");
+// 「同一人」「同一年度」「唯一人」など、直前の漢字と結合して数量ではなくなる語を除外する。
+const nonQuantityPrefixPattern = "(?<![同唯])";
+const fractionRegex = new RegExp(`(${kanjiNumberPattern})分の(${kanjiNumberPattern})`, "g");
+const precedingProvisionRegex = new RegExp(`前(${kanjiNumberPattern})(条|項|号)`, "g");
+const monthDayRegex = new RegExp(`(${kanjiNumberPattern})月(${kanjiNumberPattern})日`, "g");
+const quantityUnitRegex = new RegExp(
+  `${nonQuantityPrefixPattern}(${kanjiNumberPattern})(${quantityUnitPattern})`,
+  "g",
+);
+// 「二以上」のような助数詞を伴わない数量。「第四章の二以下」は枝番号なので直前の構造名で除外する。
+const boundedQuantityRegex = new RegExp(
+  `${nonQuantityPrefixPattern}(?<![編章節款目条項号表]の)(${kanjiNumberPattern})(?=${quantityLimitPattern})`,
   "g",
 );
 
@@ -141,6 +176,32 @@ const transformLawNumbers = (text: string): string =>
     return `${era}${replaceKanjiNumber(year)}年法律第${replaceKanjiNumber(lawNumber)}号`;
   });
 
+// 分数 → 前条参照 → 月日 → 助数詞 → 裸の数量の順に適用する。
+// 「三分の二以上」は分数を先に処理しないと「三分の2以上」で止まり、
+// 「四月一日」は月日を先に処理しないと「四月1日」と揃わない。
+const transformQuantities = (text: string): string =>
+  text
+    .replace(
+      fractionRegex,
+      (_match, denominator: string, numerator: string) =>
+        `${replaceKanjiNumber(denominator)}分の${replaceKanjiNumber(numerator)}`,
+    )
+    .replace(
+      precedingProvisionRegex,
+      (_match, kanjiNumber: string, suffix: string) =>
+        `前${replaceKanjiNumber(kanjiNumber)}${suffix}`,
+    )
+    .replace(
+      monthDayRegex,
+      (_match, month: string, day: string) =>
+        `${replaceKanjiNumber(month)}月${replaceKanjiNumber(day)}日`,
+    )
+    .replace(
+      quantityUnitRegex,
+      (_match, kanjiNumber: string, unit: string) => `${replaceKanjiNumber(kanjiNumber)}${unit}`,
+    )
+    .replace(boundedQuantityRegex, (match: string) => replaceKanjiNumber(match));
+
 export const transformReadableText = (
   text: string,
   mode: ReadabilityTransformMode = "all",
@@ -154,11 +215,17 @@ export const transformReadableText = (
       return transformLawNumbers(text);
     case "parentheses":
       return transformParentheses(text);
+    case "quantity":
+      return transformQuantities(text);
     case "unchanged":
       return text;
     case "all":
+      // 数量変換は条番号・日付・法令番号を処理した後に置く。
+      // 「令和六年」の「六年」を期間として先に拾ってしまわないようにするため。
       return transformFullWidthDigits(
-        transformArticleNumbers(transformDates(transformLawNumbers(transformParentheses(text)))),
+        transformQuantities(
+          transformArticleNumbers(transformDates(transformLawNumbers(transformParentheses(text)))),
+        ),
       );
   }
 };
