@@ -205,10 +205,11 @@ const DisplaySettingsGroup = () => {
               </option>
             ))}
           </Select>
-          {/* 書体見本という視覚専用の情報のため、スクリーンリーダーには読み上げさせない。 */}
+          {/* 書体見本という視覚専用の情報のため、スクリーンリーダーには読み上げさせない。
+              太さは条文本文と同じ 500 にして、見本が実際の表示と食い違わないようにする。 */}
           <p
             aria-hidden="true"
-            className="font-law leading-display min-w-0 break-words text-sm text-foreground"
+            className="font-law leading-display min-w-0 font-medium break-words text-sm text-foreground"
           >
             {lawFontPreviewText}
           </p>
