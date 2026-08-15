@@ -66,7 +66,6 @@ const quantityUnitPattern = [
 // 「第」に続く数字は条番号・構造番号として別の変換が扱うため、ここでは対象にしない。
 const nonQuantityPrefixPattern = "(?<![同唯第])";
 const fractionRegex = new RegExp(`(${kanjiNumberPattern})分の(${kanjiNumberPattern})`, "g");
-const precedingProvisionRegex = new RegExp(`前(${kanjiNumberPattern})(条|項|号)`, "g");
 const monthDayRegex = new RegExp(`(${kanjiNumberPattern})月(${kanjiNumberPattern})日`, "g");
 const quantityUnitRegex = new RegExp(
   `${nonQuantityPrefixPattern}(${kanjiNumberPattern})(${quantityUnitPattern})`,
@@ -177,20 +176,16 @@ const transformLawNumbers = (text: string): string =>
     return `${era}${replaceKanjiNumber(year)}年法律第${replaceKanjiNumber(lawNumber)}号`;
   });
 
-// 分数 → 前条参照 → 月日 → 助数詞 → 裸の数量の順に適用する。
+// 分数 → 月日 → 助数詞 → 裸の数量の順に適用する。
 // 「三分の二以上」は分数を先に処理しないと「三分の2以上」で止まり、
 // 「四月一日」は月日を先に処理しないと「四月1日」と揃わない。
+// 「前三条」「前二項」のような条項の相対参照は、法律書の慣行に合わせて漢数字のまま残す。
 const transformQuantities = (text: string): string =>
   text
     .replace(
       fractionRegex,
       (_match, denominator: string, numerator: string) =>
         `${replaceKanjiNumber(denominator)}分の${replaceKanjiNumber(numerator)}`,
-    )
-    .replace(
-      precedingProvisionRegex,
-      (_match, kanjiNumber: string, suffix: string) =>
-        `前${replaceKanjiNumber(kanjiNumber)}${suffix}`,
     )
     .replace(
       monthDayRegex,

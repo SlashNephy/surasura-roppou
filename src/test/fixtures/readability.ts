@@ -157,18 +157,6 @@ export const readabilityTransformFixtures = [
     expected: "2以上の法令",
   },
   {
-    name: "preceding article reference",
-    mode: "quantity",
-    input: "前三条",
-    expected: "前3条",
-  },
-  {
-    name: "preceding paragraph reference",
-    mode: "quantity",
-    input: "前二項",
-    expected: "前2項",
-  },
-  {
     name: "measurement unit",
     mode: "quantity",
     input: "総トン数二十トン",
