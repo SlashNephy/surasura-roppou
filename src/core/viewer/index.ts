@@ -10,3 +10,11 @@ export type { LawTocItem } from "./lawToc";
 export { findArticleNode, verifyAnchor } from "./anchor-verification";
 export type { AnchorStatus } from "./anchor-verification";
 export { pinAnchor, repathAnchor } from "./anchor-repair";
+export { buildArticleLinkEntries, segmentReferenceLinks } from "./reference-links";
+export type {
+  ArticleLinkContext,
+  ArticleLinkEntry,
+  ArticleLinkTarget,
+  ReferenceLinkCaption,
+  ReferenceLinkSegment,
+} from "./reference-links";

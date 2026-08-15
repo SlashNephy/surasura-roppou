@@ -1,4 +1,13 @@
 import type { LawNode } from "@/core/domain";
+import {
+  createAliasResolver,
+  initialAliasDictionary,
+  parseReference,
+  referenceArticleSpanPattern,
+  referencePositionPatternSource,
+  type ParsedReference,
+} from "@/core/jump";
+import { normalizeForSearch } from "@/core/search";
 
 import { computeChildArticleContext } from "./lawToc";
 
@@ -65,4 +74,225 @@ const collectArticleLinkEntries = (
   return children.flatMap((child) =>
     collectArticleLinkEntries(child, nodeById, childArticleContext),
   );
+};
+
+// 参照リンクの着地先。項は同じ条の中を指すときだけ載る（条をまたぐ着地は v1 では条単位）。
+export interface ArticleLinkTarget {
+  articleNumber: string;
+  paragraphNumber?: string;
+}
+
+// リンク文字列に差し込む見出し。offset は text 内の挿入位置。
+// 「第15条第2項」なら「第15条」の直後に入れて 第15条〈補助開始の審判〉第2項 とする。
+export interface ReferenceLinkCaption {
+  text: string;
+  offset: number;
+}
+
+export interface ArticleLinkContext {
+  articles: ArticleLinkEntry[];
+  // 前条・次条・前項の基準となる現在位置。
+  currentArticleNumber?: string;
+  currentParagraphNumber?: string;
+}
+
+export type ReferenceLinkSegment =
+  | { kind: "text"; text: string }
+  | { kind: "link"; text: string; target: ArticleLinkTarget; caption?: ReferenceLinkCaption };
+
+// 法令名の判定専用の resolver。組込辞書のみで十分（本文リンク化は候補解決までは行わない）。
+const defaultResolver = createAliasResolver();
+
+// 法令名部を後方から拾う窓幅。辞書の正規化キーの最大長を使う（reference-detector と同じ考え方）。
+const maxLawNameLength = Math.max(
+  ...initialAliasDictionary.flatMap((entry) =>
+    [entry.officialTitle, ...entry.aliases].map(
+      (surface) => normalizeForSearch(surface).normalized.length,
+    ),
+  ),
+);
+
+// 位置表現の直前に法令名が隣接しているかを判定する。位置部だけを渡す parseReference では
+// 法令名の有無を判定できないため、他法令参照（absolute）をここで弾く。
+const hasPrecedingLawName = (text: string, matchStart: number): boolean => {
+  const from = Math.max(0, matchStart - maxLawNameLength);
+
+  for (let start = from; start < matchStart; start += 1) {
+    if (defaultResolver.resolve(text.slice(start, matchStart)).length > 0) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+// alias 辞書は主要法令しか収録していないため、辞書外の法令名（例:「不正競争防止法」）は
+// hasPrecedingLawName で拾えない。誤ったリンクは無リンクより有害という方針のため、
+// 直前 1 文字が法令名・附則・条例の末尾、または既に別の条を指す語（「同条」「当該条」）で
+// 終わる場合も抑止する。トレードオフとして「本法第15条」のような正しい自法令参照も
+// 抑止されるが、無リンクに倒す。
+const precedingCharGuardPattern = /[法令則例条]$/;
+
+const hasPrecedingGuardChar = (text: string, matchStart: number): boolean =>
+  precedingCharGuardPattern.test(text.slice(0, matchStart));
+
+export const segmentReferenceLinks = (
+  text: string,
+  context: ArticleLinkContext,
+): ReferenceLinkSegment[] => {
+  const segments: ReferenceLinkSegment[] = [];
+  const pattern = new RegExp(referencePositionPatternSource, "g");
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(text)) !== null) {
+    // 空マッチ保険。理論上起きないが、起きれば無限ループになるため前進させる。
+    if (match[0] === "") {
+      pattern.lastIndex += 1;
+      continue;
+    }
+
+    // 法令名を伴う参照（例: 商法第15条）は他法令を指すため、同一法令内リンクの対象外。
+    if (hasPrecedingLawName(text, match.index) || hasPrecedingGuardChar(text, match.index)) {
+      continue;
+    }
+
+    const target = resolveTarget(match[0], context);
+
+    if (target === undefined) {
+      continue;
+    }
+
+    if (match.index > lastIndex) {
+      segments.push({ kind: "text", text: text.slice(lastIndex, match.index) });
+    }
+
+    const caption = buildCaption(match[0], target, context);
+
+    segments.push({
+      kind: "link",
+      text: match[0],
+      target,
+      ...(caption === undefined ? {} : { caption }),
+    });
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    segments.push({ kind: "text", text: text.slice(lastIndex) });
+  }
+
+  return segments;
+};
+
+// 参照先の条見出しを、リンク文字列のどこに差し込むかまで含めて決める。
+// 現在の条自身への参照（前項など）には付けない。同じ条の見出しを繰り返しても情報がない。
+const buildCaption = (
+  rawText: string,
+  target: ArticleLinkTarget,
+  context: ArticleLinkContext,
+): ReferenceLinkCaption | undefined => {
+  if (target.articleNumber === context.currentArticleNumber) {
+    return undefined;
+  }
+
+  const caption = context.articles.find(
+    (entry) => entry.articleNumber === target.articleNumber,
+  )?.caption;
+
+  if (caption === undefined) {
+    return undefined;
+  }
+
+  const articleSpan = referenceArticleSpanPattern.exec(rawText);
+
+  return { text: caption, offset: articleSpan === null ? rawText.length : articleSpan[0].length };
+};
+
+const resolveTarget = (
+  rawText: string,
+  context: ArticleLinkContext,
+): ArticleLinkTarget | undefined => {
+  const parsed = parseReference(rawText);
+
+  // 法令名を伴う参照は他法令を指すため、同一法令内リンクの対象外。
+  if (parsed === undefined || parsed.kind === "absolute") {
+    return undefined;
+  }
+
+  const articleNumber = resolveArticleNumber(parsed, context);
+
+  if (articleNumber === undefined) {
+    return undefined;
+  }
+
+  const entry = context.articles.find((candidate) => candidate.articleNumber === articleNumber);
+
+  if (entry === undefined) {
+    return undefined;
+  }
+
+  if (parsed.paragraph === undefined) {
+    // 条も項も伴わない参照（号のみ）と、現在の条自身への参照は、
+    // 着地先が現在位置と同じになり動かないリンクが残るためリンク化しない。
+    return parsed.article === undefined || articleNumber === context.currentArticleNumber
+      ? undefined
+      : { articleNumber };
+  }
+
+  const paragraphNumber = resolveParagraphNumber(parsed.paragraph, entry, context);
+
+  return paragraphNumber === undefined ? undefined : { articleNumber, paragraphNumber };
+};
+
+const resolveArticleNumber = (
+  parsed: ParsedReference,
+  context: ArticleLinkContext,
+): string | undefined => {
+  // 条を伴わない項参照（前項・第2項）は現在の条の中を指す。
+  if (parsed.article === undefined) {
+    return context.currentArticleNumber;
+  }
+
+  if (parsed.article !== "previous" && parsed.article !== "next") {
+    return context.articles.some((entry) => entry.articleNumber === parsed.article)
+      ? parsed.article
+      : undefined;
+  }
+
+  if (context.currentArticleNumber === undefined) {
+    return undefined;
+  }
+
+  const index = context.articles.findIndex(
+    (entry) => entry.articleNumber === context.currentArticleNumber,
+  );
+
+  if (index < 0) {
+    return undefined;
+  }
+
+  return context.articles[index + (parsed.article === "previous" ? -1 : 1)]?.articleNumber;
+};
+
+const resolveParagraphNumber = (
+  paragraph: string,
+  entry: ArticleLinkEntry,
+  context: ArticleLinkContext,
+): string | undefined => {
+  if (paragraph !== "previous" && paragraph !== "next") {
+    return entry.paragraphNumbers.includes(paragraph) ? paragraph : undefined;
+  }
+
+  if (context.currentParagraphNumber === undefined) {
+    return undefined;
+  }
+
+  const index = entry.paragraphNumbers.indexOf(context.currentParagraphNumber);
+
+  if (index < 0) {
+    return undefined;
+  }
+
+  return entry.paragraphNumbers[index + (paragraph === "previous" ? -1 : 1)];
 };
