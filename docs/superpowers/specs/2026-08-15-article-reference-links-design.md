@@ -70,20 +70,35 @@ export interface ArticleLinkTarget {
   paragraphNumber?: string;
 }
 
+// 法令 1 件ぶんの条の一覧。文書順に並ぶ。
+export interface ArticleLinkEntry {
+  articleNumber: string;
+  // 条見出し（外側の括弧は剥がしてある）
+  caption?: string;
+  // 条直下の項番号。前項・次項の解決と、存在しない項への着地の抑止に使う
+  paragraphNumbers: string[];
+}
+
 export interface ArticleLinkContext {
-  // 文書順の条番号（本則のみ、URL 到達可能なもの）
-  articleNumbers: string[];
-  // 条番号 → 見出し（括弧を剥がした形）
-  captionByArticleNumber: Map<string, string>;
+  articles: ArticleLinkEntry[];
   // 前条・次条の基準となる現在の条番号
   currentArticleNumber?: string;
   // 前項・次項の基準となる現在の項番号
   currentParagraphNumber?: string;
 }
 
+// リンク文字列に差し込む見出し。offset は text 内の挿入位置
+// （「第15条第2項」なら offset 4 で 第15条〈補助開始の審判〉第2項 になる）
+export interface ReferenceLinkCaption {
+  text: string;
+  offset: number;
+}
+
 export type ReferenceLinkSegment =
   | { kind: "text"; text: string }
-  | { kind: "link"; text: string; target: ArticleLinkTarget; caption?: string };
+  | { kind: "link"; text: string; target: ArticleLinkTarget; caption?: ReferenceLinkCaption };
+
+export const buildArticleLinkEntries: (nodes: LawNode[]) => ArticleLinkEntry[];
 
 export const segmentReferenceLinks: (
   text: string,
@@ -94,30 +109,56 @@ export const segmentReferenceLinks: (
 解析は `parseReference` をそのまま使う。次のいずれかに該当する参照は素のテキストとして返す。
 
 - `kind === "absolute"`（法令名を伴う＝他法令参照）
-- 参照先の条が `articleNumbers` に存在しない
+- 参照先の条が `articles` に存在しない、または参照先の項がその条に存在しない
 - 番号を持たない（`同条` `同法` など）
 - 前条・次条で、文書順の隣が存在しない（第 1 条の `前条` など）
 - 項のみの参照で `currentArticleNumber` が未確定
+- 着地先が現在位置と同じになるもの（現在の条自身への条参照、号のみの参照）
 
 `caption` はセグメントに常に載せ、`〈 〉` を出すかどうかは描画側が `displayMode` で決める。
+ただし現在の条自身を指すリンク（`前項` など）には見出しを付けない。同じ条の見出しを繰り返しても情報がない。
+
+#### 法令名ガード
+
+位置表現の正規表現は「商法第15条」のうち `第15条` の部分しかマッチしない。
+マッチ文字列だけを `parseReference` に渡すと法令名が届かず、他法令への参照が
+同一法令内リンクとして通ってしまう。OCR 検出側は `findLawNameStart` で後方に法令名を探して
+スパンを広げることでこれを避けている。本文リンク化では次の 2 段で抑止する。
+
+1. マッチ直前の文字列を alias 辞書で後方スキャンし、法令名（`商`『民訴』などの略称を含む）に一致したらリンク化しない
+2. マッチ直前の 1 文字が `法` `令` `則` `例` `条` のいずれかならリンク化しない
+
+2 は辞書に載っていない法令名（`不正競争防止法第2条`）、附則（`附則第15条`）、
+直前に別の条を指す語がある場合（`同条第2項`）を抑止する。
+`本法第15条` のような正しい自法令参照も巻き添えで抑止されるが、誤ったリンクは無リンクより有害という
+本件の判断基準に従って無リンクへ倒す。
 
 ### `src/core/viewer/lawToc.ts`（変更）
 
 - `articleAnchorId` を `a{number}` 形式に変更する。
 - `paragraphAnchorId(articleNumber, paragraphNumber)` を追加する。
-- `buildArticleLinkContext(nodes)` を追加し、目次構築と同じトラバースで
-  文書順の条番号配列と条番号→見出しマップを作る。
+
+条の一覧を作る `buildArticleLinkEntries(nodes)` は、`ArticleLinkEntry` 型が
+`segmentReferenceLinks` の入力そのものであるため `reference-links.ts` に置く。
+附則・別表の判定は `lawToc.ts` の `computeChildArticleContext` を import して共有する。
 
 ### `src/core/viewer/LawNodeList.tsx`（変更）
 
 - 本文の描画（条直下テキスト・項・号・章節の前文）を、文字列の直挿しからセグメント配列の写像に置き換える。
-- トップで `buildArticleLinkContext` を `useMemo` し、再帰の中で現在の条番号・項番号を足して各本文へ渡す。
+- トップで `buildArticleLinkEntries` を `useMemo` し、再帰の中で現在の条番号・項番号を足して各本文へ渡す。
 - Article 直下の Paragraph に `paragraphAnchorId` の `id` と `scroll-mt` を付ける。
+- 附則・別表の中（`isUrlAddressableArticleContext === false`）ではリンク化しない。
+  絶対参照は現在位置の基準がなくても解決できてしまうため、この抑止がないと附則の中の条番号が本則へリンクする。
 - リンクは飛び先で 2 種類に分かれる。
-  - 他の条へ: TanStack Router の `Link` で `/laws/$lawId/articles/$article` へ遷移する。
-    URL が addressable になり、既存の `activeArticleNumber` によるハイライトとスクロールがそのまま効く。
+  - 他の条へ: `buildLawArticleUrl` で作った `href` を持つ `<a>`。`onSelectArticle` があれば
+    `preventDefault` してコールバックで SPA 遷移する。URL が addressable になり、既存の
+    `activeArticleNumber` によるハイライトとスクロールがそのまま効く。
   - 同じ条の中の項へ: `<a href="#a15-p2">` のページ内リンク。ルーター・URL スキーマには手を入れない。
-- `lawId` を `LawDocumentView` → `LawNodeList` に props で渡す。
+- `core/viewer` は router 非依存を保つ。TanStack Router の `Link` は使わず、遷移は
+  既存の `LawTableOfContents` と同じくコールバック注入で行う。
+- 修飾キー付きクリック（Ctrl / Cmd / Shift / Alt）と非主ボタンのクリックは `preventDefault` しない。
+  新しいタブ・ウィンドウで開くというブラウザ標準のリンク操作を保つ。
+- `lawId` を `LawDocumentView` → `LawNodeList` に props で渡す。`LawDocumentView` は `law.lawId` から取る。
 
 リンク化は表示文字列が確定した後に行う。
 現在の `bodyText` は displayMode 変換 → 子要素の末尾テキスト除去 → 先頭マーカー除去を経た文字列であり、
