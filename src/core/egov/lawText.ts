@@ -1,4 +1,4 @@
-import type { LawNode, LawNodeType } from "@/core/domain";
+import type { LawNode, LawNodeType, RubyAnnotation } from "@/core/domain";
 
 export interface EgovLawTextNode {
   tag: string;
@@ -86,6 +86,7 @@ export const normalizeEgovLawText = (
     const rawCaption = getNodeCaption(apiNode, nodeType);
     const caption = rawCaption === undefined || rawCaption.trim() === "" ? undefined : rawCaption;
     const plainText = collectPlainText(apiNode);
+    const rubyAnnotations = collectRubyAnnotations(apiNode);
     const lawNode: LawNode = {
       id: nodeId,
       lawId,
@@ -98,6 +99,7 @@ export const normalizeEgovLawText = (
       rawText: collectRawText(apiNode),
       plainText,
       normalizedText: plainText,
+      ...(rubyAnnotations.length === 0 ? {} : { rubyAnnotations }),
       children: [],
       ...(parentId === undefined ? {} : { parentId }),
     };
@@ -223,13 +225,54 @@ const normalizeNumberSegments = (value: string): string | undefined => {
   return segments.length === 0 ? undefined : segments.map(normalizeNumberText).join("-");
 };
 
+// ルビの読み（<Ruby>瑕疵<Rt>かし</Rt></Ruby> の Rt）は本文ではないので、
+// 原文・整形いずれのテキストからも除き、rubyAnnotations として別に持つ。
+const rubyTag = "Ruby";
+const rubyTextTag = "Rt";
+
 const collectRawText = (node: EgovLawTextNode): string =>
-  node.children
-    .map((child) => (typeof child === "string" ? child : collectRawText(child)))
-    .join("");
+  node.tag === rubyTextTag
+    ? ""
+    : node.children
+        .map((child) => (typeof child === "string" ? child : collectRawText(child)))
+        .join("");
+
+const collectRubyAnnotations = (node: EgovLawTextNode): RubyAnnotation[] => {
+  const annotations = new Map<string, RubyAnnotation>();
+
+  const walk = (current: EgovLawTextNode): void => {
+    if (current.tag === rubyTag) {
+      const base = collectRawText(current);
+      const text = current.children
+        .filter(
+          (child): child is EgovLawTextNode =>
+            typeof child !== "string" && child.tag === rubyTextTag,
+        )
+        .flatMap((rt) => rt.children)
+        .map((child) => (typeof child === "string" ? child : collectRawText(child)))
+        .join("");
+
+      if (base !== "" && text !== "") {
+        annotations.set(`${base} ${text}`, { base, text });
+      }
+
+      return;
+    }
+
+    current.children.forEach((child) => {
+      if (typeof child !== "string") {
+        walk(child);
+      }
+    });
+  };
+
+  walk(node);
+
+  return [...annotations.values()];
+};
 
 const collectPlainText = (node: EgovLawTextNode): string => {
-  if (node.tag === "RubyChar") {
+  if (node.tag === rubyTextTag) {
     return "";
   }
 

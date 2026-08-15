@@ -518,4 +518,32 @@ describe("LawNodeList", () => {
 
     expect(screen.queryByText("2")).not.toBeInTheDocument();
   });
+  it("renders ruby annotations as <ruby> in the article body and caption", () => {
+    const { container } = render(
+      <LawNodeList
+        nodes={[
+          node({
+            id: "article:573",
+            type: "Article",
+            path: "article:573",
+            number: "573",
+            title: "第五百七十三条",
+            caption: "（運送賃）",
+            plainText: "運送品がその性質又は瑕疵によって滅失し、又は損傷したときは、",
+            rubyAnnotations: [{ base: "瑕疵", text: "かし" }],
+          }),
+        ]}
+      />,
+    );
+
+    const ruby = container.querySelector("ruby");
+
+    expect(ruby).not.toBeNull();
+    expect(ruby?.textContent).toBe("瑕疵かし");
+    expect(ruby?.querySelector("rt")?.textContent).toBe("かし");
+    // 読みは rt に分離されているので、本文の文字列としては地の文だけが並ぶ。
+    expect(container.querySelector("article")?.textContent).toContain(
+      "運送品がその性質又は瑕疵かしによって滅失し",
+    );
+  });
 });

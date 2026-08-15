@@ -15,6 +15,7 @@ export type {
   OcrSession,
   QuizRating,
   ReviewLog,
+  RubyAnnotation,
   StudyCard,
   StudyCardType,
   StudySession,
