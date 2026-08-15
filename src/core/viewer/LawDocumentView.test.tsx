@@ -71,7 +71,7 @@ describe("LawDocumentView", () => {
 
     const article = within(document).getByRole("article", { name: "第一条" });
 
-    expect(article).toHaveAttribute("id", "article-1");
+    expect(article).toHaveAttribute("id", "a1");
     expect(article).toHaveAttribute("data-active", "true");
     expect(within(article).getByRole("heading", { name: "第1条" })).toBeInTheDocument();
     expect(

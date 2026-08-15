@@ -29,7 +29,11 @@ export interface LawTocItem {
   children: LawTocItem[];
 }
 
-export const articleAnchorId = (articleNumber: string): string => `article-${articleNumber}`;
+// アンカー ID は本文中の参照リンクからも使うため短く保つ（第15条第2項 → a15-p2）。
+export const articleAnchorId = (articleNumber: string): string => `a${articleNumber}`;
+
+export const paragraphAnchorId = (articleNumber: string, paragraphNumber: string): string =>
+  `${articleAnchorId(articleNumber)}-p${paragraphNumber}`;
 
 export const allowsArticleUrlTargets = (nodeType: LawNodeType): boolean =>
   !nonUrlAddressableArticleContainerTypes.has(nodeType);

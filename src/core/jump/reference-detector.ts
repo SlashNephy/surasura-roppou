@@ -5,6 +5,7 @@ import { initialAliasDictionary } from "./alias-dictionary";
 import { createAliasResolver, type AliasResolver } from "./alias-resolver";
 import { resolveReferenceCandidates } from "./candidate-resolver";
 import { parseReference } from "./reference-parser";
+import { referencePositionPatternSource } from "./reference-pattern";
 
 export interface DetectLawReferencesOptions {
   // 分類・解決に使う resolver。既定は組込辞書のみ。
@@ -17,19 +18,6 @@ export interface DetectLawReferencesOptions {
 
 const defaultResolver = createAliasResolver();
 const defaultSource: LawReferenceDetectionSource = { type: "ocr" };
-
-// 位置表現に使う数字（アラビア・全角・漢数字）。パーサーの数値解釈に合わせる。
-const kanjiDigits = "一二三四五六七八九十百千";
-const numberClass = `[0-9０-９${kanjiDigits}]+`;
-
-// 行内で条文の位置表現を位置特定するパターン。先頭に必須トークン
-// （条/項/号/別表/相対マーカー）を要求して空マッチを防ぎ、続く項・号・本文/ただし書は
-// 任意で連結して 1 参照のスパンにする。抽出後の実際の解析は parseReference に委譲する。
-const positionPattern =
-  `(?:別表第?${numberClass}|第?${numberClass}条(?:の${numberClass})*|前条|次条|第?${numberClass}項|前項|次項|第?${numberClass}号)` +
-  `(?:第?${numberClass}項|前項|次項)?` +
-  `(?:第?${numberClass}号)?` +
-  `(?:本文|ただし書|但書)?`;
 
 // 法令名部を後方から拾う窓幅。辞書の正規化キーの最大長を使う。
 const maxLawNameLength = Math.max(
@@ -84,7 +72,7 @@ export const detectLawReferences = (
 
   // グローバル正規表現を関数呼び出しごとに 1 度だけ生成し、行ごとに lastIndex をリセットして使い回す。
   // 行をまたいで lastIndex を持ち回さないことで、各行を独立したマッチ対象として扱う。
-  const pattern = new RegExp(positionPattern, "g");
+  const pattern = new RegExp(referencePositionPatternSource, "g");
 
   text.split("\n").forEach((line, lineIndex) => {
     // 行の先頭からマッチを開始するため lastIndex をリセットする。

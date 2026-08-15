@@ -16,12 +16,14 @@ interface LawDocumentViewProps {
   nodes: LawNode[];
   activeArticleNumber?: string;
   displayMode?: LawTextDisplayMode;
+  onSelectArticle?: (articleNumber: string) => void;
   renderArticleActions?: (article: LawNode) => ReactNode;
 }
 
 export const LawDocumentView = ({
   activeArticleNumber,
   displayMode = "readable",
+  onSelectArticle,
   renderArticleActions,
   law,
   revision,
@@ -73,7 +75,9 @@ export const LawDocumentView = ({
       <LawNodeList
         activeArticleNumber={activeArticleNumber}
         displayMode={displayMode}
+        lawId={law.lawId}
         nodes={nodes}
+        onSelectArticle={onSelectArticle}
         renderArticleActions={renderArticleActions}
       />
     </article>

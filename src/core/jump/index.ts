@@ -31,3 +31,8 @@ export type {
 } from "./quick-search";
 export { detectLawReferences } from "./reference-detector";
 export type { DetectLawReferencesOptions } from "./reference-detector";
+export {
+  bodyReferencePositionPatternSource,
+  referenceArticleSpanPattern,
+  referencePositionPatternSource,
+} from "./reference-pattern";

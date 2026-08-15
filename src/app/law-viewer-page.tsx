@@ -698,6 +698,7 @@ const LawViewerReadyState = ({
             displayMode={displayMode}
             law={state.law}
             nodes={state.nodes}
+            onSelectArticle={navigateToArticle}
             renderArticleActions={(article) => (
               <ArticleQuickActions
                 article={article}

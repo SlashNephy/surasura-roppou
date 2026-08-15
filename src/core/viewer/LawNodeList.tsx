@@ -1,6 +1,11 @@
 import { type ReactNode, useMemo } from "react";
 
-import type { LawNode, LawNodeType } from "@/core/domain";
+import {
+  buildLawArticleUrl,
+  type LawNode,
+  type LawNodeType,
+  type RubyAnnotation,
+} from "@/core/domain";
 import { cn } from "@/shared/utils/cn";
 
 import {
@@ -9,12 +14,20 @@ import {
   type LawTextDisplayMode,
 } from "./displayMode";
 import { LawTextWithRuby } from "./LawTextWithRuby";
-import { articleAnchorId, computeChildArticleContext } from "./lawToc";
+import { articleAnchorId, computeChildArticleContext, paragraphAnchorId } from "./lawToc";
+import {
+  buildArticleLinkEntries,
+  segmentReferenceLinks,
+  type ArticleLinkContext,
+  type ReferenceLinkSegment,
+} from "./reference-links";
 
 interface LawNodeListProps {
+  lawId: string;
   nodes: LawNode[];
   activeArticleNumber?: string;
   displayMode?: LawTextDisplayMode;
+  onSelectArticle?: (articleNumber: string) => void;
   renderArticleActions?: (article: LawNode) => ReactNode;
 }
 
@@ -38,11 +51,18 @@ const headingTags: HeadingTag[] = ["h2", "h3", "h4", "h5", "h6"];
 export const LawNodeList = ({
   activeArticleNumber,
   displayMode = "readable",
+  lawId,
   nodes,
+  onSelectArticle,
   renderArticleActions,
 }: LawNodeListProps) => {
   const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
   const topLevelNodes = useMemo(() => nodes.filter((node) => node.parentId === undefined), [nodes]);
+  const articles = useMemo(() => buildArticleLinkEntries(nodes), [nodes]);
+  const linking = useMemo<LinkingOptions>(
+    () => ({ articles, displayMode, lawId, onSelectArticle }),
+    [articles, displayMode, lawId, onSelectArticle],
+  );
 
   return (
     <div className="grid gap-5">
@@ -53,8 +73,10 @@ export const LawNodeList = ({
           depth={1}
           displayMode={displayMode}
           isUrlAddressableArticleContext={true}
+          linking={linking}
           node={node}
           nodeById={nodeById}
+          position={{ articleNumber: undefined }}
           renderArticleActions={renderArticleActions}
         />
       ))}
@@ -67,16 +89,22 @@ const LawNodeBlock = ({
   depth,
   displayMode,
   isUrlAddressableArticleContext,
+  linking,
   node,
   nodeById,
+  position,
   renderArticleActions,
 }: {
   activeArticleNumber: string | undefined;
   depth: number;
   displayMode: LawTextDisplayMode;
   isUrlAddressableArticleContext: boolean;
+  linking: LinkingOptions;
   node: LawNode;
   nodeById: Map<string, LawNode>;
+  // 本文中の相対参照（前条・前項）の基準となる、この節点を含む条・項の番号。
+  // 附則・別表の中では条アンカーが無いため undefined のまま伝える。
+  position: { articleNumber?: string; paragraphNumber?: string };
   renderArticleActions: ((article: LawNode) => ReactNode) | undefined;
 }) => {
   const childArticleContext = computeChildArticleContext(isUrlAddressableArticleContext, node.type);
@@ -97,6 +125,9 @@ const LawNodeBlock = ({
       const displayTitle = getDisplayInlineText(node.title ?? node.number, displayMode);
       const displayCaption = getDisplayInlineText(node.caption, displayMode);
       const displayText = getDisplayText(node, displayMode);
+      const childPosition = isUrlAddressableArticle
+        ? { articleNumber: node.number }
+        : { articleNumber: undefined };
 
       return (
         <article
@@ -141,16 +172,20 @@ const LawNodeBlock = ({
                 depth,
                 displayMode,
                 isUrlAddressableArticleContext: childArticleContext,
+                linking,
                 nodeById,
+                position: childPosition,
                 renderArticleActions,
               })
             ) : (
               <p className="indent-[1em] font-law leading-display font-medium text-foreground break-words">
-                <LawTextWithRuby
-                  displayMode={displayMode}
-                  annotations={node.rubyAnnotations}
-                  text={displayText}
-                />
+                {renderLinkedText(
+                  displayText,
+                  linking,
+                  { articleNumber: node.number },
+                  isUrlAddressableArticleContext,
+                  node.rubyAnnotations,
+                )}
               </p>
             )}
           </div>
@@ -162,6 +197,16 @@ const LawNodeBlock = ({
     case "Item":
     case "Subitem": {
       const parent = node.parentId === undefined ? undefined : nodeById.get(node.parentId);
+      // 条直下の項だけ、本文中の参照リンクの着地先としてアンカーを持つ。
+      // 附則・別表の中は条アンカーと同様に URL 到達可能でないため付けない。
+      const paragraphId =
+        node.type === "Paragraph" &&
+        parent?.type === "Article" &&
+        isUrlAddressableArticleContext &&
+        parent.number !== undefined &&
+        node.number !== undefined
+          ? paragraphAnchorId(parent.number, node.number)
+          : undefined;
       const marker =
         node.type === "Paragraph"
           ? (node.title ?? getArticleParagraphMarker(node, nodeById))
@@ -173,11 +218,20 @@ const LawNodeBlock = ({
       );
       // 条直下の項は、1行目を字下げして第1項・第2項以降の本文頭を揃える。
       const isArticleParagraph = node.type === "Paragraph" && parent?.type === "Article";
+      const ownPosition = isArticleParagraph
+        ? { articleNumber: parent.number, paragraphNumber: node.number }
+        : position;
+      const childPosition = isArticleParagraph
+        ? { ...position, paragraphNumber: node.number }
+        : position;
 
       return (
         <div
+          id={paragraphId}
           className={cn(
             "grid gap-2",
+            // アンカー着地時にヘッダへ潜り込まないよう、条と同じだけ余白を取る。
+            paragraphId !== undefined && "scroll-mt-20",
             node.type === "Item" && "pl-5",
             node.type === "Subitem" && "pl-8",
           )}
@@ -197,11 +251,13 @@ const LawNodeBlock = ({
                 </span>
               ) : null}
               <span>
-                <LawTextWithRuby
-                  displayMode={displayMode}
-                  annotations={node.rubyAnnotations}
-                  text={bodyText}
-                />
+                {renderLinkedText(
+                  bodyText,
+                  linking,
+                  ownPosition,
+                  isUrlAddressableArticleContext,
+                  node.rubyAnnotations,
+                )}
               </span>
             </p>
           ) : (
@@ -213,11 +269,13 @@ const LawNodeBlock = ({
               <span
                 className={cn("min-w-0 break-words", displayMarker === undefined && "indent-[1em]")}
               >
-                <LawTextWithRuby
-                  displayMode={displayMode}
-                  annotations={node.rubyAnnotations}
-                  text={bodyText}
-                />
+                {renderLinkedText(
+                  bodyText,
+                  linking,
+                  ownPosition,
+                  isUrlAddressableArticleContext,
+                  node.rubyAnnotations,
+                )}
               </span>
             </p>
           )}
@@ -227,7 +285,9 @@ const LawNodeBlock = ({
             depth,
             displayMode,
             isUrlAddressableArticleContext: childArticleContext,
+            linking,
             nodeById,
+            position: childPosition,
             renderArticleActions,
           })}
         </div>
@@ -258,11 +318,13 @@ const LawNodeBlock = ({
       ) : null}
       {bodyText !== "" ? (
         <p className="font-law leading-display font-medium text-foreground break-words">
-          <LawTextWithRuby
-            displayMode={displayMode}
-            annotations={node.rubyAnnotations}
-            text={bodyText}
-          />
+          {renderLinkedText(
+            bodyText,
+            linking,
+            {},
+            isUrlAddressableArticleContext,
+            node.rubyAnnotations,
+          )}
         </p>
       ) : null}
       {renderChildBlocks({
@@ -271,7 +333,9 @@ const LawNodeBlock = ({
         depth,
         displayMode,
         isUrlAddressableArticleContext: childArticleContext,
+        linking,
         nodeById,
+        position,
         renderArticleActions,
       })}
     </section>
@@ -284,7 +348,9 @@ const renderChildBlocks = ({
   depth,
   displayMode,
   isUrlAddressableArticleContext,
+  linking,
   nodeById,
+  position,
   renderArticleActions,
 }: {
   activeArticleNumber: string | undefined;
@@ -292,7 +358,11 @@ const renderChildBlocks = ({
   depth: number;
   displayMode: LawTextDisplayMode;
   isUrlAddressableArticleContext: boolean;
+  linking: LinkingOptions;
   nodeById: Map<string, LawNode>;
+  // 本文中の相対参照（前条・前項）の基準となる、この節点を含む条・項の番号。
+  // 附則・別表の中では条アンカーが無いため undefined のまま伝える。
+  position: { articleNumber?: string; paragraphNumber?: string };
   renderArticleActions: ((article: LawNode) => ReactNode) | undefined;
 }) =>
   children.map((child) => (
@@ -302,8 +372,10 @@ const renderChildBlocks = ({
       depth={depth + 1}
       displayMode={displayMode}
       isUrlAddressableArticleContext={isUrlAddressableArticleContext}
+      linking={linking}
       node={child}
       nodeById={nodeById}
+      position={position}
       renderArticleActions={renderArticleActions}
     />
   ));
@@ -377,4 +449,116 @@ const getDisplayHeadingInlineText = (
   }
 
   return applyLawHeadingTextDisplayMode(text, displayMode);
+};
+
+interface LinkingOptions {
+  articles: ArticleLinkContext["articles"];
+  displayMode: LawTextDisplayMode;
+  lawId: string;
+  onSelectArticle: ((articleNumber: string) => void) | undefined;
+}
+
+// 表示文字列を参照リンク入りの ReactNode 列へ写す。
+// リンクにならない部分もルビ復元は通すため、素の文字列ではなく LawTextWithRuby を返す。
+// ルビは文字位置ではなく語の一致で付くので、リンクで分割したあとの断片にもそのまま適用できる。
+// 分割の境界をまたぐ語だけはルビが落ちるが、ルビ対象語と条番号の参照が重なることは実質ない。
+const renderLinkedText = (
+  text: string,
+  linking: LinkingOptions,
+  position: { articleNumber?: string; paragraphNumber?: string },
+  isUrlAddressableArticleContext: boolean,
+  annotations: RubyAnnotation[] | undefined,
+): ReactNode => {
+  const plain = (
+    <LawTextWithRuby annotations={annotations} displayMode={linking.displayMode} text={text} />
+  );
+
+  // 附則・別表の中の条番号は本則の条を指さないため、リンク化しない。
+  if (text === "" || !isUrlAddressableArticleContext) {
+    return plain;
+  }
+
+  const segments = segmentReferenceLinks(text, {
+    articles: linking.articles,
+    ...(position.articleNumber === undefined
+      ? {}
+      : { currentArticleNumber: position.articleNumber }),
+    ...(position.paragraphNumber === undefined
+      ? {}
+      : { currentParagraphNumber: position.paragraphNumber }),
+  });
+
+  if (segments.every((segment) => segment.kind === "text")) {
+    return plain;
+  }
+
+  return segments.map((segment, index) => (
+    <ReferenceSegment
+      key={`${String(index)}:${segment.text}`}
+      annotations={annotations}
+      linking={linking}
+      segment={segment}
+    />
+  ));
+};
+
+const ReferenceSegment = ({
+  annotations,
+  linking,
+  segment,
+}: {
+  annotations: RubyAnnotation[] | undefined;
+  linking: LinkingOptions;
+  segment: ReferenceLinkSegment;
+}) => {
+  const withRuby = (text: string) => (
+    <LawTextWithRuby annotations={annotations} displayMode={linking.displayMode} text={text} />
+  );
+
+  if (segment.kind === "text") {
+    return withRuby(segment.text);
+  }
+
+  const { caption, target, text } = segment;
+  // 同じ条の中の項へはページ内リンク。条をまたぐときは条ルートへ遷移する。
+  const isInPage = target.paragraphNumber !== undefined;
+  const href = isInPage
+    ? `#${paragraphAnchorId(target.articleNumber, target.paragraphNumber ?? "")}`
+    : buildLawArticleUrl({ lawId: linking.lawId, article: target.articleNumber });
+  // 見出しの注入は見やすい表示のときだけ。原文表示では原文にない文字を足さない。
+  const showCaption = caption !== undefined && linking.displayMode === "readable";
+
+  return (
+    <a
+      className="text-primary underline decoration-dotted underline-offset-4 hover:decoration-solid"
+      href={href}
+      onClick={
+        isInPage || linking.onSelectArticle === undefined
+          ? undefined
+          : (event) => {
+              // 修飾キー付きクリックや中クリックは、新しいタブ・ウィンドウで開く
+              // といったブラウザ標準のリンク操作を期待させるため横取りしない。
+              // 素の左クリックのときだけ SPA 内遷移に差し替える。
+              if (
+                event.metaKey ||
+                event.ctrlKey ||
+                event.shiftKey ||
+                event.altKey ||
+                event.button !== 0
+              ) {
+                return;
+              }
+
+              event.preventDefault();
+              linking.onSelectArticle?.(target.articleNumber);
+            }
+      }
+    >
+      {withRuby(showCaption ? text.slice(0, caption.offset) : text)}
+      {showCaption ? (
+        <span className="text-secondary-foreground">〈{withRuby(caption.text)}〉</span>
+      ) : null}
+      {showCaption ? withRuby(text.slice(caption.offset)) : null}
+    </a>
+  );
 };
