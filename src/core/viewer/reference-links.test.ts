@@ -212,6 +212,18 @@ describe("segmentReferenceLinks", () => {
       context: { currentArticleNumber: "16", currentParagraphNumber: "1" },
       expected: [],
     },
+    {
+      name: "does not link a reference carrying a single-character law abbreviation",
+      text: "商第15条の規定",
+      context: { currentArticleNumber: "16" },
+      expected: [],
+    },
+    {
+      name: "does not link a reference carrying a multi-character law abbreviation",
+      text: "民訴第15条の規定",
+      context: { currentArticleNumber: "16" },
+      expected: [],
+    },
   ])("$name", ({ context, expected, text }) => {
     expect(linkTexts(text, context)).toEqual(expected);
   });
