@@ -1,5 +1,5 @@
 export type ReadabilityTransformMode =
-  "article-number" | "date" | "law-number" | "parentheses" | "unchanged" | "all";
+  "article-number" | "date" | "law-number" | "parentheses" | "quantity" | "unchanged" | "all";
 
 const digitByKanji = new Map([
   ["一", 1],
@@ -39,6 +39,72 @@ const eraDateRegex = new RegExp(
 );
 const lawNumberRegex = new RegExp(
   `(令和|平成|昭和|大正|明治)(${eraYearPattern})年法律第(${kanjiNumberPattern})号`,
+  "g",
+);
+const quantityLimitPattern = "以上|以下|以内|未満|を超え|を越え|をこえ|を経過";
+// 助数詞は許可リストで持つ。裸の漢数字を一律に変換すると「一般」「一部」「一切」などを壊すため。
+// 「一通り」は数量ではないので除き、「月」は「三月以内」のように限度表現が続く場合だけ期間として扱う
+// （「四月一日」のような日付は monthDayRegex 側で処理する）。
+const quantityUnitPattern = [
+  "労働日",
+  "親等",
+  "年間",
+  "箇年",
+  "箇月",
+  "か月",
+  "ヶ月",
+  "カ月",
+  "ケ月",
+  "週間",
+  "時間",
+  "月間",
+  "単元",
+  "単位",
+  "年",
+  "株",
+  "組",
+  "週",
+  "日",
+  "人",
+  "歳",
+  "回",
+  "個",
+  "倍",
+  "棟",
+  "割",
+  // 金額は「一万円」→「1万円」のように万・億を単位語として残す。
+  // 万・億の前後それぞれが独立して変換されるので「三億五千万円」→「3億5000万円」になる。
+  "億",
+  "万",
+  "円",
+  "通(?!り)",
+  "トン",
+  // 「三月以内」のような期間と、「一月から三月まで」のような月名だけを対象にする。
+  // 「四月一日」形式の日付は monthDayRegex が先に処理する。
+  `月(?=${quantityLimitPattern}|から|まで)`,
+].join("|");
+// 「同一人」「同一年度」「唯一人」「第一人者」など、直前の漢字と結合して数量ではなくなる語を除外する。
+// 「第」に続く数字は条番号・構造番号として別の変換が扱うため、ここでは対象にしない。
+const nonQuantityPrefixPattern = "(?<![同唯第])";
+const fractionRegex = new RegExp(`(${kanjiNumberPattern})分の(${kanjiNumberPattern})`, "g");
+// 歩合の「二割五分」は割と分をまとめて扱う。「分」を単独の助数詞にすると「十分な」「十分に」を壊すため。
+const rateRegex = new RegExp(
+  `${nonQuantityPrefixPattern}(${kanjiNumberPattern})割(${kanjiNumberPattern})分`,
+  "g",
+);
+const monthDayRegex = new RegExp(`(${kanjiNumberPattern})月(${kanjiNumberPattern})日`, "g");
+const quantityUnitRegex = new RegExp(
+  `${nonQuantityPrefixPattern}(${kanjiNumberPattern})(${quantityUnitPattern})`,
+  "g",
+);
+// 「一又は二以上」は後半だけ変換すると「一又は2以上」と不揃いになるため、対にして扱う。
+const pairedBoundedQuantityRegex = new RegExp(
+  `${nonQuantityPrefixPattern}(${kanjiNumberPattern})(又は|若しくは|及び|、)(${kanjiNumberPattern})(?=${quantityLimitPattern})`,
+  "g",
+);
+// 「二以上」のような助数詞を伴わない数量。「第四章の二以下」は枝番号なので直前の構造名で除外する。
+const boundedQuantityRegex = new RegExp(
+  `${nonQuantityPrefixPattern}(?<![編章節款目条項号表]の)(${kanjiNumberPattern})(?=${quantityLimitPattern})`,
   "g",
 );
 
@@ -141,6 +207,40 @@ const transformLawNumbers = (text: string): string =>
     return `${era}${replaceKanjiNumber(year)}年法律第${replaceKanjiNumber(lawNumber)}号`;
   });
 
+// 分数 → 歩合 → 月日 → 助数詞 → 裸の数量の順に適用する。
+// 「三分の二以上」は分数を先に処理しないと「三分の2以上」で止まり、
+// 「四月一日」は月日を先に処理しないと「四月1日」と揃わない。
+// 「前三条」「前二項」のような条項の相対参照は、法律書の慣行に合わせて漢数字のまま残す。
+const transformQuantities = (text: string): string =>
+  text
+    .replace(
+      fractionRegex,
+      (_match, denominator: string, numerator: string) =>
+        `${replaceKanjiNumber(denominator)}分の${replaceKanjiNumber(numerator)}`,
+    )
+    .replace(
+      rateRegex,
+      (_match, tenths: string, hundredths: string) =>
+        `${replaceKanjiNumber(tenths)}割${replaceKanjiNumber(hundredths)}分`,
+    )
+    .replace(
+      monthDayRegex,
+      (_match, month: string, day: string) =>
+        `${replaceKanjiNumber(month)}月${replaceKanjiNumber(day)}日`,
+    )
+    .replace(
+      quantityUnitRegex,
+      (_match, kanjiNumber: string, unit: string) => `${replaceKanjiNumber(kanjiNumber)}${unit}`,
+    )
+    .replace(
+      pairedBoundedQuantityRegex,
+      (_match, first: string, conjunction: string, second: string) =>
+        `${replaceKanjiNumber(first)}${conjunction}${replaceKanjiNumber(second)}`,
+    )
+    .replace(boundedQuantityRegex, (_match, kanjiNumber: string) =>
+      replaceKanjiNumber(kanjiNumber),
+    );
+
 export const transformReadableText = (
   text: string,
   mode: ReadabilityTransformMode = "all",
@@ -154,11 +254,17 @@ export const transformReadableText = (
       return transformLawNumbers(text);
     case "parentheses":
       return transformParentheses(text);
+    case "quantity":
+      return transformQuantities(text);
     case "unchanged":
       return text;
     case "all":
+      // 数量変換は条番号・日付・法令番号を処理した後に置く。
+      // 「令和六年」の「六年」を期間として先に拾ってしまわないようにするため。
       return transformFullWidthDigits(
-        transformArticleNumbers(transformDates(transformLawNumbers(transformParentheses(text)))),
+        transformQuantities(
+          transformArticleNumbers(transformDates(transformLawNumbers(transformParentheses(text)))),
+        ),
       );
   }
 };

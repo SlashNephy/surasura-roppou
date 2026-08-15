@@ -11,7 +11,9 @@ describe("readability transform fixtures", () => {
       expect(names.has(fixture.name)).toBe(false);
       names.add(fixture.name);
       expect(fixture.input).not.toBe("");
-      expect(fixture.mode).toMatch(/^(article-number|date|law-number|parentheses|unchanged)$/);
+      expect(fixture.mode).toMatch(
+        /^(article-number|date|law-number|parentheses|quantity|unchanged)$/,
+      );
       expect(fixture.expected).not.toBe("");
 
       if (fixture.mode === "unchanged") {

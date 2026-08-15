@@ -1,22 +1,16 @@
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { render, screen, waitFor } from "@testing-library/react";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { createMemoryStorageRepository } from "@/test/fixtures/storage";
+import { setupScrollMocks } from "@/test/scrollMocks";
 
 import { createAppRouter } from "./router";
 
 const primaryNavRoutes = ["法令", "撮る", "復習", "設定"] as const;
-const scrollTo = window.scrollTo;
 
 describe("AppShell", () => {
-  beforeAll(() => {
-    window.scrollTo = () => undefined;
-  });
-
-  afterAll(() => {
-    window.scrollTo = scrollTo;
-  });
+  setupScrollMocks();
 
   it("renders header and mobile navigation links for main routes", async () => {
     const history = createMemoryHistory({ initialEntries: ["/laws"] });
