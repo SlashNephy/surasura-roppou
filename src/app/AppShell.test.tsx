@@ -1,7 +1,10 @@
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
+import { createEgovLawRepository } from "@/core/egov";
+import { createJsonFetchStub, fixedTestNow as now, lawDataFixture } from "@/test/fixtures/egov";
 import { createMemoryStorageRepository } from "@/test/fixtures/storage";
 import { setupScrollMocks } from "@/test/scrollMocks";
 
@@ -60,6 +63,45 @@ describe("AppShell", () => {
       for (const link of inactiveLinks) {
         expect(link).toHaveClass("text-muted-foreground");
         expect(link).not.toHaveClass("bg-accent");
+      }
+    });
+  });
+
+  it("returns to the article that was open when the law tab was left", async () => {
+    const user = userEvent.setup();
+    const articlePath = "/laws/129AC0000000089/articles/1";
+    const history = createMemoryHistory({ initialEntries: [articlePath] });
+    const { fetcher } = createJsonFetchStub(lawDataFixture);
+    const lawRepository = createEgovLawRepository({ fetcher, now });
+    const storageRepository = createMemoryStorageRepository().repository;
+    const router = createAppRouter({ history, lawRepository, storageRepository });
+
+    render(<RouterProvider router={router} />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "民法" })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getAllByRole("link", { name: "撮る" })[0]);
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe("/scanner");
+    });
+
+    await user.click(screen.getAllByRole("link", { name: "法令" })[0]);
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(articlePath);
+    });
+  });
+
+  it("keeps the law tab pointing at its root before any law has been opened", async () => {
+    const history = createMemoryHistory({ initialEntries: ["/scanner"] });
+    const storageRepository = createMemoryStorageRepository().repository;
+
+    render(<RouterProvider router={createAppRouter({ history, storageRepository })} />);
+
+    await waitFor(() => {
+      for (const link of screen.getAllByRole("link", { name: "法令" })) {
+        expect(link).toHaveAttribute("href", "/laws");
       }
     });
   });

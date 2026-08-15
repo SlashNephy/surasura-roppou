@@ -39,6 +39,7 @@ import { QuizGenerateDialog } from "./QuizGenerateDialog";
 import { StudyCardCreateDialog } from "./StudyCardCreateDialog";
 import { AnchorDriftBadge } from "./AnchorDriftBadge";
 import { loadLawViewerDocument } from "./law-viewer-loader";
+import { useRestoredReadingPosition } from "./scroll-restoration";
 import { useSavedViewerState } from "./law-viewer-hooks";
 import type { LawViewerDocument } from "./law-viewer-sample";
 import { useAnchorVerification } from "./use-anchor-verification";
@@ -293,6 +294,10 @@ const LawViewerReadyState = ({
     setIsArticleSheetOpen(false);
   }
 
+  // 本文がマウントされたこの時点で、タブを離れる前の読書位置を当て直す。
+  const hasRestoredReadingPosition = useRestoredReadingPosition();
+  const [mountedArticleNumber] = useState(activeArticleNumber);
+
   const articleInputId = useId();
   const tocPanelId = "law-viewer-mobile-toc";
   const articleJumpErrorId = "article-jump-error";
@@ -375,8 +380,14 @@ const LawViewerReadyState = ({
       return;
     }
 
+    // タブから戻って読書位置を復元したときは、条文の先頭へ引き戻さない。
+    // 復元対象はマウント時の条だけで、条を移動したあとは通常どおりジャンプする。
+    if (hasRestoredReadingPosition && activeArticleNumber === mountedArticleNumber) {
+      return;
+    }
+
     scrollToArticle(activeArticleNumber);
-  }, [activeArticleNumber]);
+  }, [activeArticleNumber, hasRestoredReadingPosition, mountedArticleNumber]);
 
   const navigateToArticle = (articleNumber: string) => {
     setHasJumpError(false);

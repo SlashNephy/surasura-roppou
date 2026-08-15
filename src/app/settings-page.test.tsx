@@ -147,6 +147,15 @@ describe("SettingsPage 表示", () => {
     expect(localStorage.getItem(DISPLAY_PREFERENCES_STORAGE_KEYS.textMode)).toBe("original");
   });
 
+  it("保存値がないときは本文フォントに同梱の可変明朝を選ぶ", async () => {
+    renderSettingsRoute();
+
+    expect(await screen.findByLabelText("本文フォント")).toHaveValue("noto-serif-jp");
+    expect(screen.getByLabelText("UI フォント")).toHaveValue("system");
+    expect(document.documentElement).toHaveAttribute("data-law-font", "noto-serif-jp");
+    expect(document.documentElement).toHaveAttribute("data-ui-font", "system");
+  });
+
   it("本文フォントと UI フォントを選択して端末へ保存する", async () => {
     const { user } = renderSettingsRoute();
 

@@ -26,6 +26,7 @@ import {
 } from "./pages";
 import { navigateToCandidate, navigateToReviewCandidate } from "./search-navigation";
 import { SavedCollectionPage, SavedPage } from "./saved-page";
+import { getScrollRestorationKey } from "./scroll-restoration";
 import { StudyCardDetailPage } from "./study-card-detail-page";
 import { StudyCardsPage } from "./study-cards-page";
 import { StudyReviewPage } from "./study-review-page";
@@ -235,6 +236,8 @@ export const createAppRouter = ({
   createRouter({
     routeTree: createRouteTree({ lawRepository, storageRepository, quickSearch }),
     history,
+    scrollRestoration: true,
+    getScrollRestorationKey,
   });
 
 export const router = createAppRouter();

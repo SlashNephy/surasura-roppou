@@ -813,5 +813,63 @@ describe("LawNodeList", () => {
 
       expect(screen.getAllByRole("link", { name: /第15条/ })).toHaveLength(1);
     });
+
+    it("renders both a reference link and a ruby annotation in the same body text", () => {
+      // 参照リンクとルビは同じ本文テキストを ReactNode へ写す。リンクで分割したあとの
+      // 断片にもルビが付くこと（どちらか一方に食われないこと）を確かめる。
+      const rubyReferenceNodes: LawNode[] = referenceNodes.map((existing) =>
+        existing.id === "article:16/paragraph:1"
+          ? {
+              ...existing,
+              plainText: "第十五条の審判は、瑕疵があるときは、この限りでない。",
+              rubyAnnotations: [{ base: "瑕疵", text: "かし" }],
+            }
+          : existing,
+      );
+
+      const { container } = render(
+        <LawNodeList lawId="129AC0000000089" nodes={rubyReferenceNodes} />,
+      );
+
+      expect(screen.getByRole("link", { name: /第15条/ })).toHaveAttribute(
+        "href",
+        "/laws/129AC0000000089/articles/15",
+      );
+
+      const ruby = container.querySelector("ruby");
+
+      expect(ruby?.textContent).toBe("瑕疵かし");
+      expect(ruby?.querySelector("rt")?.textContent).toBe("かし");
+    });
+  });
+
+  it("renders ruby annotations as <ruby> in the article body and caption", () => {
+    const { container } = render(
+      <LawNodeList
+        lawId="129AC0000000089"
+        nodes={[
+          node({
+            id: "article:573",
+            type: "Article",
+            path: "article:573",
+            number: "573",
+            title: "第五百七十三条",
+            caption: "（運送賃）",
+            plainText: "運送品がその性質又は瑕疵によって滅失し、又は損傷したときは、",
+            rubyAnnotations: [{ base: "瑕疵", text: "かし" }],
+          }),
+        ]}
+      />,
+    );
+
+    const ruby = container.querySelector("ruby");
+
+    expect(ruby).not.toBeNull();
+    expect(ruby?.textContent).toBe("瑕疵かし");
+    expect(ruby?.querySelector("rt")?.textContent).toBe("かし");
+    // 読みは rt に分離されているので、本文の文字列としては地の文だけが並ぶ。
+    expect(container.querySelector("article")?.textContent).toContain(
+      "運送品がその性質又は瑕疵かしによって滅失し",
+    );
   });
 });

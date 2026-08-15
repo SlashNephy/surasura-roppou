@@ -9,11 +9,13 @@ export const setupScrollMocks = () => {
     "scrollIntoView",
   );
   let scrollIntoView = vi.fn<ScrollIntoView>();
+  let scrollTo = vi.fn<(options: ScrollToOptions) => void>();
 
   beforeEach(() => {
+    scrollTo = vi.fn<(options: ScrollToOptions) => void>();
     Object.defineProperty(window, "scrollTo", {
       configurable: true,
-      value: vi.fn(),
+      value: scrollTo,
       writable: true,
     });
     scrollIntoView = vi.fn<ScrollIntoView>();
@@ -41,6 +43,9 @@ export const setupScrollMocks = () => {
   return {
     get scrollIntoView() {
       return scrollIntoView;
+    },
+    get scrollTo() {
+      return scrollTo;
     },
   };
 };

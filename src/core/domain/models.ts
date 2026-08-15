@@ -35,6 +35,12 @@ export type LawNodeType =
   | "AppdxTable"
   | "AppdxStyle";
 
+// ルビ（例: 瑕疵かし）は本文文字列から読みを除き、表示レイヤーで <ruby> として復元する。
+export interface RubyAnnotation {
+  base: string;
+  text: string;
+}
+
 export interface LawNode {
   id: string;
   lawId: string;
@@ -47,6 +53,7 @@ export interface LawNode {
   rawText: string;
   plainText: string;
   normalizedText?: string;
+  rubyAnnotations?: RubyAnnotation[];
   children: string[];
   parentId?: string;
 }

@@ -1,6 +1,11 @@
 import { type ReactNode, useMemo } from "react";
 
-import { buildLawArticleUrl, type LawNode, type LawNodeType } from "@/core/domain";
+import {
+  buildLawArticleUrl,
+  type LawNode,
+  type LawNodeType,
+  type RubyAnnotation,
+} from "@/core/domain";
 import { cn } from "@/shared/utils/cn";
 
 import {
@@ -8,6 +13,7 @@ import {
   applyLawTextDisplayMode,
   type LawTextDisplayMode,
 } from "./displayMode";
+import { LawTextWithRuby } from "./LawTextWithRuby";
 import { articleAnchorId, computeChildArticleContext, paragraphAnchorId } from "./lawToc";
 import {
   buildArticleLinkEntries,
@@ -139,10 +145,18 @@ const LawNodeBlock = ({
           ) : null}
           <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
             <Heading className="min-w-0 font-law text-lg font-semibold text-foreground break-words">
-              {displayTitle}
+              <LawTextWithRuby
+                displayMode={displayMode}
+                annotations={node.rubyAnnotations}
+                text={displayTitle ?? ""}
+              />
               {displayCaption === undefined ? null : (
                 <span className="ml-2 text-base font-normal text-secondary-foreground">
-                  {displayCaption}
+                  <LawTextWithRuby
+                    displayMode={displayMode}
+                    annotations={node.rubyAnnotations}
+                    text={displayCaption}
+                  />
                 </span>
               )}
             </Heading>
@@ -164,12 +178,13 @@ const LawNodeBlock = ({
                 renderArticleActions,
               })
             ) : (
-              <p className="indent-[1em] font-law leading-display text-foreground break-words">
+              <p className="indent-[1em] font-law leading-display font-medium text-foreground break-words">
                 {renderLinkedText(
                   displayText,
                   linking,
                   { articleNumber: node.number },
                   isUrlAddressableArticleContext,
+                  node.rubyAnnotations,
                 )}
               </p>
             )}
@@ -224,7 +239,7 @@ const LawNodeBlock = ({
           {isArticleParagraph ? (
             <p
               className={cn(
-                "font-law leading-display break-words text-foreground",
+                "font-law leading-display font-medium break-words text-foreground",
                 // 番号のない項は1行目を字下げ。番号のある項は番号欄（下の span）が字下げ幅を担う。
                 // 折り返し行は行頭に戻す（天付き）ので、1行目だけが下がる伝統的な字下げになる。
                 displayMarker === undefined && "indent-[1.5em]",
@@ -236,11 +251,17 @@ const LawNodeBlock = ({
                 </span>
               ) : null}
               <span>
-                {renderLinkedText(bodyText, linking, ownPosition, isUrlAddressableArticleContext)}
+                {renderLinkedText(
+                  bodyText,
+                  linking,
+                  ownPosition,
+                  isUrlAddressableArticleContext,
+                  node.rubyAnnotations,
+                )}
               </span>
             </p>
           ) : (
-            <p className="flex min-w-0 gap-3 font-law leading-display text-foreground">
+            <p className="flex min-w-0 gap-3 font-law leading-display font-medium text-foreground">
               {displayMarker !== undefined ? (
                 <span className="shrink-0 text-muted-foreground">{displayMarker}</span>
               ) : null}
@@ -248,7 +269,13 @@ const LawNodeBlock = ({
               <span
                 className={cn("min-w-0 break-words", displayMarker === undefined && "indent-[1em]")}
               >
-                {renderLinkedText(bodyText, linking, ownPosition, isUrlAddressableArticleContext)}
+                {renderLinkedText(
+                  bodyText,
+                  linking,
+                  ownPosition,
+                  isUrlAddressableArticleContext,
+                  node.rubyAnnotations,
+                )}
               </span>
             </p>
           )}
@@ -282,12 +309,22 @@ const LawNodeBlock = ({
     <section className="grid gap-3">
       {displayTitle !== undefined ? (
         <Heading className={cn("font-law text-foreground break-words", headingClassName)}>
-          {displayTitle}
+          <LawTextWithRuby
+            displayMode={displayMode}
+            annotations={node.rubyAnnotations}
+            text={displayTitle}
+          />
         </Heading>
       ) : null}
       {bodyText !== "" ? (
-        <p className="font-law leading-display text-foreground break-words">
-          {renderLinkedText(bodyText, linking, {}, isUrlAddressableArticleContext)}
+        <p className="font-law leading-display font-medium text-foreground break-words">
+          {renderLinkedText(
+            bodyText,
+            linking,
+            {},
+            isUrlAddressableArticleContext,
+            node.rubyAnnotations,
+          )}
         </p>
       ) : null}
       {renderChildBlocks({
@@ -421,16 +458,24 @@ interface LinkingOptions {
   onSelectArticle: ((articleNumber: string) => void) | undefined;
 }
 
-// 表示文字列を参照リンク入りの ReactNode 列へ写す。リンクにならない部分は素の文字列のまま返す。
+// 表示文字列を参照リンク入りの ReactNode 列へ写す。
+// リンクにならない部分もルビ復元は通すため、素の文字列ではなく LawTextWithRuby を返す。
+// ルビは文字位置ではなく語の一致で付くので、リンクで分割したあとの断片にもそのまま適用できる。
+// 分割の境界をまたぐ語だけはルビが落ちるが、ルビ対象語と条番号の参照が重なることは実質ない。
 const renderLinkedText = (
   text: string,
   linking: LinkingOptions,
   position: { articleNumber?: string; paragraphNumber?: string },
   isUrlAddressableArticleContext: boolean,
+  annotations: RubyAnnotation[] | undefined,
 ): ReactNode => {
+  const plain = (
+    <LawTextWithRuby annotations={annotations} displayMode={linking.displayMode} text={text} />
+  );
+
   // 附則・別表の中の条番号は本則の条を指さないため、リンク化しない。
   if (text === "" || !isUrlAddressableArticleContext) {
-    return text;
+    return plain;
   }
 
   const segments = segmentReferenceLinks(text, {
@@ -444,12 +489,13 @@ const renderLinkedText = (
   });
 
   if (segments.every((segment) => segment.kind === "text")) {
-    return text;
+    return plain;
   }
 
   return segments.map((segment, index) => (
     <ReferenceSegment
       key={`${String(index)}:${segment.text}`}
+      annotations={annotations}
       linking={linking}
       segment={segment}
     />
@@ -457,14 +503,20 @@ const renderLinkedText = (
 };
 
 const ReferenceSegment = ({
+  annotations,
   linking,
   segment,
 }: {
+  annotations: RubyAnnotation[] | undefined;
   linking: LinkingOptions;
   segment: ReferenceLinkSegment;
 }) => {
+  const withRuby = (text: string) => (
+    <LawTextWithRuby annotations={annotations} displayMode={linking.displayMode} text={text} />
+  );
+
   if (segment.kind === "text") {
-    return segment.text;
+    return withRuby(segment.text);
   }
 
   const { caption, target, text } = segment;
@@ -502,9 +554,11 @@ const ReferenceSegment = ({
             }
       }
     >
-      {showCaption ? text.slice(0, caption.offset) : text}
-      {showCaption ? <span className="text-secondary-foreground">〈{caption.text}〉</span> : null}
-      {showCaption ? text.slice(caption.offset) : null}
+      {withRuby(showCaption ? text.slice(0, caption.offset) : text)}
+      {showCaption ? (
+        <span className="text-secondary-foreground">〈{withRuby(caption.text)}〉</span>
+      ) : null}
+      {showCaption ? withRuby(text.slice(caption.offset)) : null}
     </a>
   );
 };

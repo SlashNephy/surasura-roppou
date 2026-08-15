@@ -221,19 +221,17 @@ describe("normalizeEgovLawText", () => {
     }
   });
 
-  it("builds plainText without ruby readings or inline spaces", () => {
+  it("builds text without ruby readings or inline spaces", () => {
     const nodes = normalizeLawBody([
       article("第一条", [
         paragraph([
           lawTextNode("ParagraphNum"),
           lawTextNode("ParagraphSentence", [
             lawTextNode("Sentence", [
-              "この法律は、",
-              lawTextNode("Ruby", [
-                lawTextNode("RubyTo", ["公布"]),
-                lawTextNode("RubyChar", ["こうふ"]),
-              ]),
-              "の日から施行する。",
+              "運送品がその性質又は",
+              // e-Gov 法令 API v2 のルビは Ruby 直下に地の文と Rt（読み）が並ぶ。
+              lawTextNode("Ruby", ["瑕疵", lawTextNode("Rt", ["かし"])]),
+              "によって滅失したとき。",
             ]),
           ]),
         ]),
@@ -244,12 +242,49 @@ describe("normalizeEgovLawText", () => {
     expect(paragraphNode).toEqual(
       expect.objectContaining({
         number: "1",
-        rawText: "この法律は、公布こうふの日から施行する。",
-        plainText: "この法律は、公布の日から施行する。",
-        normalizedText: "この法律は、公布の日から施行する。",
+        rawText: "運送品がその性質又は瑕疵によって滅失したとき。",
+        plainText: "運送品がその性質又は瑕疵によって滅失したとき。",
+        normalizedText: "運送品がその性質又は瑕疵によって滅失したとき。",
+        rubyAnnotations: [{ base: "瑕疵", text: "かし" }],
       }),
     );
     expect(paragraphNode).not.toHaveProperty("title");
+  });
+
+  it("keeps ruby annotations on the node that owns the text", () => {
+    const nodes = normalizeLawBody([
+      lawTextNode("Article", [
+        lawTextNode("ArticleCaption", [
+          "（定期",
+          lawTextNode("Ruby", ["傭", lawTextNode("Rt", ["よう"])]),
+          "船契約）",
+        ]),
+        lawTextNode("ArticleTitle", ["第一条"]),
+        paragraph([
+          lawTextNode("ParagraphSentence", [
+            lawTextNode("Sentence", [
+              lawTextNode("Ruby", ["艤", lawTextNode("Rt", ["ぎ"])]),
+              "装した船舶。",
+            ]),
+          ]),
+        ]),
+      ]),
+    ]);
+
+    // 条見出しのルビは条ノード、本文のルビは項ノードが持つ。
+    // 章や編に法令全体のルビが積み上がらないよう、収集はノード境界で止まる。
+    expect(findNode(nodes, "Article", "article:1")).toEqual(
+      expect.objectContaining({ rubyAnnotations: [{ base: "傭", text: "よう" }] }),
+    );
+    expect(findNode(nodes, "Paragraph", "article:1/paragraph:1")).toEqual(
+      expect.objectContaining({ rubyAnnotations: [{ base: "艤", text: "ぎ" }] }),
+    );
+  });
+
+  it("omits rubyAnnotations when the node has no ruby", () => {
+    const nodes = normalizeLawBody([article("第一条")]);
+
+    expect(findNode(nodes, "Article", "article:1")).not.toHaveProperty("rubyAnnotations");
   });
 
   it("extracts the article caption into caption", () => {
