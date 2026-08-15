@@ -7,6 +7,7 @@ import {
   articleAnchorId,
   buildLawTableOfContents,
   computeChildArticleContext,
+  paragraphAnchorId,
 } from "./lawToc";
 
 const node = (overrides: Partial<LawNode> & Pick<LawNode, "id" | "path" | "type">): LawNode => ({
@@ -248,11 +249,22 @@ describe("lawToc", () => {
   });
 
   it.each([
-    ["1", "article-1"],
-    ["709", "article-709"],
+    ["1", "a1"],
+    ["709", "a709"],
+    ["798-2", "a798-2"],
   ])("builds an article anchor id for article %s", (articleNumber, expected) => {
     expect(articleAnchorId(articleNumber)).toBe(expected);
   });
+
+  it.each([
+    ["15", "2", "a15-p2"],
+    ["798-2", "1", "a798-2-p1"],
+  ])(
+    "builds a paragraph anchor id for article %s paragraph %s",
+    (articleNumber, paragraphNumber, expected) => {
+      expect(paragraphAnchorId(articleNumber, paragraphNumber)).toBe(expected);
+    },
+  );
 
   it.each([
     ["Part", true],

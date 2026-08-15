@@ -280,7 +280,7 @@ describe("LawNodeList", () => {
     ).not.toBeInTheDocument();
 
     const article = screen.getByRole("article", { name: "第一条" });
-    expect(article).toHaveAttribute("id", "article-1");
+    expect(article).toHaveAttribute("id", "a1");
     expect(article).toHaveAttribute("data-active", "true");
     expect(article).toHaveAttribute("aria-current", "location");
     expect(within(article).getByRole("heading", { level: 4, name: "第1条" })).toBeInTheDocument();
@@ -344,7 +344,7 @@ describe("LawNodeList", () => {
         name: "第一条",
       });
 
-      expect(mainArticle).toHaveAttribute("id", "article-1");
+      expect(mainArticle).toHaveAttribute("id", "a1");
       expect(mainArticle).toHaveAttribute("data-active", "true");
       expect(mainArticle).toHaveAttribute("aria-current", "location");
       expect(nonAddressableArticle).not.toHaveAttribute("id");
@@ -517,5 +517,44 @@ describe("LawNodeList", () => {
     );
 
     expect(screen.queryByText("2")).not.toBeInTheDocument();
+  });
+
+  it("gives article-direct paragraphs an anchor id", () => {
+    const { container } = render(<LawNodeList nodes={nodes} />);
+
+    expect(container.querySelector("#a1-p1")).not.toBeNull();
+  });
+
+  it("does not anchor paragraphs inside supplementary provisions", () => {
+    const supplementaryNodes: LawNode[] = [
+      node({
+        id: "supplementary:2",
+        type: "SupplementaryProvision",
+        path: "supplementary-provision:2",
+        title: "附　則",
+        children: ["supplementary-article:1"],
+      }),
+      node({
+        id: "supplementary-article:1",
+        type: "Article",
+        path: "supplementary-provision:2/article:1",
+        number: "1",
+        title: "第一条",
+        children: ["supplementary-paragraph:1"],
+        parentId: "supplementary:2",
+      }),
+      node({
+        id: "supplementary-paragraph:1",
+        type: "Paragraph",
+        path: "supplementary-provision:2/article:1/paragraph:1",
+        number: "1",
+        plainText: "この法律は、公布の日から施行する。",
+        parentId: "supplementary-article:1",
+      }),
+    ];
+
+    const { container } = render(<LawNodeList nodes={supplementaryNodes} />);
+
+    expect(container.querySelector("#a1-p1")).toBeNull();
   });
 });

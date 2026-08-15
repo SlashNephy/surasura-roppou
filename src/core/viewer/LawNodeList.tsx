@@ -8,7 +8,7 @@ import {
   applyLawTextDisplayMode,
   type LawTextDisplayMode,
 } from "./displayMode";
-import { articleAnchorId, computeChildArticleContext } from "./lawToc";
+import { articleAnchorId, computeChildArticleContext, paragraphAnchorId } from "./lawToc";
 
 interface LawNodeListProps {
   nodes: LawNode[];
@@ -149,6 +149,16 @@ const LawNodeBlock = ({
     case "Item":
     case "Subitem": {
       const parent = node.parentId === undefined ? undefined : nodeById.get(node.parentId);
+      // 条直下の項だけ、本文中の参照リンクの着地先としてアンカーを持つ。
+      // 附則・別表の中は条アンカーと同様に URL 到達可能でないため付けない。
+      const paragraphId =
+        node.type === "Paragraph" &&
+        parent?.type === "Article" &&
+        isUrlAddressableArticleContext &&
+        parent.number !== undefined &&
+        node.number !== undefined
+          ? paragraphAnchorId(parent.number, node.number)
+          : undefined;
       const marker =
         node.type === "Paragraph"
           ? (node.title ?? getArticleParagraphMarker(node, nodeById))
@@ -163,8 +173,11 @@ const LawNodeBlock = ({
 
       return (
         <div
+          id={paragraphId}
           className={cn(
             "grid gap-2",
+            // アンカー着地時にヘッダへ潜り込まないよう、条と同じだけ余白を取る。
+            paragraphId !== undefined && "scroll-mt-20",
             node.type === "Item" && "pl-5",
             node.type === "Subitem" && "pl-8",
           )}

@@ -2,7 +2,7 @@ export { LawDocumentView } from "./LawDocumentView";
 export { LawNodeList } from "./LawNodeList";
 export { LawTableOfContents } from "./LawTableOfContents";
 export { buildArticleCopyText } from "./article-copy";
-export { articleAnchorId, buildLawTableOfContents } from "./lawToc";
+export { articleAnchorId, buildLawTableOfContents, paragraphAnchorId } from "./lawToc";
 export { applyLawTextDisplayMode } from "./displayMode";
 export type { LawTextDisplayMode } from "./displayMode";
 export { formatLawTypeLabel } from "./lawType";
