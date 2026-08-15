@@ -695,12 +695,59 @@ describe("LawNodeList", () => {
     it("renders a reference inside an item body (not directly under an article) as a link", () => {
       // 号（Item）は条直下でないため、この号を含む項（第16条2項）の番号を継承する。
       // 「前項」がその親の項を基準に解決されることを検証する。
-      const referenceNodesWithItem: LawNode[] = [
-        ...referenceNodes.map((existing) =>
-          existing.id === "article:16/paragraph:2"
-            ? { ...existing, children: ["article:16/paragraph:2/item:1"] }
-            : existing,
-        ),
+      // 共有フィクスチャ（referenceNodes）は使わない: 第16条2項の本文自体が「前項」への
+      // 参照を含んでいると、その親由来のリンクと号由来のリンクが区別できなくなるため、
+      // 号の本文だけが「前項」を含む専用フィクスチャを組む。
+      const itemReferenceNodes: LawNode[] = [
+        node({
+          id: "article:15",
+          type: "Article",
+          path: "article:15",
+          number: "15",
+          title: "第十五条",
+          children: ["article:15/paragraph:1", "article:15/paragraph:2"],
+        }),
+        node({
+          id: "article:15/paragraph:1",
+          type: "Paragraph",
+          path: "article:15/paragraph:1",
+          number: "1",
+          plainText: "家庭裁判所は、補助開始の審判をすることができる。",
+          parentId: "article:15",
+        }),
+        node({
+          id: "article:15/paragraph:2",
+          type: "Paragraph",
+          path: "article:15/paragraph:2",
+          number: "2",
+          plainText: "本人の請求によりこれをすることができる。",
+          parentId: "article:15",
+        }),
+        node({
+          id: "article:16",
+          type: "Article",
+          path: "article:16",
+          number: "16",
+          title: "第十六条",
+          children: ["article:16/paragraph:1", "article:16/paragraph:2"],
+        }),
+        node({
+          id: "article:16/paragraph:1",
+          type: "Paragraph",
+          path: "article:16/paragraph:1",
+          number: "1",
+          plainText: "被補助人は、行為能力を制限される。",
+          parentId: "article:16",
+        }),
+        node({
+          id: "article:16/paragraph:2",
+          type: "Paragraph",
+          path: "article:16/paragraph:2",
+          number: "2",
+          plainText: "被補助人の同意を要する行為を定める。",
+          children: ["article:16/paragraph:2/item:1"],
+          parentId: "article:16",
+        }),
         node({
           id: "article:16/paragraph:2/item:1",
           type: "Item",
@@ -712,18 +759,15 @@ describe("LawNodeList", () => {
         }),
       ];
 
-      render(<LawNodeList lawId="129AC0000000089" nodes={referenceNodesWithItem} />);
+      render(<LawNodeList lawId="129AC0000000089" nodes={itemReferenceNodes} />);
 
-      const links = screen.getAllByRole("link", { name: "前項" });
-
-      expect(links.length).toBeGreaterThan(0);
-      for (const link of links) {
-        expect(link).toHaveAttribute("href", "#a16-p1");
-      }
+      expect(screen.getByRole("link", { name: "前項" })).toHaveAttribute("href", "#a16-p1");
     });
 
     it("renders a reference inside a heading node's preamble text as a link", () => {
       // 章・節などの見出しノード自身が持つ前文（本文）中の参照もリンク化対象である。
+      // 節の前文は referenceNodes の本文が参照していない第十六条を参照するようにし、
+      // 「第16条」を名前に持つリンクが節の前文由来の1件のみになるようにする。
       const headingReferenceNodes: LawNode[] = [
         ...referenceNodes,
         node({
@@ -731,14 +775,17 @@ describe("LawNodeList", () => {
           type: "Section",
           path: "section:1",
           title: "第一節　通則",
-          plainText: "第一節　通則 第十五条の規定を準用する。",
+          plainText: "第一節　通則 第十六条の規定を準用する。",
         }),
       ];
 
       render(<LawNodeList lawId="129AC0000000089" nodes={headingReferenceNodes} />);
 
       expect(screen.getByRole("heading", { name: "第1節　通則" })).toBeInTheDocument();
-      expect(screen.getAllByRole("link", { name: /第15条/ }).length).toBeGreaterThan(0);
+      expect(screen.getByRole("link", { name: /第16条/ })).toHaveAttribute(
+        "href",
+        "/laws/129AC0000000089/articles/16",
+      );
     });
 
     it("does not linkify article numbers inside supplementary provisions", () => {
