@@ -53,7 +53,7 @@ describe("getDisplayPreferences", () => {
         lineSpacing,
         theme,
         textDisplayMode,
-        lawFont: "system",
+        lawFont: "noto-serif-jp",
         uiFont: "system",
       });
     },
@@ -68,7 +68,7 @@ describe("getDisplayPreferences", () => {
         lineSpacing: "relaxed",
         theme: "dark",
         textDisplayMode: "readable",
-        lawFont: "system",
+        lawFont: "noto-serif-jp",
         uiFont: "system",
       },
     },
@@ -80,7 +80,7 @@ describe("getDisplayPreferences", () => {
         lineSpacing: "standard",
         theme: "dark",
         textDisplayMode: "readable",
-        lawFont: "system",
+        lawFont: "noto-serif-jp",
         uiFont: "system",
       },
     },
@@ -92,7 +92,7 @@ describe("getDisplayPreferences", () => {
         lineSpacing: "relaxed",
         theme: "system",
         textDisplayMode: "readable",
-        lawFont: "system",
+        lawFont: "noto-serif-jp",
         uiFont: "system",
       },
     },
@@ -358,8 +358,8 @@ describe("textDisplayMode", () => {
 });
 
 describe("フォント設定", () => {
-  it("既定はどちらも system", () => {
-    expect(getDisplayPreferences().lawFont).toBe("system");
+  it("既定は法令本文が noto-serif-jp、UI が system", () => {
+    expect(getDisplayPreferences().lawFont).toBe("noto-serif-jp");
     expect(getDisplayPreferences().uiFont).toBe("system");
   });
 
@@ -382,7 +382,7 @@ describe("フォント設定", () => {
     localStorage.setItem(storageKeys.lawFont, "comic-sans");
     localStorage.setItem(storageKeys.uiFont, "noto-sans-jp");
 
-    expect(getDisplayPreferences().lawFont).toBe("system");
+    expect(getDisplayPreferences().lawFont).toBe("noto-serif-jp");
     expect(getDisplayPreferences().uiFont).toBe("noto-sans-jp");
   });
 

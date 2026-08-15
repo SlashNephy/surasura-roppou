@@ -60,9 +60,12 @@
   --font-stack-zen-old-mincho: "Zen Old Mincho", var(--font-stack-mincho-system);
   --font-stack-noto-sans-jp: "Noto Sans JP Variable", var(--font-stack-gothic-system);
   --font-stack-biz-udgothic: "BIZ UDGothic", var(--font-stack-gothic-system);
-  /* data-ui-font / data-law-font が下の規則で差し替える現在値。既定はシステム書体。 */
+  /* data-ui-font / data-law-font が下の規則で差し替える現在値。
+     UI は通信量を抑えるためシステム書体を既定にする。
+     法令本文はウェイト 500 を実際に持つフェイスが要るため、同梱の可変フォントを既定にする
+     （システム明朝は 400 と bold しか持たず、500 指定が 400 へ落ちて太さが変わらない）。 */
   --ui-font-family: var(--font-stack-gothic-system);
-  --law-font-family: var(--font-stack-mincho-system);
+  --law-font-family: var(--font-stack-noto-serif-jp);
   --radius: 0.625rem;
   --display-line-height: 1.5;
   --background: #fcfbf8;
@@ -112,6 +115,10 @@
 
 :root[data-line-spacing="wide"] {
   --display-line-height: 2;
+}
+
+:root[data-law-font="system"] {
+  --law-font-family: var(--font-stack-mincho-system);
 }
 
 :root[data-law-font="noto-serif-jp"] {

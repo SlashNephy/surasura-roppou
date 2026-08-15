@@ -136,7 +136,7 @@ const LawNodeBlock = ({
                 renderArticleActions,
               })
             ) : (
-              <p className="indent-[1em] font-law leading-display text-foreground break-words">
+              <p className="indent-[1em] font-law leading-display font-medium text-foreground break-words">
                 {displayText}
               </p>
             )}
@@ -172,7 +172,7 @@ const LawNodeBlock = ({
           {isArticleParagraph ? (
             <p
               className={cn(
-                "font-law leading-display break-words text-foreground",
+                "font-law leading-display font-medium break-words text-foreground",
                 // 番号のない項は1行目を字下げ。番号のある項は番号欄（下の span）が字下げ幅を担う。
                 // 折り返し行は行頭に戻す（天付き）ので、1行目だけが下がる伝統的な字下げになる。
                 displayMarker === undefined && "indent-[1.5em]",
@@ -186,7 +186,7 @@ const LawNodeBlock = ({
               <span>{bodyText}</span>
             </p>
           ) : (
-            <p className="flex min-w-0 gap-3 font-law leading-display text-foreground">
+            <p className="flex min-w-0 gap-3 font-law leading-display font-medium text-foreground">
               {displayMarker !== undefined ? (
                 <span className="shrink-0 text-muted-foreground">{displayMarker}</span>
               ) : null}
@@ -230,7 +230,9 @@ const LawNodeBlock = ({
         </Heading>
       ) : null}
       {bodyText !== "" ? (
-        <p className="font-law leading-display text-foreground break-words">{bodyText}</p>
+        <p className="font-law leading-display font-medium text-foreground break-words">
+          {bodyText}
+        </p>
       ) : null}
       {renderChildBlocks({
         activeArticleNumber,

@@ -45,10 +45,12 @@ const createDisplayPreferences = (
 ): DisplayPreferences =>
   Object.freeze({ fontSize, lineSpacing, lawFont, theme, textDisplayMode, uiFont });
 
+// 法令本文だけは、太さ 500 のフェイスを持つ同梱の可変明朝を既定にする。
+// システム明朝は 400 と bold しか持たず、本文のウェイト指定が効かないため。
 export const DEFAULT_DISPLAY_PREFERENCES = createDisplayPreferences(
   "standard",
   "standard",
-  "system",
+  "noto-serif-jp",
   "system",
   "readable",
   "system",
