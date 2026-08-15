@@ -1,6 +1,6 @@
 import { type ReactNode, useMemo } from "react";
 
-import type { LawNode, LawNodeType } from "@/core/domain";
+import { buildLawArticleUrl, type LawNode, type LawNodeType } from "@/core/domain";
 import { cn } from "@/shared/utils/cn";
 
 import {
@@ -9,11 +9,19 @@ import {
   type LawTextDisplayMode,
 } from "./displayMode";
 import { articleAnchorId, computeChildArticleContext, paragraphAnchorId } from "./lawToc";
+import {
+  buildArticleLinkEntries,
+  segmentReferenceLinks,
+  type ArticleLinkContext,
+  type ReferenceLinkSegment,
+} from "./reference-links";
 
 interface LawNodeListProps {
+  lawId: string;
   nodes: LawNode[];
   activeArticleNumber?: string;
   displayMode?: LawTextDisplayMode;
+  onSelectArticle?: (articleNumber: string) => void;
   renderArticleActions?: (article: LawNode) => ReactNode;
 }
 
@@ -37,11 +45,18 @@ const headingTags: HeadingTag[] = ["h2", "h3", "h4", "h5", "h6"];
 export const LawNodeList = ({
   activeArticleNumber,
   displayMode = "readable",
+  lawId,
   nodes,
+  onSelectArticle,
   renderArticleActions,
 }: LawNodeListProps) => {
   const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
   const topLevelNodes = useMemo(() => nodes.filter((node) => node.parentId === undefined), [nodes]);
+  const articles = useMemo(() => buildArticleLinkEntries(nodes), [nodes]);
+  const linking = useMemo<LinkingOptions>(
+    () => ({ articles, displayMode, lawId, onSelectArticle }),
+    [articles, displayMode, lawId, onSelectArticle],
+  );
 
   return (
     <div className="grid gap-5">
@@ -52,8 +67,10 @@ export const LawNodeList = ({
           depth={1}
           displayMode={displayMode}
           isUrlAddressableArticleContext={true}
+          linking={linking}
           node={node}
           nodeById={nodeById}
+          position={{ articleNumber: undefined }}
           renderArticleActions={renderArticleActions}
         />
       ))}
@@ -66,16 +83,22 @@ const LawNodeBlock = ({
   depth,
   displayMode,
   isUrlAddressableArticleContext,
+  linking,
   node,
   nodeById,
+  position,
   renderArticleActions,
 }: {
   activeArticleNumber: string | undefined;
   depth: number;
   displayMode: LawTextDisplayMode;
   isUrlAddressableArticleContext: boolean;
+  linking: LinkingOptions;
   node: LawNode;
   nodeById: Map<string, LawNode>;
+  // 本文中の相対参照（前条・前項）の基準となる、この節点を含む条・項の番号。
+  // 附則・別表の中では条アンカーが無いため undefined のまま伝える。
+  position: { articleNumber?: string; paragraphNumber?: string };
   renderArticleActions: ((article: LawNode) => ReactNode) | undefined;
 }) => {
   const childArticleContext = computeChildArticleContext(isUrlAddressableArticleContext, node.type);
@@ -96,6 +119,9 @@ const LawNodeBlock = ({
       const displayTitle = getDisplayInlineText(node.title ?? node.number, displayMode);
       const displayCaption = getDisplayInlineText(node.caption, displayMode);
       const displayText = getDisplayText(node, displayMode);
+      const childPosition = isUrlAddressableArticle
+        ? { articleNumber: node.number }
+        : { articleNumber: undefined };
 
       return (
         <article
@@ -132,12 +158,19 @@ const LawNodeBlock = ({
                 depth,
                 displayMode,
                 isUrlAddressableArticleContext: childArticleContext,
+                linking,
                 nodeById,
+                position: childPosition,
                 renderArticleActions,
               })
             ) : (
               <p className="indent-[1em] font-law leading-display text-foreground break-words">
-                {displayText}
+                {renderLinkedText(
+                  displayText,
+                  linking,
+                  { articleNumber: node.number },
+                  isUrlAddressableArticleContext,
+                )}
               </p>
             )}
           </div>
@@ -170,6 +203,12 @@ const LawNodeBlock = ({
       );
       // 条直下の項は、1行目を字下げして第1項・第2項以降の本文頭を揃える。
       const isArticleParagraph = node.type === "Paragraph" && parent?.type === "Article";
+      const ownPosition = isArticleParagraph
+        ? { articleNumber: parent.number, paragraphNumber: node.number }
+        : position;
+      const childPosition = isArticleParagraph
+        ? { ...position, paragraphNumber: node.number }
+        : position;
 
       return (
         <div
@@ -196,7 +235,9 @@ const LawNodeBlock = ({
                   {displayMarker}
                 </span>
               ) : null}
-              <span>{bodyText}</span>
+              <span>
+                {renderLinkedText(bodyText, linking, ownPosition, isUrlAddressableArticleContext)}
+              </span>
             </p>
           ) : (
             <p className="flex min-w-0 gap-3 font-law leading-display text-foreground">
@@ -207,7 +248,7 @@ const LawNodeBlock = ({
               <span
                 className={cn("min-w-0 break-words", displayMarker === undefined && "indent-[1em]")}
               >
-                {bodyText}
+                {renderLinkedText(bodyText, linking, ownPosition, isUrlAddressableArticleContext)}
               </span>
             </p>
           )}
@@ -217,7 +258,9 @@ const LawNodeBlock = ({
             depth,
             displayMode,
             isUrlAddressableArticleContext: childArticleContext,
+            linking,
             nodeById,
+            position: childPosition,
             renderArticleActions,
           })}
         </div>
@@ -243,7 +286,9 @@ const LawNodeBlock = ({
         </Heading>
       ) : null}
       {bodyText !== "" ? (
-        <p className="font-law leading-display text-foreground break-words">{bodyText}</p>
+        <p className="font-law leading-display text-foreground break-words">
+          {renderLinkedText(bodyText, linking, {}, isUrlAddressableArticleContext)}
+        </p>
       ) : null}
       {renderChildBlocks({
         activeArticleNumber,
@@ -251,7 +296,9 @@ const LawNodeBlock = ({
         depth,
         displayMode,
         isUrlAddressableArticleContext: childArticleContext,
+        linking,
         nodeById,
+        position,
         renderArticleActions,
       })}
     </section>
@@ -264,7 +311,9 @@ const renderChildBlocks = ({
   depth,
   displayMode,
   isUrlAddressableArticleContext,
+  linking,
   nodeById,
+  position,
   renderArticleActions,
 }: {
   activeArticleNumber: string | undefined;
@@ -272,7 +321,11 @@ const renderChildBlocks = ({
   depth: number;
   displayMode: LawTextDisplayMode;
   isUrlAddressableArticleContext: boolean;
+  linking: LinkingOptions;
   nodeById: Map<string, LawNode>;
+  // 本文中の相対参照（前条・前項）の基準となる、この節点を含む条・項の番号。
+  // 附則・別表の中では条アンカーが無いため undefined のまま伝える。
+  position: { articleNumber?: string; paragraphNumber?: string };
   renderArticleActions: ((article: LawNode) => ReactNode) | undefined;
 }) =>
   children.map((child) => (
@@ -282,8 +335,10 @@ const renderChildBlocks = ({
       depth={depth + 1}
       displayMode={displayMode}
       isUrlAddressableArticleContext={isUrlAddressableArticleContext}
+      linking={linking}
       node={child}
       nodeById={nodeById}
+      position={position}
       renderArticleActions={renderArticleActions}
     />
   ));
@@ -357,4 +412,86 @@ const getDisplayHeadingInlineText = (
   }
 
   return applyLawHeadingTextDisplayMode(text, displayMode);
+};
+
+interface LinkingOptions {
+  articles: ArticleLinkContext["articles"];
+  displayMode: LawTextDisplayMode;
+  lawId: string;
+  onSelectArticle: ((articleNumber: string) => void) | undefined;
+}
+
+// 表示文字列を参照リンク入りの ReactNode 列へ写す。リンクにならない部分は素の文字列のまま返す。
+const renderLinkedText = (
+  text: string,
+  linking: LinkingOptions,
+  position: { articleNumber?: string; paragraphNumber?: string },
+  isUrlAddressableArticleContext: boolean,
+): ReactNode => {
+  // 附則・別表の中の条番号は本則の条を指さないため、リンク化しない。
+  if (text === "" || !isUrlAddressableArticleContext) {
+    return text;
+  }
+
+  const segments = segmentReferenceLinks(text, {
+    articles: linking.articles,
+    ...(position.articleNumber === undefined
+      ? {}
+      : { currentArticleNumber: position.articleNumber }),
+    ...(position.paragraphNumber === undefined
+      ? {}
+      : { currentParagraphNumber: position.paragraphNumber }),
+  });
+
+  if (segments.every((segment) => segment.kind === "text")) {
+    return text;
+  }
+
+  return segments.map((segment, index) => (
+    <ReferenceSegment
+      key={`${String(index)}:${segment.text}`}
+      linking={linking}
+      segment={segment}
+    />
+  ));
+};
+
+const ReferenceSegment = ({
+  linking,
+  segment,
+}: {
+  linking: LinkingOptions;
+  segment: ReferenceLinkSegment;
+}) => {
+  if (segment.kind === "text") {
+    return segment.text;
+  }
+
+  const { caption, target, text } = segment;
+  // 同じ条の中の項へはページ内リンク。条をまたぐときは条ルートへ遷移する。
+  const isInPage = target.paragraphNumber !== undefined;
+  const href = isInPage
+    ? `#${paragraphAnchorId(target.articleNumber, target.paragraphNumber ?? "")}`
+    : buildLawArticleUrl({ lawId: linking.lawId, article: target.articleNumber });
+  // 見出しの注入は見やすい表示のときだけ。原文表示では原文にない文字を足さない。
+  const showCaption = caption !== undefined && linking.displayMode === "readable";
+
+  return (
+    <a
+      className="text-primary underline decoration-dotted underline-offset-4 hover:decoration-solid"
+      href={href}
+      onClick={
+        isInPage || linking.onSelectArticle === undefined
+          ? undefined
+          : (event) => {
+              event.preventDefault();
+              linking.onSelectArticle?.(target.articleNumber);
+            }
+      }
+    >
+      {showCaption ? text.slice(0, caption.offset) : text}
+      {showCaption ? <span className="text-secondary-foreground">〈{caption.text}〉</span> : null}
+      {showCaption ? text.slice(caption.offset) : null}
+    </a>
+  );
 };

@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
 
 import type { LawNode, LawNodeType } from "@/core/domain";
 
@@ -82,6 +83,7 @@ describe("LawNodeList", () => {
   it("renders readable text by default", () => {
     render(
       <LawNodeList
+        lawId="129AC0000000089"
         nodes={[
           node({
             id: "article:12-2",
@@ -105,6 +107,7 @@ describe("LawNodeList", () => {
   it("renders the article caption in a lighter ink inside the heading", () => {
     render(
       <LawNodeList
+        lawId="129AC0000000089"
         nodes={[
           node({
             id: "article:caption",
@@ -133,6 +136,7 @@ describe("LawNodeList", () => {
   it("renders the heading without a caption span when the article has no caption", () => {
     render(
       <LawNodeList
+        lawId="129AC0000000089"
         nodes={[
           node({
             id: "article:no-caption",
@@ -152,6 +156,7 @@ describe("LawNodeList", () => {
   it("renders article actions only for URL-addressable article nodes", () => {
     render(
       <LawNodeList
+        lawId="129AC0000000089"
         nodes={[
           node({
             id: "article:1",
@@ -189,6 +194,7 @@ describe("LawNodeList", () => {
   it("renders original raw text when displayMode is original", () => {
     render(
       <LawNodeList
+        lawId="129AC0000000089"
         displayMode="original"
         nodes={[
           node({
@@ -220,6 +226,7 @@ describe("LawNodeList", () => {
   it("falls back to plainText in original mode when rawText is empty", () => {
     render(
       <LawNodeList
+        lawId="129AC0000000089"
         displayMode="original"
         nodes={[
           node({
@@ -237,7 +244,7 @@ describe("LawNodeList", () => {
   });
 
   it("keeps legal structure headings unchanged in original mode", () => {
-    render(<LawNodeList displayMode="original" nodes={nodes} />);
+    render(<LawNodeList displayMode="original" lawId="129AC0000000089" nodes={nodes} />);
 
     expect(screen.getByRole("heading", { level: 2, name: "第一編　総則" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 3, name: "第一章　通則" })).toBeInTheDocument();
@@ -249,6 +256,7 @@ describe("LawNodeList", () => {
   ] as const)("renders a branch chapter heading in %s mode", (displayMode, expectedHeading) => {
     render(
       <LawNodeList
+        lawId="129AC0000000089"
         displayMode={displayMode}
         nodes={[
           node({
@@ -266,7 +274,7 @@ describe("LawNodeList", () => {
   });
 
   it("renders LawNode hierarchy as readable legal text blocks", () => {
-    render(<LawNodeList activeArticleNumber="1" nodes={nodes} />);
+    render(<LawNodeList activeArticleNumber="1" lawId="129AC0000000089" nodes={nodes} />);
 
     expect(screen.getByRole("heading", { level: 2, name: "第1編　総則" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 3, name: "第1章　通則" })).toBeInTheDocument();
@@ -309,6 +317,7 @@ describe("LawNodeList", () => {
 
       render(
         <LawNodeList
+          lawId="129AC0000000089"
           activeArticleNumber="1"
           nodes={[
             node({
@@ -356,6 +365,7 @@ describe("LawNodeList", () => {
   it("keeps parent body text when the same text appears before child text", () => {
     render(
       <LawNodeList
+        lawId="129AC0000000089"
         nodes={[
           node({
             id: "article:1",
@@ -395,6 +405,7 @@ describe("LawNodeList", () => {
   it("keeps parent body text when child text is empty", () => {
     render(
       <LawNodeList
+        lawId="129AC0000000089"
         nodes={[
           node({
             id: "article:1",
@@ -432,6 +443,7 @@ describe("LawNodeList", () => {
   it("renders untitled heading node text as body copy", () => {
     render(
       <LawNodeList
+        lawId="129AC0000000089"
         nodes={[
           node({
             id: "section:1",
@@ -453,6 +465,7 @@ describe("LawNodeList", () => {
     // 日本国憲法6条は ParagraphNum が空だが、条直下の第2項は Num 由来で番号を出す。
     render(
       <LawNodeList
+        lawId="129AC0000000089"
         nodes={[
           node({
             id: "article:6",
@@ -497,6 +510,7 @@ describe("LawNodeList", () => {
     // 前文の段落は Article 直下ではないので番号を付けない（散文）。
     render(
       <LawNodeList
+        lawId="129AC0000000089"
         nodes={[
           node({
             id: "preamble:1",
@@ -520,7 +534,7 @@ describe("LawNodeList", () => {
   });
 
   it("gives article-direct paragraphs an anchor id", () => {
-    const { container } = render(<LawNodeList nodes={nodes} />);
+    const { container } = render(<LawNodeList lawId="129AC0000000089" nodes={nodes} />);
 
     expect(container.querySelector("#a1-p1")).not.toBeNull();
   });
@@ -553,8 +567,129 @@ describe("LawNodeList", () => {
       }),
     ];
 
-    const { container } = render(<LawNodeList nodes={supplementaryNodes} />);
+    const { container } = render(
+      <LawNodeList lawId="129AC0000000089" nodes={supplementaryNodes} />,
+    );
 
     expect(container.querySelector("#a1-p1")).toBeNull();
+  });
+
+  describe("reference links", () => {
+    const referenceNodes: LawNode[] = [
+      node({
+        id: "article:15",
+        type: "Article",
+        path: "article:15",
+        number: "15",
+        title: "第十五条",
+        caption: "（補助開始の審判）",
+        children: ["article:15/paragraph:1"],
+      }),
+      node({
+        id: "article:15/paragraph:1",
+        type: "Paragraph",
+        path: "article:15/paragraph:1",
+        number: "1",
+        plainText: "家庭裁判所は、補助開始の審判をすることができる。",
+        parentId: "article:15",
+      }),
+      node({
+        id: "article:16",
+        type: "Article",
+        path: "article:16",
+        number: "16",
+        title: "第十六条",
+        children: ["article:16/paragraph:1", "article:16/paragraph:2"],
+      }),
+      node({
+        id: "article:16/paragraph:1",
+        type: "Paragraph",
+        path: "article:16/paragraph:1",
+        number: "1",
+        plainText: "第十五条の審判を受けた者は、被補助人とする。",
+        parentId: "article:16",
+      }),
+      node({
+        id: "article:16/paragraph:2",
+        type: "Paragraph",
+        path: "article:16/paragraph:2",
+        number: "2",
+        plainText: "前項の規定を適用する。",
+        parentId: "article:16",
+      }),
+    ];
+
+    it("renders a cross article reference as a link to the article route", () => {
+      render(<LawNodeList lawId="129AC0000000089" nodes={referenceNodes} />);
+
+      const link = screen.getByRole("link", { name: /第15条/ });
+
+      expect(link).toHaveAttribute("href", "/laws/129AC0000000089/articles/15");
+    });
+
+    it("renders a same article paragraph reference as an in-page link", () => {
+      render(<LawNodeList lawId="129AC0000000089" nodes={referenceNodes} />);
+
+      expect(screen.getByRole("link", { name: "前項" })).toHaveAttribute("href", "#a16-p1");
+    });
+
+    it("shows the target caption in readable mode", () => {
+      render(<LawNodeList lawId="129AC0000000089" nodes={referenceNodes} />);
+
+      expect(screen.getByRole("link", { name: /第15条/ })).toHaveTextContent(
+        "第15条〈補助開始の審判〉",
+      );
+    });
+
+    it("omits the caption in original mode", () => {
+      render(<LawNodeList displayMode="original" lawId="129AC0000000089" nodes={referenceNodes} />);
+
+      expect(screen.getByRole("link", { name: /第十五条/ })).not.toHaveTextContent(
+        "補助開始の審判",
+      );
+    });
+
+    it("navigates through the callback instead of following the href", async () => {
+      const user = userEvent.setup();
+      const onSelectArticle = vi.fn();
+
+      render(
+        <LawNodeList
+          lawId="129AC0000000089"
+          nodes={referenceNodes}
+          onSelectArticle={onSelectArticle}
+        />,
+      );
+
+      await user.click(screen.getByRole("link", { name: /第15条/ }));
+
+      expect(onSelectArticle).toHaveBeenCalledWith("15");
+    });
+
+    it("does not linkify article numbers inside supplementary provisions", () => {
+      const supplementaryReferenceNodes: LawNode[] = [
+        ...referenceNodes,
+        node({
+          id: "supplementary:1",
+          type: "SupplementaryProvision",
+          path: "supplementary-provision:1",
+          title: "附　則",
+          children: ["supplementary:1/article:1"],
+        }),
+        node({
+          id: "supplementary:1/article:1",
+          type: "Article",
+          path: "supplementary-provision:1/article:1",
+          number: "1",
+          title: "第一条",
+          plainText: "第十五条の規定は、当分の間適用しない。",
+          parentId: "supplementary:1",
+        }),
+      ];
+
+      render(<LawNodeList lawId="129AC0000000089" nodes={supplementaryReferenceNodes} />);
+
+      expect(screen.getAllByRole("link", { name: /第15条/ })).toHaveLength(1);
+    });
   });
 });
