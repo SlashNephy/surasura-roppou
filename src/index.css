@@ -213,6 +213,18 @@ body {
   line-height: var(--display-line-height);
 }
 
+/* 法令本文のルビ。読みは本文より小さくし、行の高さを揺らさないよう ruby は行内に収める。 */
+ruby {
+  ruby-position: over;
+  ruby-align: center;
+}
+
+rt {
+  font-size: 0.5em;
+  line-height: 1;
+  color: var(--color-muted-foreground);
+}
+
 button,
 input,
 textarea,

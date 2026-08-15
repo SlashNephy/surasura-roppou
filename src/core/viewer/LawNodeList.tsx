@@ -8,6 +8,7 @@ import {
   applyLawTextDisplayMode,
   type LawTextDisplayMode,
 } from "./displayMode";
+import { LawTextWithRuby } from "./LawTextWithRuby";
 import { articleAnchorId, computeChildArticleContext } from "./lawToc";
 
 interface LawNodeListProps {
@@ -113,10 +114,18 @@ const LawNodeBlock = ({
           ) : null}
           <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
             <Heading className="min-w-0 font-law text-lg font-semibold text-foreground break-words">
-              {displayTitle}
+              <LawTextWithRuby
+                displayMode={displayMode}
+                annotations={node.rubyAnnotations}
+                text={displayTitle ?? ""}
+              />
               {displayCaption === undefined ? null : (
                 <span className="ml-2 text-base font-normal text-secondary-foreground">
-                  {displayCaption}
+                  <LawTextWithRuby
+                    displayMode={displayMode}
+                    annotations={node.rubyAnnotations}
+                    text={displayCaption}
+                  />
                 </span>
               )}
             </Heading>
@@ -137,7 +146,11 @@ const LawNodeBlock = ({
               })
             ) : (
               <p className="indent-[1em] font-law leading-display font-medium text-foreground break-words">
-                {displayText}
+                <LawTextWithRuby
+                  displayMode={displayMode}
+                  annotations={node.rubyAnnotations}
+                  text={displayText}
+                />
               </p>
             )}
           </div>
@@ -183,7 +196,13 @@ const LawNodeBlock = ({
                   {displayMarker}
                 </span>
               ) : null}
-              <span>{bodyText}</span>
+              <span>
+                <LawTextWithRuby
+                  displayMode={displayMode}
+                  annotations={node.rubyAnnotations}
+                  text={bodyText}
+                />
+              </span>
             </p>
           ) : (
             <p className="flex min-w-0 gap-3 font-law leading-display font-medium text-foreground">
@@ -194,7 +213,11 @@ const LawNodeBlock = ({
               <span
                 className={cn("min-w-0 break-words", displayMarker === undefined && "indent-[1em]")}
               >
-                {bodyText}
+                <LawTextWithRuby
+                  displayMode={displayMode}
+                  annotations={node.rubyAnnotations}
+                  text={bodyText}
+                />
               </span>
             </p>
           )}
@@ -226,12 +249,20 @@ const LawNodeBlock = ({
     <section className="grid gap-3">
       {displayTitle !== undefined ? (
         <Heading className={cn("font-law text-foreground break-words", headingClassName)}>
-          {displayTitle}
+          <LawTextWithRuby
+            displayMode={displayMode}
+            annotations={node.rubyAnnotations}
+            text={displayTitle}
+          />
         </Heading>
       ) : null}
       {bodyText !== "" ? (
         <p className="font-law leading-display font-medium text-foreground break-words">
-          {bodyText}
+          <LawTextWithRuby
+            displayMode={displayMode}
+            annotations={node.rubyAnnotations}
+            text={bodyText}
+          />
         </p>
       ) : null}
       {renderChildBlocks({
