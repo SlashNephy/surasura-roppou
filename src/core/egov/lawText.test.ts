@@ -251,33 +251,33 @@ describe("normalizeEgovLawText", () => {
     expect(paragraphNode).not.toHaveProperty("title");
   });
 
-  it("collects ruby annotations from descendants without duplicates", () => {
+  it("keeps ruby annotations on the node that owns the text", () => {
     const nodes = normalizeLawBody([
-      article("第一条", [
+      lawTextNode("Article", [
+        lawTextNode("ArticleCaption", [
+          "（定期",
+          lawTextNode("Ruby", ["傭", lawTextNode("Rt", ["よう"])]),
+          "船契約）",
+        ]),
+        lawTextNode("ArticleTitle", ["第一条"]),
         paragraph([
           lawTextNode("ParagraphSentence", [
             lawTextNode("Sentence", [
-              lawTextNode("Ruby", ["傭", lawTextNode("Rt", ["よう"])]),
-              "船契約",
-            ]),
-          ]),
-          item("一", [
-            lawTextNode("ItemSentence", [
-              lawTextNode("Sentence", [
-                lawTextNode("Ruby", ["傭", lawTextNode("Rt", ["よう"])]),
-                "船者",
-              ]),
+              lawTextNode("Ruby", ["艤", lawTextNode("Rt", ["ぎ"])]),
+              "装した船舶。",
             ]),
           ]),
         ]),
       ]),
     ]);
 
+    // 条見出しのルビは条ノード、本文のルビは項ノードが持つ。
+    // 章や編に法令全体のルビが積み上がらないよう、収集はノード境界で止まる。
     expect(findNode(nodes, "Article", "article:1")).toEqual(
       expect.objectContaining({ rubyAnnotations: [{ base: "傭", text: "よう" }] }),
     );
-    expect(findNode(nodes, "Item", "article:1/paragraph:1/item:1")).toEqual(
-      expect.objectContaining({ rubyAnnotations: [{ base: "傭", text: "よう" }] }),
+    expect(findNode(nodes, "Paragraph", "article:1/paragraph:1")).toEqual(
+      expect.objectContaining({ rubyAnnotations: [{ base: "艤", text: "ぎ" }] }),
     );
   });
 

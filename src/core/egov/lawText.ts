@@ -260,7 +260,9 @@ const collectRubyAnnotations = (node: EgovLawTextNode): RubyAnnotation[] => {
     }
 
     current.children.forEach((child) => {
-      if (typeof child !== "string") {
+      // 子の LawNode に属するルビは、その子ノード側で収集する。
+      // 章や編に法令全体のルビが積み上がるのを防ぎ、描画対象の文言だけを持たせる。
+      if (typeof child !== "string" && nodeTypeByTag[child.tag] === undefined) {
         walk(child);
       }
     });
