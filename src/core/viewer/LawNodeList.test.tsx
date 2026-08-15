@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -664,6 +664,81 @@ describe("LawNodeList", () => {
       await user.click(screen.getByRole("link", { name: /第15条/ }));
 
       expect(onSelectArticle).toHaveBeenCalledWith("15");
+    });
+
+    it.each([
+      ["ctrlKey", { ctrlKey: true }],
+      ["metaKey", { metaKey: true }],
+      ["shiftKey", { shiftKey: true }],
+      ["altKey", { altKey: true }],
+      ["middle click", { button: 1 }],
+    ] as const)(
+      "does not call onSelectArticle on %s, leaving the browser's default link behavior intact",
+      (_label, eventInit) => {
+        const onSelectArticle = vi.fn();
+
+        render(
+          <LawNodeList
+            lawId="129AC0000000089"
+            nodes={referenceNodes}
+            onSelectArticle={onSelectArticle}
+          />,
+        );
+
+        const link = screen.getByRole("link", { name: /第15条/ });
+        fireEvent.click(link, eventInit);
+
+        expect(onSelectArticle).not.toHaveBeenCalled();
+      },
+    );
+
+    it("renders a reference inside an item body (not directly under an article) as a link", () => {
+      // 号（Item）は条直下でないため、この号を含む項（第16条2項）の番号を継承する。
+      // 「前項」がその親の項を基準に解決されることを検証する。
+      const referenceNodesWithItem: LawNode[] = [
+        ...referenceNodes.map((existing) =>
+          existing.id === "article:16/paragraph:2"
+            ? { ...existing, children: ["article:16/paragraph:2/item:1"] }
+            : existing,
+        ),
+        node({
+          id: "article:16/paragraph:2/item:1",
+          type: "Item",
+          path: "article:16/paragraph:2/item:1",
+          number: "1",
+          title: "一",
+          plainText: "一 前項の規定による審判を除く。",
+          parentId: "article:16/paragraph:2",
+        }),
+      ];
+
+      render(<LawNodeList lawId="129AC0000000089" nodes={referenceNodesWithItem} />);
+
+      const links = screen.getAllByRole("link", { name: "前項" });
+
+      expect(links.length).toBeGreaterThan(0);
+      for (const link of links) {
+        expect(link).toHaveAttribute("href", "#a16-p1");
+      }
+    });
+
+    it("renders a reference inside a heading node's preamble text as a link", () => {
+      // 章・節などの見出しノード自身が持つ前文（本文）中の参照もリンク化対象である。
+      const headingReferenceNodes: LawNode[] = [
+        ...referenceNodes,
+        node({
+          id: "section:1",
+          type: "Section",
+          path: "section:1",
+          title: "第一節　通則",
+          plainText: "第一節　通則 第十五条の規定を準用する。",
+        }),
+      ];
+
+      render(<LawNodeList lawId="129AC0000000089" nodes={headingReferenceNodes} />);
+
+      expect(screen.getByRole("heading", { name: "第1節　通則" })).toBeInTheDocument();
+      expect(screen.getAllByRole("link", { name: /第15条/ }).length).toBeGreaterThan(0);
     });
 
     it("does not linkify article numbers inside supplementary provisions", () => {

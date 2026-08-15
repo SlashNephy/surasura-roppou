@@ -484,6 +484,19 @@ const ReferenceSegment = ({
         isInPage || linking.onSelectArticle === undefined
           ? undefined
           : (event) => {
+              // 修飾キー付きクリックや中クリックは、新しいタブ・ウィンドウで開く
+              // といったブラウザ標準のリンク操作を期待させるため横取りしない。
+              // 素の左クリックのときだけ SPA 内遷移に差し替える。
+              if (
+                event.metaKey ||
+                event.ctrlKey ||
+                event.shiftKey ||
+                event.altKey ||
+                event.button !== 0
+              ) {
+                return;
+              }
+
               event.preventDefault();
               linking.onSelectArticle?.(target.articleNumber);
             }
