@@ -41,7 +41,7 @@ const lawNumberRegex = new RegExp(
   `(令和|平成|昭和|大正|明治)(${eraYearPattern})年法律第(${kanjiNumberPattern})号`,
   "g",
 );
-const quantityLimitPattern = "以上|以下|以内|未満";
+const quantityLimitPattern = "以上|以下|以内|未満|を超え|を越え";
 // 助数詞は許可リストで持つ。裸の漢数字を一律に変換すると「一般」「一部」「一切」などを壊すため。
 // 「一通り」は数量ではないので除き、「月」は「三月以内」のように限度表現が続く場合だけ期間として扱う
 // （「四月一日」のような日付は monthDayRegex 側で処理する）。
@@ -62,8 +62,9 @@ const quantityUnitPattern = [
   "トン",
   `月(?=${quantityLimitPattern})`,
 ].join("|");
-// 「同一人」「同一年度」「唯一人」など、直前の漢字と結合して数量ではなくなる語を除外する。
-const nonQuantityPrefixPattern = "(?<![同唯])";
+// 「同一人」「同一年度」「唯一人」「第一人者」など、直前の漢字と結合して数量ではなくなる語を除外する。
+// 「第」に続く数字は条番号・構造番号として別の変換が扱うため、ここでは対象にしない。
+const nonQuantityPrefixPattern = "(?<![同唯第])";
 const fractionRegex = new RegExp(`(${kanjiNumberPattern})分の(${kanjiNumberPattern})`, "g");
 const precedingProvisionRegex = new RegExp(`前(${kanjiNumberPattern})(条|項|号)`, "g");
 const monthDayRegex = new RegExp(`(${kanjiNumberPattern})月(${kanjiNumberPattern})日`, "g");
@@ -200,7 +201,9 @@ const transformQuantities = (text: string): string =>
       quantityUnitRegex,
       (_match, kanjiNumber: string, unit: string) => `${replaceKanjiNumber(kanjiNumber)}${unit}`,
     )
-    .replace(boundedQuantityRegex, (match: string) => replaceKanjiNumber(match));
+    .replace(boundedQuantityRegex, (_match, kanjiNumber: string) =>
+      replaceKanjiNumber(kanjiNumber),
+    );
 
 export const transformReadableText = (
   text: string,

@@ -112,6 +112,8 @@ describe("readability", () => {
       "その3分の2を船舶所有者に支払い、その3分の1を船員に支払わなければならない。",
     ],
     ["十分の一以上の議決権", "10分の1以上の議決権"],
+    ["三月を超える期間", "3月を超える期間"],
+    ["十を超える議決権", "10を超える議決権"],
   ])("transforms quantity notation: %s", (input, expected) => {
     expect(transformReadableText(input)).toBe(expected);
   });
@@ -126,6 +128,7 @@ describe("readability", () => {
     ["一部の規定は適用しない。", "一部の規定は適用しない。"],
     ["一般に公表する。", "一般に公表する。"],
     ["三万円以下の過料に処する。", "三万円以下の過料に処する。"],
+    ["その分野の第一人者による監修", "その分野の第一人者による監修"],
   ])("keeps quantity-like prose unchanged: %s", (input, expected) => {
     expect(transformReadableText(input)).toBe(expected);
   });
