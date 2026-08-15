@@ -1,10 +1,10 @@
 import type { LawNode } from "@/core/domain";
 import {
+  bodyReferencePositionPatternSource,
   createAliasResolver,
   initialAliasDictionary,
   parseReference,
   referenceArticleSpanPattern,
-  referencePositionPatternSource,
   type ParsedReference,
 } from "@/core/jump";
 import { normalizeForSearch } from "@/core/search";
@@ -131,19 +131,25 @@ const hasPrecedingLawName = (text: string, matchStart: number): boolean => {
 // 直前 1 文字が法令名・附則・条例の末尾、または既に別の条を指す語（「同条」「当該条」）で
 // 終わる場合も抑止する。トレードオフとして「本法第15条」のような正しい自法令参照も
 // 抑止されるが、無リンクに倒す。
-const precedingCharGuardPattern = /[法令則例条]$/;
+const precedingGuardChars = new Set(["法", "令", "則", "例", "条"]);
 
 const hasPrecedingGuardChar = (text: string, matchStart: number): boolean =>
-  precedingCharGuardPattern.test(text.slice(0, matchStart));
+  matchStart > 0 && precedingGuardChars.has(text[matchStart - 1]);
 
 export const segmentReferenceLinks = (
   text: string,
   context: ArticleLinkContext,
 ): ReferenceLinkSegment[] => {
   const segments: ReferenceLinkSegment[] = [];
-  const pattern = new RegExp(referencePositionPatternSource, "g");
+  const pattern = new RegExp(bodyReferencePositionPatternSource, "g");
   let lastIndex = 0;
   let match: RegExpExecArray | null;
+  // 同じ文の中で、条を名指しする参照が既に現れたか。
+  // 「第三十条第二項及び第三項」の後半のような裸の項参照を、現在の条の項として
+  // 誤解決しないための抑止に使う。
+  let sawArticleScopedReference = false;
+  // 文の境界判定のために見終えたテキストの終端。マッチしなかった箇所も含めて走査する。
+  let scannedIndex = 0;
 
   while ((match = pattern.exec(text)) !== null) {
     // 空マッチ保険。理論上起きないが、起きれば無限ループになるため前進させる。
@@ -152,12 +158,40 @@ export const segmentReferenceLinks = (
       continue;
     }
 
+    // 文が変われば条のスコープは切れる。リンク化を見送ったマッチも走査済みに含めるため、
+    // 以降の continue より前で状態を更新する。
+    if (text.slice(scannedIndex, match.index).includes("。")) {
+      sawArticleScopedReference = false;
+    }
+
+    scannedIndex = match.index + match[0].length;
+
+    const parsed = parseReference(match[0]);
+
+    if (parsed === undefined) {
+      continue;
+    }
+
+    // 条を名指ししない裸の項参照（第2項）は、同じ文で既に別の条が示されていれば
+    // その条の項を指している可能性が高い。確信が持てないためリンク化しない。
+    const isSuppressedByArticleScope =
+      sawArticleScopedReference && parsed.article === undefined && parsed.paragraph !== undefined;
+
+    // 条を名指ししていれば、リンクになったかどうかに関わらずスコープを立てる。
+    if (parsed.article !== undefined) {
+      sawArticleScopedReference = true;
+    }
+
+    if (isSuppressedByArticleScope) {
+      continue;
+    }
+
     // 法令名を伴う参照（例: 商法第15条）は他法令を指すため、同一法令内リンクの対象外。
     if (hasPrecedingLawName(text, match.index) || hasPrecedingGuardChar(text, match.index)) {
       continue;
     }
 
-    const target = resolveTarget(match[0], context);
+    const target = resolveTarget(parsed, context);
 
     if (target === undefined) {
       continue;
@@ -210,13 +244,11 @@ const buildCaption = (
 };
 
 const resolveTarget = (
-  rawText: string,
+  parsed: ParsedReference,
   context: ArticleLinkContext,
 ): ArticleLinkTarget | undefined => {
-  const parsed = parseReference(rawText);
-
   // 法令名を伴う参照は他法令を指すため、同一法令内リンクの対象外。
-  if (parsed === undefined || parsed.kind === "absolute") {
+  if (parsed.kind === "absolute") {
     return undefined;
   }
 
@@ -240,9 +272,23 @@ const resolveTarget = (
       : { articleNumber };
   }
 
+  // 存在しない項への着地を避けるため、項番号は条をまたぐ場合も必ず検証する。
   const paragraphNumber = resolveParagraphNumber(parsed.paragraph, entry, context);
 
-  return paragraphNumber === undefined ? undefined : { articleNumber, paragraphNumber };
+  if (paragraphNumber === undefined) {
+    return undefined;
+  }
+
+  // v1 では条をまたぐ着地は条単位とし、項アンカーは同一条内のページ内リンクにだけ載せる。
+  // 他の条の項を項アンカーで返すと、ページ内リンクになって URL も現在位置も動かない。
+  if (articleNumber !== context.currentArticleNumber) {
+    return { articleNumber };
+  }
+
+  // 着地先が現在位置そのものになるリンクは、押しても動かないため作らない。
+  return paragraphNumber === context.currentParagraphNumber
+    ? undefined
+    : { articleNumber, paragraphNumber };
 };
 
 const resolveArticleNumber = (

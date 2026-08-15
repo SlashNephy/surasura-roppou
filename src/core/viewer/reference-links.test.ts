@@ -80,6 +80,90 @@ const lawNodes: LawNode[] = [
   }),
 ];
 
+// 「前二条」「第N項」の誤リンクを識別できるようにするための専用フィクスチャ。
+// 第二条を実在させ（「前二条」が第2条へ誤着地しうる状態）、第四条に項を 3 つ持たせて
+// （裸の「第三項」が着地しうる状態）、修正前後で結果が変わることを保証する。
+const numberedLawNodes: LawNode[] = [
+  node({
+    id: "chapter:1",
+    type: "Chapter",
+    path: "chapter:1",
+    number: "1",
+    title: "第一章　通則",
+    children: ["article:2", "article:3", "article:4"],
+  }),
+  node({
+    id: "article:2",
+    type: "Article",
+    path: "chapter:1/article:2",
+    number: "2",
+    title: "第二条",
+    caption: "（定義）",
+    children: ["article:2/paragraph:1", "article:2/paragraph:2"],
+    parentId: "chapter:1",
+  }),
+  node({
+    id: "article:2/paragraph:1",
+    type: "Paragraph",
+    path: "chapter:1/article:2/paragraph:1",
+    number: "1",
+    parentId: "article:2",
+  }),
+  node({
+    id: "article:2/paragraph:2",
+    type: "Paragraph",
+    path: "chapter:1/article:2/paragraph:2",
+    number: "2",
+    parentId: "article:2",
+  }),
+  node({
+    id: "article:3",
+    type: "Article",
+    path: "chapter:1/article:3",
+    number: "3",
+    title: "第三条",
+    children: ["article:3/paragraph:1"],
+    parentId: "chapter:1",
+  }),
+  node({
+    id: "article:3/paragraph:1",
+    type: "Paragraph",
+    path: "chapter:1/article:3/paragraph:1",
+    number: "1",
+    parentId: "article:3",
+  }),
+  node({
+    id: "article:4",
+    type: "Article",
+    path: "chapter:1/article:4",
+    number: "4",
+    title: "第四条",
+    children: ["article:4/paragraph:1", "article:4/paragraph:2", "article:4/paragraph:3"],
+    parentId: "chapter:1",
+  }),
+  node({
+    id: "article:4/paragraph:1",
+    type: "Paragraph",
+    path: "chapter:1/article:4/paragraph:1",
+    number: "1",
+    parentId: "article:4",
+  }),
+  node({
+    id: "article:4/paragraph:2",
+    type: "Paragraph",
+    path: "chapter:1/article:4/paragraph:2",
+    number: "2",
+    parentId: "article:4",
+  }),
+  node({
+    id: "article:4/paragraph:3",
+    type: "Paragraph",
+    path: "chapter:1/article:4/paragraph:3",
+    number: "3",
+    parentId: "article:4",
+  }),
+];
+
 describe("buildArticleLinkEntries", () => {
   it("collects url addressable articles in document order", () => {
     expect(buildArticleLinkEntries(lawNodes).map((entry) => entry.articleNumber)).toEqual([
@@ -265,8 +349,107 @@ describe("segmentReferenceLinks", () => {
     expect(segment).toEqual({
       kind: "link",
       text: "第15条第2項",
-      target: { articleNumber: "15", paragraphNumber: "2" },
+      target: { articleNumber: "15" },
       caption: { text: "補助開始の審判", offset: 4 },
     });
+  });
+
+  it("omits the paragraph from the target of a reference crossing articles", () => {
+    const [segment] = segmentReferenceLinks("第15条第2項の審判", {
+      articles,
+      currentArticleNumber: "16",
+      currentParagraphNumber: "1",
+    });
+
+    expect(segment).toMatchObject({ kind: "link", target: { articleNumber: "15" } });
+    expect(segment).not.toHaveProperty("target.paragraphNumber");
+  });
+
+  it("keeps the paragraph in the target of a reference inside the current article", () => {
+    const [segment] = segmentReferenceLinks("第2項の請求", {
+      articles,
+      currentArticleNumber: "15",
+      currentParagraphNumber: "1",
+    });
+
+    expect(segment).toEqual({
+      kind: "link",
+      text: "第2項",
+      target: { articleNumber: "15", paragraphNumber: "2" },
+    });
+  });
+});
+
+describe("segmentReferenceLinks with a multi paragraph article", () => {
+  const articles = buildArticleLinkEntries(numberedLawNodes);
+
+  const linkTexts = (text: string, context: Partial<ArticleLinkContext> = {}) =>
+    segmentReferenceLinks(text, { articles, ...context })
+      .filter((segment) => segment.kind === "link")
+      .map((segment) => segment.text);
+
+  it.each([
+    {
+      name: "does not link the number inside 前二項",
+      text: "前二項の規定は、前条の場合について準用する。",
+      context: { currentArticleNumber: "4", currentParagraphNumber: "3" },
+      expected: ["前条"],
+    },
+    {
+      name: "does not link the number inside 前三項",
+      text: "前三項の規定にかかわらず、その効力を妨げない。",
+      context: { currentArticleNumber: "4", currentParagraphNumber: "3" },
+      expected: [],
+    },
+    {
+      name: "does not link the number inside 前二条",
+      text: "前二条の規定により債務を負担した者",
+      context: { currentArticleNumber: "4", currentParagraphNumber: "1" },
+      expected: [],
+    },
+    {
+      name: "does not link the number inside 次の二条",
+      text: "次の二条に規定する場合を除く。",
+      context: { currentArticleNumber: "4", currentParagraphNumber: "1" },
+      expected: [],
+    },
+    {
+      name: "does not link a bare paragraph after an article scoped reference in the same sentence",
+      text: "第2条第2項及び第3項の規定による。",
+      context: { currentArticleNumber: "4", currentParagraphNumber: "1" },
+      expected: ["第2条第2項"],
+    },
+    {
+      name: "does not link a bare paragraph after a relative article reference in the same sentence",
+      text: "前条第1項又は第2項の規定による。",
+      context: { currentArticleNumber: "4", currentParagraphNumber: "1" },
+      expected: ["前条第1項"],
+    },
+    {
+      name: "links a bare paragraph in a sentence carrying no article scoped reference",
+      text: "前項の規定は、第1項の場合には適用しない。",
+      context: { currentArticleNumber: "4", currentParagraphNumber: "2" },
+      expected: ["前項", "第1項"],
+    },
+    {
+      name: "resets the article scope at a sentence boundary",
+      text: "第2条の規定による。第2項の場合はこの限りでない。",
+      context: { currentArticleNumber: "4", currentParagraphNumber: "1" },
+      expected: ["第2条", "第2項"],
+    },
+    {
+      name: "does not link a paragraph reference landing on the current paragraph itself",
+      text: "第1項第3号に掲げるもの",
+      context: { currentArticleNumber: "4", currentParagraphNumber: "1" },
+      expected: [],
+    },
+    {
+      name: "links a paragraph reference landing on another paragraph of the current article",
+      text: "第3項に掲げるもの",
+      context: { currentArticleNumber: "4", currentParagraphNumber: "1" },
+      expected: ["第3項"],
+    },
+  ])("$name", ({ context, expected, text }) => {
+    expect(linkTexts(text, context)).toEqual(expected);
   });
 });
