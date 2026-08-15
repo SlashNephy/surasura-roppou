@@ -449,7 +449,57 @@ describe("segmentReferenceLinks with a multi paragraph article", () => {
       context: { currentArticleNumber: "4", currentParagraphNumber: "1" },
       expected: ["第3項"],
     },
+    {
+      name: "links 前項 even after an article scoped reference earlier in the sentence",
+      text: "第2条の規定は、前項の場合について準用する。",
+      context: { currentArticleNumber: "4", currentParagraphNumber: "2" },
+      expected: ["第2条", "前項"],
+    },
+    {
+      name: "still suppresses a bare numbered paragraph after an article scoped reference earlier in the sentence",
+      text: "第2条の規定は、第1項の場合には適用しない。",
+      context: { currentArticleNumber: "4", currentParagraphNumber: "2" },
+      expected: ["第2条"],
+    },
+    {
+      name: "does not link a bare paragraph following a paragraph suppressed by 同条",
+      text: "同条第2項及び第3項の規定による。",
+      context: { currentArticleNumber: "4", currentParagraphNumber: "1" },
+      expected: [],
+    },
+    {
+      name: "does not link a bare paragraph following an article and paragraph suppressed by a law name",
+      text: "商法第15条第1項及び第2項の規定による。",
+      context: { currentArticleNumber: "4", currentParagraphNumber: "1" },
+      expected: [],
+    },
   ])("$name", ({ context, expected, text }) => {
     expect(linkTexts(text, context)).toEqual(expected);
+  });
+
+  it("resolves 前項 to the preceding paragraph of the current article when preceded by an article scoped reference", () => {
+    const articles = buildArticleLinkEntries(numberedLawNodes);
+
+    expect(
+      segmentReferenceLinks("第2条の規定は、前項の場合について準用する。", {
+        articles,
+        currentArticleNumber: "4",
+        currentParagraphNumber: "2",
+      }),
+    ).toEqual([
+      {
+        kind: "link",
+        text: "第2条",
+        target: { articleNumber: "2" },
+        caption: { text: "定義", offset: 3 },
+      },
+      { kind: "text", text: "の規定は、" },
+      {
+        kind: "link",
+        text: "前項",
+        target: { articleNumber: "4", paragraphNumber: "1" },
+      },
+      { kind: "text", text: "の場合について準用する。" },
+    ]);
   });
 });

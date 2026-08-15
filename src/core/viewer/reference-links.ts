@@ -136,6 +136,11 @@ const precedingGuardChars = new Set(["法", "令", "則", "例", "条"]);
 const hasPrecedingGuardChar = (text: string, matchStart: number): boolean =>
   matchStart > 0 && precedingGuardChars.has(text[matchStart - 1]);
 
+// 項の相対シフト（前項・次項）かどうかを判定する。相対シフトは現在位置から一意に
+// 解決できるため、文スコープ抑止の対象外にする（裸の数字の項参照とは扱いを分ける）。
+const isRelativeParagraphShift = (paragraph: string): boolean =>
+  paragraph === "previous" || paragraph === "next";
+
 export const segmentReferenceLinks = (
   text: string,
   context: ArticleLinkContext,
@@ -172,22 +177,31 @@ export const segmentReferenceLinks = (
       continue;
     }
 
-    // 条を名指ししない裸の項参照（第2項）は、同じ文で既に別の条が示されていれば
+    // 条を名指ししない裸の数字の項参照（第2項）は、同じ文で既に別の条が示されていれば
     // その条の項を指している可能性が高い。確信が持てないためリンク化しない。
+    // ただし前項・次項は起草慣行として常に同じ条の直前・直後の項を指すため対象外とする
+    // （同じ文で別の条が名指しされていても意味は変わらない）。
     const isSuppressedByArticleScope =
-      sawArticleScopedReference && parsed.article === undefined && parsed.paragraph !== undefined;
+      sawArticleScopedReference &&
+      parsed.article === undefined &&
+      parsed.paragraph !== undefined &&
+      !isRelativeParagraphShift(parsed.paragraph);
 
     // 条を名指ししていれば、リンクになったかどうかに関わらずスコープを立てる。
     if (parsed.article !== undefined) {
       sawArticleScopedReference = true;
     }
 
-    if (isSuppressedByArticleScope) {
+    // 法令名を伴う参照（例: 商法第15条）やガード文字（例: 同条）で弾いた参照も、
+    // 別の条（または別の法令の条）を名指ししているという点では条名指しと同じ。
+    // ここでリンク化を見送っても、以降の裸の項参照が現在の条へ誤解決しないよう
+    // スコープを立てておく。
+    if (hasPrecedingLawName(text, match.index) || hasPrecedingGuardChar(text, match.index)) {
+      sawArticleScopedReference = true;
       continue;
     }
 
-    // 法令名を伴う参照（例: 商法第15条）は他法令を指すため、同一法令内リンクの対象外。
-    if (hasPrecedingLawName(text, match.index) || hasPrecedingGuardChar(text, match.index)) {
+    if (isSuppressedByArticleScope) {
       continue;
     }
 
@@ -326,7 +340,7 @@ const resolveParagraphNumber = (
   entry: ArticleLinkEntry,
   context: ArticleLinkContext,
 ): string | undefined => {
-  if (paragraph !== "previous" && paragraph !== "next") {
+  if (!isRelativeParagraphShift(paragraph)) {
     return entry.paragraphNumbers.includes(paragraph) ? paragraph : undefined;
   }
 
