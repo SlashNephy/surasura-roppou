@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { LawViewerDocument } from "./law-viewer-sample";
 
 export interface SavedViewerState {
-  isSaved: boolean;
+  isPinned: boolean;
   loadedFromStorage: boolean;
   savedAt?: string;
 }
@@ -12,7 +12,7 @@ export const useSavedViewerState = (state: LawViewerDocument) =>
   useState<SavedViewerState>(() => toSavedViewerState(state));
 
 export const toSavedViewerState = (state: LawViewerDocument): SavedViewerState => ({
-  isSaved: state.isSaved,
+  isPinned: state.isPinned,
   loadedFromStorage: state.loadedFromStorage,
   ...(state.savedAt === undefined ? {} : { savedAt: state.savedAt }),
 });

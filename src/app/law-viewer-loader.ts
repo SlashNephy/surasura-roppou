@@ -23,7 +23,10 @@ export const loadLawViewerDocument = async (
     return { status: "offline-unavailable", lawTitle: sampleLawViewerDocument.law.title };
   }
 
-  const savedDocument = await getSavedDocument(storageRepository, lawId);
+  const [savedDocument, isPinned] = await Promise.all([
+    getSavedDocument(storageRepository, lawId),
+    getIsLawPinned(storageRepository, lawId),
+  ]);
 
   try {
     const document = await repository.getLaw(lawId, asOf === undefined ? {} : { asOf });
@@ -33,7 +36,7 @@ export const loadLawViewerDocument = async (
       law: document.law,
       revision: document.revision,
       nodes: document.nodes,
-      isSaved: savedDocument !== undefined,
+      isPinned,
       loadedFromStorage: false,
       requestedAsOf: asOf,
       savedAt: savedDocument?.savedAt,
@@ -46,7 +49,7 @@ export const loadLawViewerDocument = async (
           law: savedDocument.law,
           revision: savedDocument.revision,
           nodes: savedDocument.nodes,
-          isSaved: true,
+          isPinned,
           loadedFromStorage: true,
           requestedAsOf: asOf,
           savedAt: savedDocument.savedAt,
@@ -76,5 +79,14 @@ const getSavedDocument = async (storageRepository: StorageRepository, lawId: str
     return await storageRepository.getLawDocument(lawId);
   } catch {
     return undefined;
+  }
+};
+
+// 保存領域の失敗で閲覧を止めない。ピン留めの状態が読めないときは未ピン留めとして表示する。
+const getIsLawPinned = async (storageRepository: StorageRepository, lawId: string) => {
+  try {
+    return await storageRepository.isLawPinned(lawId);
+  } catch {
+    return false;
   }
 };

@@ -246,7 +246,7 @@ const LawViewerReadyState = ({
             law: document.law,
             revision: document.revision,
             nodes: document.nodes,
-            isSaved: baseState.isSaved,
+            isPinned: baseState.isPinned,
             loadedFromStorage: false,
           });
         }
@@ -260,7 +260,7 @@ const LawViewerReadyState = ({
     return () => {
       isCurrent = false;
     };
-  }, [pinnedRevisionId, resolvedRepository, baseState.revision.revisionId, baseState.isSaved]);
+  }, [pinnedRevisionId, resolvedRepository, baseState.revision.revisionId, baseState.isPinned]);
 
   // 実際に表示する状態。固定解決の結果が現在の目的版と一致するときだけ採用し、
   // それ以外（未解決・pinned 解除・別条移動）は基準日解決版を表示する。
@@ -438,9 +438,9 @@ const LawViewerReadyState = ({
     setSaveError(undefined);
 
     try {
-      if (savedState.isSaved) {
+      if (savedState.isPinned) {
         await savedLawUseCase.remove(state.law.lawId);
-        setSavedState({ isSaved: false, loadedFromStorage: false });
+        setSavedState({ isPinned: false, loadedFromStorage: false });
         return;
       }
 
@@ -453,7 +453,7 @@ const LawViewerReadyState = ({
       const savedDocument = await savedLawUseCase.get(state.law.lawId);
 
       setSavedState({
-        isSaved: true,
+        isPinned: true,
         loadedFromStorage: false,
         ...(savedDocument?.savedAt === undefined ? {} : { savedAt: savedDocument.savedAt }),
       });
@@ -564,7 +564,7 @@ const LawViewerReadyState = ({
                 施行日 {formatEffectiveDateLabel(state.revision)}
               </div>
             </div>
-            {savedState.isSaved ? (
+            {savedState.isPinned ? (
               <Badge variant="secondary" className="w-fit">
                 オフライン保存済み
               </Badge>
@@ -580,14 +580,14 @@ const LawViewerReadyState = ({
                   void handleSaveToggle();
                 }}
                 type="button"
-                variant={savedState.isSaved ? "outline" : "default"}
+                variant={savedState.isPinned ? "outline" : "default"}
               >
-                {savedState.isSaved ? (
+                {savedState.isPinned ? (
                   <Trash2 className="size-4" aria-hidden="true" />
                 ) : (
                   <Download className="size-4" aria-hidden="true" />
                 )}
-                {savedState.isSaved ? "保存解除" : "オフライン保存"}
+                {savedState.isPinned ? "保存解除" : "オフライン保存"}
               </Button>
             </div>
 
@@ -867,9 +867,9 @@ const LawViewerReadyState = ({
                 void handleSaveToggle();
               }}
               type="button"
-              variant={savedState.isSaved ? "outline" : "default"}
+              variant={savedState.isPinned ? "outline" : "default"}
             >
-              {savedState.isSaved ? "保存解除" : "オフライン保存"}
+              {savedState.isPinned ? "保存解除" : "オフライン保存"}
             </Button>
             {/* 保存失敗はシート表示中だと本文側の alert が隠れるため、シート内にも通知する。 */}
             {saveError !== undefined ? (

@@ -5,7 +5,7 @@ export interface LawViewerDocument {
   law: Law;
   revision: LawRevision;
   nodes: LawNode[];
-  isSaved: boolean;
+  isPinned: boolean;
   loadedFromStorage: boolean;
   savedAt?: ISODateString;
   requestedAsOf?: string;
@@ -102,6 +102,6 @@ export const sampleLawViewerDocument = {
       parentId: "article:2",
     }),
   ],
-  isSaved: false,
+  isPinned: false,
   loadedFromStorage: false,
 } satisfies LawViewerDocument;

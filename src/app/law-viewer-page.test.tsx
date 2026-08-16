@@ -235,7 +235,7 @@ const nonNumericArticleState = {
       children: [],
     },
   ],
-  isSaved: false,
+  isPinned: false,
   loadedFromStorage: false,
 } satisfies LawViewerState;
 
@@ -333,6 +333,9 @@ describe("LawViewerPageContent", () => {
         nodes: sampleLawViewerDocument.nodes,
       }),
     );
+    // ローダーの初期表示はピン留め状態から決まる。保存済みでもピン留めしていなければ
+    // 「保存解除」ボタンは表示されないため、事前にピン留めしておく。
+    await storage.repository.pinLaw(sampleLawViewerDocument.law.lawId);
     const { user } = renderLawViewerRoute(
       "/laws/129AC0000000089",
       createFixtureRepository().repository,
