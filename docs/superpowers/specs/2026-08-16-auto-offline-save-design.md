@@ -45,7 +45,7 @@ keyPath 変更のため object store の作り直しが必要になるが、vers
 
 ## データモデル（DB v4）
 
-```
+```text
 savedLaws
   keyPath: ["lawId", "revisionId"]
   value:   { lawId, revisionId, isCurrent: 0 | 1, nodeCount, savedAt, updatedAt }
@@ -62,7 +62,7 @@ savedLaws
 
 `savedAt` は「その版を初めて保存した時刻」、`updatedAt` は「最後に書いた時刻」を版単位で保持する。
 
-#### `savedAt` の意味の変更と、それに伴う振る舞いの変化
+### `savedAt` の意味の変更と、それに伴う振る舞いの変化
 
 旧スキーマの `savedAt` は法令単位で、別の版に更新しても初回保存時刻のまま据え置かれた。
 版単位に変えることで、同じ法令を新しい版で保存し直すと `savedAt` はその時刻になる。
@@ -129,7 +129,7 @@ PR 1 ではビューアの呼び出し方を変えないため、常に現行版
 
 ### 保存（PR 1 時点 = 手動保存のみ）
 
-```
+```text
 ビューアの保存ボタン
   → SavedLawUseCase.save(document)          options 省略 = 現行版
   → StorageRepository.saveLawDocument
@@ -140,7 +140,7 @@ PR 1 ではビューアの呼び出し方を変えないため、常に現行版
 
 ### 取得とオフラインフォールバック（PR 1 では経路不変）
 
-```
+```text
 loadLawViewerDocument(lawId, asOf?)
   → getLawDocument(lawId)   ← 常に現行版
   → e-Gov 取得を試みる
@@ -188,7 +188,8 @@ loadLawViewerDocument(lawId, asOf?)
 
 - v3 形式の `savedLaws` レコードを持つ DB を手書きで再現し、現行バージョンで開いたあと新 keyPath で引けること・`isCurrent` が 1 であること
 - 保存法令が 0 件の v3 DB でも問題なく開けること
-- 索引（`by-current`、`by-law-current`、`by-updated-at`）が作られ、引けること
+- 索引（`by-law-id`、`by-law-current`、`by-saved-at`、`by-updated-at`）が作られ、引けること
+- `lawId` または `revisionId` を欠く壊れたレコードはスキップされ、他のレコードの移行は完了すること
 
 既存テストの方針に従い、seed 用のスキーマ定義は現行コードを流用せず手書きする。移行テストは「当時の形の DB」から始まらなければ意味がないため。
 

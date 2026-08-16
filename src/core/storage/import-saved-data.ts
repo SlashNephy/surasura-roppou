@@ -2,6 +2,7 @@ import type { IDBPDatabase } from "idb";
 
 import { fixedIntervalScheduler } from "@/core/study";
 
+import { deleteRevisionNodes, demoteOtherCurrentRevisions } from "./current-revision-slot";
 import type { SavedDataExport } from "./export-data";
 import { countSavedData, type SavedDataImportResult } from "./import-data";
 import type { SurasuraDatabase } from "./schema";
@@ -40,27 +41,10 @@ export const importSavedDataIntoDatabase = async (
     for (const savedLaw of data.savedLaws) {
       const lawId = savedLaw.law.lawId;
       const revisionId = savedLaw.revision.revisionId;
-      const currentRecords = await savedLaws.index("by-law-current").getAll([lawId, 1]);
 
-      for (const existingSavedLaw of currentRecords) {
-        // インポート対象の版と一致するレコードは、下の共通処理でノードを消してから入れ直す。
-        if (existingSavedLaw.revisionId === revisionId) {
-          continue;
-        }
-
-        // saveLawDocument と対称に、旧現行版はレコードとノードを残したまま降格する。
-        // インポートはローカルの本文を破棄しない。updatedAt は据え置く（LRU が使うため）。
-        await savedLaws.put({ ...existingSavedLaw, isCurrent: 0 });
-      }
-
-      // saveLawDocument と対称にするため、インポート対象の版のノードも常に一度消してから入れ直す。
-      // これを怠ると、インポート対象の版が既に履歴版（isCurrent: 0）へ降格済みの場合に
-      // ローカルのノードがインポート側に無くても残留し、nodeCount と実件数がずれる。
-      const targetNodeKeys = await lawNodes
-        .index("by-law-revision")
-        .getAllKeys([lawId, revisionId]);
-
-      await Promise.all(targetNodeKeys.map((key) => lawNodes.delete(key)));
+      // インポートはローカルの本文を破棄しない。旧現行版は saveLawDocument と対称に降格して残す。
+      await demoteOtherCurrentRevisions(savedLaws, lawId, revisionId);
+      await deleteRevisionNodes(lawNodes, lawId, revisionId);
 
       // 大量の法令ノードを1件ずつ完了待ちせず、同じ transaction の request queue へまとめて渡す。
       await Promise.all([

@@ -2,6 +2,7 @@ import { deleteDB, openDB } from "idb";
 import type { IDBPDatabase, IDBPTransaction, StoreNames } from "idb";
 
 import { fixedIntervalScheduler } from "@/core/study";
+import { deleteRevisionNodes, demoteOtherCurrentRevisions } from "./current-revision-slot";
 import { migrateRecordsToVersion3, migrateRecordsToVersion4 } from "./migrations";
 import type {
   Annotation,
@@ -144,25 +145,11 @@ export const createStorageRepository = (
         const isCurrent: 0 | 1 = shouldBeCurrent ? 1 : 0;
 
         // 同じ版を書き直すときだけ、その版のノードを消して入れ直す。
-        // 他の版のノードは残す（削除はエビクションの責務）。
-        const existingNodeKeys = await nodes
-          .index("by-law-revision")
-          .getAllKeys([lawId, revisionId]);
-
-        for (const key of existingNodeKeys) {
-          void nodes.delete(key);
-        }
+        await deleteRevisionNodes(nodes, lawId, revisionId);
 
         // 現行版スロットは 1 法令 1 件。旧現行版はフラグだけ降格し、履歴として残す。
-        // updatedAt は据え置く（最後に書いた時刻としてエビクションが使う）。
         if (isCurrent === 1) {
-          const currentRecords = await savedLaws.index("by-law-current").getAll([lawId, 1]);
-
-          for (const record of currentRecords) {
-            if (record.revisionId !== revisionId) {
-              void savedLaws.put({ ...record, isCurrent: 0 });
-            }
-          }
+          await demoteOtherCurrentRevisions(savedLaws, lawId, revisionId);
         }
 
         void tx.objectStore("laws").put(document.law);
@@ -290,7 +277,13 @@ export const createStorageRepository = (
         await tx.done;
 
         // 新しく保存したものから並べる（一覧の既定の並びと揃える）。
-        return summaries.sort((left, right) => right.savedAt.localeCompare(left.savedAt));
+        // 同一トランザクションでの複数版保存やインポートでは savedAt が同値になりうるため、
+        // 索引の返却順に依存しないよう revisionId を第 2 キーにして順序を決定的にする。
+        return summaries.sort((left, right) =>
+          left.savedAt === right.savedAt
+            ? right.revision.revisionId.localeCompare(left.revision.revisionId)
+            : right.savedAt.localeCompare(left.savedAt),
+        );
       });
     },
 

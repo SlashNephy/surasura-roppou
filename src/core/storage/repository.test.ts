@@ -364,24 +364,23 @@ describe("StorageRepository", () => {
     });
     await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
 
-    await expect(repository.listSavedRevisions(law.lawId)).resolves.toEqual(
-      expect.arrayContaining([
-        {
-          revision,
-          isCurrent: true,
-          nodeCount: 2,
-          savedAt: "2026-07-06T00:00:00.000Z",
-          updatedAt: "2026-07-06T00:00:00.000Z",
-        },
-        {
-          revision: olderRevision,
-          isCurrent: false,
-          nodeCount: 1,
-          savedAt: "2026-07-06T00:00:00.000Z",
-          updatedAt: "2026-07-06T00:00:00.000Z",
-        },
-      ]),
-    );
+    // savedAt は 2 版とも同値。索引の返却順に依存せず revisionId 降順で並ぶこと。
+    await expect(repository.listSavedRevisions(law.lawId)).resolves.toEqual([
+      {
+        revision,
+        isCurrent: true,
+        nodeCount: 2,
+        savedAt: "2026-07-06T00:00:00.000Z",
+        updatedAt: "2026-07-06T00:00:00.000Z",
+      },
+      {
+        revision: olderRevision,
+        isCurrent: false,
+        nodeCount: 1,
+        savedAt: "2026-07-06T00:00:00.000Z",
+        updatedAt: "2026-07-06T00:00:00.000Z",
+      },
+    ]);
   });
 
   it("deletes a single revision without touching the others", async () => {
