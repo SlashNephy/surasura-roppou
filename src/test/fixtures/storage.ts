@@ -77,7 +77,12 @@ export const createMemoryStorageRepository = (
       return cardSchedules;
     },
     repository: {
-      saveLawDocument(document) {
+      saveLawDocument(document, options) {
+        // 現行版でない保存はメモリ実装では保持しない（PR 1 では UI から使われない）。
+        if (options?.isCurrent === false && savedDocument?.law.lawId === document.law.lawId) {
+          return Promise.resolve();
+        }
+
         const nextSavedAt = savedAt ?? document.revision.fetchedAt;
         savedAt = nextSavedAt;
         updatedAt = document.revision.fetchedAt;
@@ -86,6 +91,12 @@ export const createMemoryStorageRepository = (
       },
       getLawDocument(lawId) {
         return Promise.resolve(savedDocument?.law.lawId === lawId ? savedDocument : undefined);
+      },
+      getLawDocumentRevision(lawId, revisionId) {
+        const matches =
+          savedDocument?.law.lawId === lawId && savedDocument.revision.revisionId === revisionId;
+
+        return Promise.resolve(matches ? savedDocument : undefined);
       },
       listSavedLaws() {
         if (savedDocument === undefined || savedAt === undefined || updatedAt === undefined) {
@@ -102,8 +113,38 @@ export const createMemoryStorageRepository = (
           },
         ]);
       },
+      listSavedRevisions(lawId) {
+        if (
+          savedDocument?.law.lawId !== lawId ||
+          savedAt === undefined ||
+          updatedAt === undefined
+        ) {
+          return Promise.resolve([]);
+        }
+
+        return Promise.resolve([
+          {
+            revision: savedDocument.revision,
+            isCurrent: true,
+            nodeCount: savedDocument.nodes.length,
+            savedAt,
+            updatedAt,
+          },
+        ]);
+      },
       deleteLawDocument(lawId) {
         if (savedDocument?.law.lawId === lawId) {
+          savedDocument = undefined;
+          savedAt = undefined;
+          updatedAt = undefined;
+        }
+        return Promise.resolve();
+      },
+      deleteLawRevision(lawId, revisionId) {
+        if (
+          savedDocument?.law.lawId === lawId &&
+          savedDocument.revision.revisionId === revisionId
+        ) {
           savedDocument = undefined;
           savedAt = undefined;
           updatedAt = undefined;

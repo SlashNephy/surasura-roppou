@@ -58,6 +58,19 @@ export interface SavedLawSummary {
   updatedAt: ISODateString;
 }
 
+export interface SavedLawRevisionSummary {
+  revision: LawRevision;
+  isCurrent: boolean;
+  nodeCount: number;
+  savedAt: ISODateString;
+  updatedAt: ISODateString;
+}
+
+export interface SaveLawDocumentOptions {
+  // 既定 true。基準日指定や版固定で取得した本文を保存するときだけ false にする。
+  isCurrent?: boolean;
+}
+
 export interface LawScopedQuery {
   lawId?: string;
 }
@@ -69,10 +82,13 @@ export interface DueStudyCard {
 }
 
 export interface StorageRepository {
-  saveLawDocument(document: LawDocumentInput): Promise<void>;
+  saveLawDocument(document: LawDocumentInput, options?: SaveLawDocumentOptions): Promise<void>;
   getLawDocument(lawId: string): Promise<SavedLawDocument | undefined>;
+  getLawDocumentRevision(lawId: string, revisionId: string): Promise<SavedLawDocument | undefined>;
   listSavedLaws(): Promise<SavedLawSummary[]>;
+  listSavedRevisions(lawId: string): Promise<SavedLawRevisionSummary[]>;
   deleteLawDocument(lawId: string): Promise<void>;
+  deleteLawRevision(lawId: string, revisionId: string): Promise<void>;
   putBookmark(bookmark: Bookmark): Promise<void>;
   listBookmarks(query?: LawScopedQuery): Promise<Bookmark[]>;
   putCollection(collection: Collection): Promise<void>;
@@ -114,7 +130,7 @@ export const createStorageRepository = (
   };
 
   return {
-    async saveLawDocument(document) {
+    async saveLawDocument(document, options = {}) {
       await withDatabase(async (db) => {
         const updatedAt = now().toISOString();
         const tx = db.transaction(["laws", "lawRevisions", "lawNodes", "savedLaws"], "readwrite");
@@ -123,6 +139,8 @@ export const createStorageRepository = (
         const lawId = document.law.lawId;
         const revisionId = document.revision.revisionId;
         const existing = await savedLaws.get([lawId, revisionId]);
+        // 既に現行版として保存済みの版は、基準日指定の取得で降格させない。
+        const isCurrent: 0 | 1 = (options.isCurrent ?? true) || existing?.isCurrent === 1 ? 1 : 0;
 
         // 同じ版を書き直すときだけ、その版のノードを消して入れ直す。
         // 他の版のノードは残す（削除はエビクションの責務）。
@@ -136,11 +154,13 @@ export const createStorageRepository = (
 
         // 現行版スロットは 1 法令 1 件。旧現行版はフラグだけ降格し、履歴として残す。
         // updatedAt は据え置く（最後に書いた時刻としてエビクションが使う）。
-        const currentRecords = await savedLaws.index("by-law-current").getAll([lawId, 1]);
+        if (isCurrent === 1) {
+          const currentRecords = await savedLaws.index("by-law-current").getAll([lawId, 1]);
 
-        for (const record of currentRecords) {
-          if (record.revisionId !== revisionId) {
-            void savedLaws.put({ ...record, isCurrent: 0 });
+          for (const record of currentRecords) {
+            if (record.revisionId !== revisionId) {
+              void savedLaws.put({ ...record, isCurrent: 0 });
+            }
           }
         }
 
@@ -160,7 +180,7 @@ export const createStorageRepository = (
         void savedLaws.put({
           lawId,
           revisionId,
-          isCurrent: 1,
+          isCurrent,
           nodeCount: document.nodes.length,
           savedAt: existing?.savedAt ?? updatedAt,
           updatedAt,
@@ -182,26 +202,26 @@ export const createStorageRepository = (
           return undefined;
         }
 
-        const [law, revision, storedNodes] = await Promise.all([
-          tx.objectStore("laws").get(savedLaw.lawId),
-          tx.objectStore("lawRevisions").get(savedLaw.revisionId),
-          tx
-            .objectStore("lawNodes")
-            .index("by-law-revision")
-            .getAll([savedLaw.lawId, savedLaw.revisionId]),
-        ]);
+        const document = await readSavedDocument(tx, savedLaw);
         await tx.done;
 
-        if (law === undefined || revision === undefined) {
+        return document;
+      });
+    },
+
+    async getLawDocumentRevision(lawId, revisionId) {
+      return withDatabase(async (db) => {
+        const tx = db.transaction(["savedLaws", "laws", "lawRevisions", "lawNodes"], "readonly");
+        const savedLaw = await tx.objectStore("savedLaws").get([lawId, revisionId]);
+
+        if (savedLaw === undefined) {
           return undefined;
         }
 
-        return {
-          law,
-          revision,
-          nodes: toOrderedNodes(storedNodes),
-          savedAt: savedLaw.savedAt,
-        };
+        const document = await readSavedDocument(tx, savedLaw);
+        await tx.done;
+
+        return document;
       });
     },
 
@@ -244,6 +264,35 @@ export const createStorageRepository = (
       });
     },
 
+    async listSavedRevisions(lawId) {
+      return withDatabase(async (db) => {
+        const tx = db.transaction(["savedLaws", "lawRevisions"], "readonly");
+        const records = await tx.objectStore("savedLaws").index("by-law-id").getAll(lawId);
+        const lawRevisions = tx.objectStore("lawRevisions");
+        const summaries: SavedLawRevisionSummary[] = [];
+
+        for (const record of records) {
+          const revision = await lawRevisions.get(record.revisionId);
+
+          if (revision === undefined) {
+            continue;
+          }
+
+          summaries.push({
+            revision,
+            isCurrent: record.isCurrent === 1,
+            nodeCount: record.nodeCount,
+            savedAt: record.savedAt,
+            updatedAt: record.updatedAt,
+          });
+        }
+        await tx.done;
+
+        // 新しく保存したものから並べる（一覧の既定の並びと揃える）。
+        return summaries.sort((left, right) => right.savedAt.localeCompare(left.savedAt));
+      });
+    },
+
     async deleteLawDocument(lawId) {
       await withDatabase(async (db) => {
         const tx = db.transaction(["laws", "lawRevisions", "lawNodes", "savedLaws"], "readwrite");
@@ -272,6 +321,37 @@ export const createStorageRepository = (
         }
 
         void tx.objectStore("laws").delete(lawId);
+        await tx.done;
+      });
+    },
+
+    async deleteLawRevision(lawId, revisionId) {
+      await withDatabase(async (db) => {
+        const tx = db.transaction(["laws", "lawRevisions", "lawNodes", "savedLaws"], "readwrite");
+        const savedLaws = tx.objectStore("savedLaws");
+        const record = await savedLaws.get([lawId, revisionId]);
+
+        if (record === undefined) {
+          await tx.done;
+          return;
+        }
+
+        const nodes = tx.objectStore("lawNodes");
+        const nodeKeys = await nodes.index("by-law-revision").getAllKeys([lawId, revisionId]);
+
+        for (const key of nodeKeys) {
+          void nodes.delete(key);
+        }
+
+        void tx.objectStore("lawRevisions").delete(revisionId);
+        await savedLaws.delete([lawId, revisionId]);
+
+        // 版がすべて消えたら法令メタも残さない。
+        const remaining = await savedLaws.index("by-law-id").getAllKeys(lawId);
+
+        if (remaining.length === 0) {
+          void tx.objectStore("laws").delete(lawId);
+        }
         await tx.done;
       });
     },
@@ -619,3 +699,34 @@ const pickCurrentRecord = (records: SavedLawRecord[]): SavedLawRecord | undefine
       latest === undefined || record.updatedAt > latest.updatedAt ? record : latest,
     undefined,
   );
+
+type ReadDocumentTransaction = IDBPTransaction<
+  SurasuraDatabase,
+  ["savedLaws", "laws", "lawRevisions", "lawNodes"]
+>;
+
+// 保存メタから本文を組み立てる。呼び出し側で tx.done を待つ。
+const readSavedDocument = async (
+  tx: ReadDocumentTransaction,
+  savedLaw: SavedLawRecord,
+): Promise<SavedLawDocument | undefined> => {
+  const [law, revision, storedNodes] = await Promise.all([
+    tx.objectStore("laws").get(savedLaw.lawId),
+    tx.objectStore("lawRevisions").get(savedLaw.revisionId),
+    tx
+      .objectStore("lawNodes")
+      .index("by-law-revision")
+      .getAll([savedLaw.lawId, savedLaw.revisionId]),
+  ]);
+
+  if (law === undefined || revision === undefined) {
+    return undefined;
+  }
+
+  return {
+    law,
+    revision,
+    nodes: toOrderedNodes(storedNodes),
+    savedAt: savedLaw.savedAt,
+  };
+};

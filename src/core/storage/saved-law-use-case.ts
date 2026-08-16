@@ -1,8 +1,13 @@
-import type { LawDocumentInput, SavedLawDocument, SavedLawSummary } from "./repository";
+import type {
+  LawDocumentInput,
+  SaveLawDocumentOptions,
+  SavedLawDocument,
+  SavedLawSummary,
+} from "./repository";
 import type { StorageRepository } from "./repository";
 
 export interface SavedLawUseCase {
-  save(document: LawDocumentInput): Promise<void>;
+  save(document: LawDocumentInput, options?: SaveLawDocumentOptions): Promise<void>;
   get(lawId: string): Promise<SavedLawDocument | undefined>;
   list(): Promise<SavedLawSummary[]>;
   remove(lawId: string): Promise<void>;
@@ -21,11 +26,11 @@ export interface SavedLawUseCaseOptions {
 
 export const createSavedLawUseCase = (
   repository: StorageRepository,
-  options: SavedLawUseCaseOptions = {},
+  useCaseOptions: SavedLawUseCaseOptions = {},
 ): SavedLawUseCase => ({
-  async save(document) {
-    await repository.saveLawDocument(document);
-    await options.indexer?.indexLaw(document);
+  async save(document, options) {
+    await repository.saveLawDocument(document, options);
+    await useCaseOptions.indexer?.indexLaw(document);
   },
   get(lawId) {
     return repository.getLawDocument(lawId);
@@ -35,6 +40,6 @@ export const createSavedLawUseCase = (
   },
   async remove(lawId) {
     await repository.deleteLawDocument(lawId);
-    await options.indexer?.removeLaw(lawId);
+    await useCaseOptions.indexer?.removeLaw(lawId);
   },
 });

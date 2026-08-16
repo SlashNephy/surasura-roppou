@@ -325,6 +325,139 @@ describe("StorageRepository", () => {
     ]);
   });
 
+  it("reads a specific saved revision", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.saveLawDocument({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+    });
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+
+    await expect(
+      repository.getLawDocumentRevision(law.lawId, olderRevision.revisionId),
+    ).resolves.toEqual({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+      savedAt: "2026-07-06T00:00:00.000Z",
+    });
+    await expect(
+      repository.getLawDocumentRevision(law.lawId, "129AC0000000089_19000101_missing"),
+    ).resolves.toBeUndefined();
+  });
+
+  it("lists every saved revision of a law with the current flag", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.saveLawDocument({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+    });
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+
+    await expect(repository.listSavedRevisions(law.lawId)).resolves.toEqual(
+      expect.arrayContaining([
+        {
+          revision,
+          isCurrent: true,
+          nodeCount: 2,
+          savedAt: "2026-07-06T00:00:00.000Z",
+          updatedAt: "2026-07-06T00:00:00.000Z",
+        },
+        {
+          revision: olderRevision,
+          isCurrent: false,
+          nodeCount: 1,
+          savedAt: "2026-07-06T00:00:00.000Z",
+          updatedAt: "2026-07-06T00:00:00.000Z",
+        },
+      ]),
+    );
+  });
+
+  it("deletes a single revision without touching the others", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.saveLawDocument({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+    });
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+    await repository.deleteLawRevision(law.lawId, olderRevision.revisionId);
+
+    await expect(
+      repository.getLawDocumentRevision(law.lawId, olderRevision.revisionId),
+    ).resolves.toBeUndefined();
+    await expect(repository.getLawDocument(law.lawId)).resolves.toEqual({
+      law,
+      revision,
+      nodes: [articleNode, paragraphNode],
+      savedAt: "2026-07-06T00:00:00.000Z",
+    });
+  });
+
+  it("saves a revision without promoting it to the current slot", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+    await repository.saveLawDocument(
+      { law, revision: olderRevision, nodes: [olderArticleNode] },
+      { isCurrent: false },
+    );
+
+    // 現行版スロットは最初に保存した版のまま。
+    await expect(repository.getLawDocument(law.lawId)).resolves.toEqual({
+      law,
+      revision,
+      nodes: [articleNode, paragraphNode],
+      savedAt: "2026-07-06T00:00:00.000Z",
+    });
+    await expect(
+      repository.getLawDocumentRevision(law.lawId, olderRevision.revisionId),
+    ).resolves.toEqual({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+      savedAt: "2026-07-06T00:00:00.000Z",
+    });
+  });
+
+  it("does not demote a revision that is already current when saving it as non-current", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+    await repository.saveLawDocument(
+      { law, revision, nodes: [articleNode, paragraphNode] },
+      { isCurrent: false },
+    );
+
+    await expect(repository.getLawDocument(law.lawId)).resolves.toEqual({
+      law,
+      revision,
+      nodes: [articleNode, paragraphNode],
+      savedAt: "2026-07-06T00:00:00.000Z",
+    });
+  });
+
   it("keeps user bookmark, collection, annotation, and study records queryable by their public contract", async () => {
     const repository = createStorageRepository({
       databaseName: createDatabaseName(),
