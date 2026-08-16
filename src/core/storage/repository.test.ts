@@ -1264,6 +1264,24 @@ describe("StorageRepository", () => {
     ]);
   });
 
+  it("orders pinned laws deterministically when they share the same pinned time", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    // 同一ミリ秒でのピン留めは pinnedAt が同値になる。索引の返却順に任せず lawId 降順で決める。
+    await repository.pinLaw("129AC0000000089");
+    await repository.pinLaw("132AC0000000048");
+    await repository.pinLaw("140AC0000000045");
+
+    await expect(repository.listPinnedLaws()).resolves.toEqual([
+      { lawId: "140AC0000000045", pinnedAt: "2026-07-06T00:00:00.000Z" },
+      { lawId: "132AC0000000048", pinnedAt: "2026-07-06T00:00:00.000Z" },
+      { lawId: "129AC0000000089", pinnedAt: "2026-07-06T00:00:00.000Z" },
+    ]);
+  });
+
   it("closes the cached connection and can reopen on later operations", async () => {
     const repository = createStorageRepository({
       databaseName: createDatabaseName(),

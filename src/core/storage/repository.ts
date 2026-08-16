@@ -4,6 +4,7 @@ import type { IDBPDatabase, IDBPTransaction, StoreNames } from "idb";
 import { fixedIntervalScheduler } from "@/core/study";
 import { deleteRevisionNodes, demoteOtherCurrentRevisions } from "./current-revision-slot";
 import { migrateRecordsToVersion3, migrateSavedLawStores } from "./migrations";
+import { comparePinnedLaws } from "./pinned-law-order";
 import type {
   Annotation,
   Bookmark,
@@ -383,8 +384,9 @@ export const createStorageRepository = (
       return withDatabase(async (db) => {
         const records = await db.getAllFromIndex("pinnedLaws", "by-pinned-at");
 
-        // 新しくピン留めしたものから並べる。索引は昇順で返すため反転する。
-        return records.reverse();
+        // 新しくピン留めしたものから並べる。pinnedAt が同値でも順序が決定的になるよう
+        // lawId を第 2 キーにする。索引の返却順に任せるとメモリ実装と並びが食い違う。
+        return records.sort(comparePinnedLaws);
       });
     },
 

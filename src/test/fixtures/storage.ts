@@ -12,6 +12,7 @@ import type {
 } from "@/core/domain";
 import { fixedIntervalScheduler } from "@/core/study";
 import {
+  comparePinnedLaws,
   countSavedData,
   type SavedDataExport,
   type SavedDataImportResult,
@@ -200,11 +201,8 @@ export const createMemoryStorageRepository = (
         return Promise.resolve(pinnedLaws.has(lawId));
       },
       listPinnedLaws() {
-        return Promise.resolve(
-          [...pinnedLaws.values()].sort((left, right) =>
-            right.pinnedAt.localeCompare(left.pinnedAt),
-          ),
-        );
+        // 並びは実リポジトリと共有の比較関数に委ねる。ここで書き下すと契約が二重定義になる。
+        return Promise.resolve([...pinnedLaws.values()].sort(comparePinnedLaws));
       },
       putBookmark(bookmark) {
         bookmarks = [

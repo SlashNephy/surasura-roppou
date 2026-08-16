@@ -29,6 +29,7 @@ export type {
   SavedDataImportPreview,
   SavedDataImportResult,
 } from "./import-data";
+export { comparePinnedLaws } from "./pinned-law-order";
 export type { LawIndexHook, SavedLawUseCase, SavedLawUseCaseOptions } from "./saved-law-use-case";
 export type {
   LawCatalogEntry,
