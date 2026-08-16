@@ -184,6 +184,9 @@ export const createMemoryStorageRepository = (
             savedRevisions.delete(key);
           }
         }
+        // 実リポジトリと同じく、本文と同一トランザクション相当でピン留めも消す
+        // （本文だけ消えてピンが幽霊レコードとして残る契約違反を避ける）。
+        pinnedLaws.delete(lawId);
         return Promise.resolve();
       },
       deleteLawRevision(lawId, revisionId) {

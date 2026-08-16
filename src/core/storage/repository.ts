@@ -315,9 +315,15 @@ export const createStorageRepository = (
 
     async deleteLawDocument(lawId) {
       await withDatabase(async (db) => {
-        const tx = db.transaction(["laws", "lawRevisions", "lawNodes", "savedLaws"], "readwrite");
+        const tx = db.transaction(
+          ["laws", "lawRevisions", "lawNodes", "savedLaws", "pinnedLaws"],
+          "readwrite",
+        );
         const savedLaws = tx.objectStore("savedLaws");
         const records = await savedLaws.index("by-law-id").getAll(lawId);
+
+        // 本文が 1 件も無くても、ピン留めだけが残っている可能性があるため常に削除を試みる。
+        void tx.objectStore("pinnedLaws").delete(lawId);
 
         if (records.length === 0) {
           await tx.done;

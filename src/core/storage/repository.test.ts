@@ -1298,6 +1298,24 @@ describe("StorageRepository", () => {
     });
   });
 
+  it("removes the pin when the pinned law's document is deleted", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+    await repository.pinLaw(law.lawId);
+
+    await expect(repository.isLawPinned(law.lawId)).resolves.toBe(true);
+
+    await repository.deleteLawDocument(law.lawId);
+
+    // 本文が消えたあとにピンだけが幽霊レコードとして残ってはいけない。
+    await expect(repository.isLawPinned(law.lawId)).resolves.toBe(false);
+    await expect(repository.listPinnedLaws()).resolves.toEqual([]);
+  });
+
   it("keeps the first pinned time when the same law is pinned again", async () => {
     let currentTime = new Date("2026-07-06T00:00:00.000Z");
     const repository = createStorageRepository({
