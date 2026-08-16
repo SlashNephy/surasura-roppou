@@ -373,6 +373,113 @@ describe("LawViewerPageContent", () => {
     expect(screen.getByText("取得: 2026/07/05")).toBeInTheDocument();
   });
 
+  it("auto saves the opened law as the current revision", async () => {
+    const { repository: lawRepository } = createFixtureRepository();
+    const storage = createMemoryStorageRepository();
+
+    renderLawViewerRoute("/laws/129AC0000000089", lawRepository, storage.repository);
+
+    await screen.findByRole("article", { name: "民法" });
+    // 取得元は createFixtureRepository（実 e-Gov レスポンス相当）のため、法令オブジェクトの
+    // 全項目は sampleLawViewerDocument と一致しない。ID と版で同一本文が書き戻されたことを確認する。
+    await waitFor(() => {
+      expect(storage.getSavedDocument()).toMatchObject({
+        law: { lawId: sampleLawViewerDocument.law.lawId },
+        revision: { revisionId: sampleLawViewerDocument.revision.revisionId },
+      });
+    });
+    await expect(
+      storage.repository.listSavedRevisions(sampleLawViewerDocument.law.lawId),
+    ).resolves.toEqual([expect.objectContaining({ isCurrent: true })]);
+  });
+
+  it("auto saves a law opened with a base date as a history revision", async () => {
+    // 基準日指定で取得した版は現行版とは別の revisionId を持つ想定で、履歴として積み上がる。
+    const olderRevision = {
+      ...sampleLawViewerDocument.revision,
+      revisionId: "129AC0000000089_20200401_501AC0000000034",
+      effectiveDate: "2020-04-01",
+    };
+    const repository = {
+      listLaws: (): Promise<LawListResult> => Promise.reject(new Error("Not used in this test")),
+      getLaw: (_lawId: string, query?: { asOf?: string }): Promise<LawDocument> =>
+        Promise.resolve({
+          law: sampleLawViewerDocument.law,
+          revision: query?.asOf === "2020-04-01" ? olderRevision : sampleLawViewerDocument.revision,
+          nodes: sampleLawViewerDocument.nodes,
+          raw: {},
+        }),
+      getLawMetadata: (): Promise<LawMetadata> =>
+        Promise.reject(new Error("Not used in this test")),
+    } satisfies LawRepository;
+    const { repository: storageRepository } = createMemoryStorageRepository();
+    await storageRepository.saveLawDocument({
+      law: sampleLawViewerDocument.law,
+      revision: sampleLawViewerDocument.revision,
+      nodes: sampleLawViewerDocument.nodes,
+    });
+
+    act(() => {
+      setBaseDate("2020-04-01");
+    });
+
+    renderLawViewerRoute("/laws/129AC0000000089", repository, storageRepository);
+
+    await screen.findByRole("article", { name: "民法" });
+    await waitFor(async () => {
+      await expect(
+        storageRepository.listSavedRevisions(sampleLawViewerDocument.law.lawId),
+      ).resolves.toHaveLength(2);
+    });
+
+    // 現行版スロットは基準日指定の取得で入れ替わらない。
+    await expect(
+      storageRepository.getLawDocument(sampleLawViewerDocument.law.lawId),
+    ).resolves.toMatchObject({ revision: sampleLawViewerDocument.revision });
+  });
+
+  it("does not save again when the document came from storage", async () => {
+    const failingLawRepository = {
+      listLaws: (): Promise<LawListResult> => Promise.reject(new Error("Not used in this test")),
+      getLaw: (): Promise<LawDocument> => Promise.reject(new Error("network down")),
+      getLawMetadata: (): Promise<LawMetadata> =>
+        Promise.reject(new Error("Not used in this test")),
+    } satisfies LawRepository;
+    const storage = createMemoryStorageRepository(
+      createSavedLawDocument({
+        law: sampleLawViewerDocument.law,
+        revision: sampleLawViewerDocument.revision,
+        nodes: sampleLawViewerDocument.nodes,
+      }),
+    );
+    const saveLawDocument = vi.fn(storage.repository.saveLawDocument.bind(storage.repository));
+
+    renderLawViewerRoute("/laws/129AC0000000089", failingLawRepository, {
+      ...storage.repository,
+      saveLawDocument,
+    });
+
+    // e-Gov 取得が失敗し、保存済みの本文でフォールバック表示する。
+    expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+    expect(screen.getByText("保存済み本文を表示中")).toBeInTheDocument();
+    expect(saveLawDocument).not.toHaveBeenCalled();
+  });
+
+  it("keeps rendering the document when auto save fails", async () => {
+    const { repository: lawRepository } = createFixtureRepository();
+    const storageRepository = {
+      ...createMemoryStorageRepository().repository,
+      saveLawDocument: () => Promise.reject(new Error("quota exceeded")),
+    };
+
+    renderLawViewerRoute("/laws/129AC0000000089", lawRepository, storageRepository);
+
+    expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+
+    // 自動保存はユーザーが要求した操作ではないため、失敗をバナーで知らせない。
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("既定は読みやすい表示で本文を描画する", async () => {
     renderLawViewerRoute("/laws/129AC0000000089");
 

@@ -107,20 +107,41 @@ const LawViewerPageLoader = ({
   storageRepository: StorageRepository;
 }) => {
   const [state, setState] = useState<LawViewerState>({ status: "loading" });
+  const savedLawUseCase = useMemo(
+    () => createSavedLawUseCase(storageRepository),
+    [storageRepository],
+  );
 
   useEffect(() => {
     let isCurrent = true;
 
     void loadLawViewerDocument(lawId, repository, storageRepository, asOf).then((nextState) => {
-      if (isCurrent) {
-        setState(nextState);
+      if (!isCurrent) {
+        return;
       }
+
+      setState(nextState);
+
+      // 表示できた本文だけを保存する。保存済みの本文をそのまま出しただけのフォールバックは書き戻さない。
+      // オフラインデモ法令は status が "offline-unavailable" になるため、この分岐で同時に除外される。
+      if (nextState.status !== "ready" || nextState.loadedFromStorage) {
+        return;
+      }
+
+      // 自動保存は表示をブロックしない。失敗しても閲覧を妨げないので握りつぶす。
+      void savedLawUseCase
+        .save(
+          { law: nextState.law, revision: nextState.revision, nodes: nextState.nodes },
+          // 基準日を指定して開いた版は現行版スロットを奪わない。
+          { isCurrent: asOf === undefined },
+        )
+        .catch(() => undefined);
     });
 
     return () => {
       isCurrent = false;
     };
-  }, [asOf, lawId, repository, storageRepository]);
+  }, [asOf, lawId, repository, savedLawUseCase, storageRepository]);
 
   return (
     <LawViewerPageContent
@@ -249,6 +270,14 @@ const LawViewerReadyState = ({
             isPinned: baseState.isPinned,
             loadedFromStorage: false,
           });
+
+          // 固定解決した過去版も開いた版として保存する。現行版スロットは奪わない。
+          void savedLawUseCase
+            .save(
+              { law: document.law, revision: document.revision, nodes: document.nodes },
+              { isCurrent: false },
+            )
+            .catch(() => undefined);
         }
       } catch {
         // 固定解決に失敗した場合は基準日解決版のまま表示する。
@@ -260,7 +289,13 @@ const LawViewerReadyState = ({
     return () => {
       isCurrent = false;
     };
-  }, [pinnedRevisionId, resolvedRepository, baseState.revision.revisionId, baseState.isPinned]);
+  }, [
+    pinnedRevisionId,
+    resolvedRepository,
+    baseState.revision.revisionId,
+    baseState.isPinned,
+    savedLawUseCase,
+  ]);
 
   // 実際に表示する状態。固定解決の結果が現在の目的版と一致するときだけ採用し、
   // それ以外（未解決・pinned 解除・別条移動）は基準日解決版を表示する。
