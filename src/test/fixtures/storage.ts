@@ -122,8 +122,12 @@ export const createMemoryStorageRepository = (
         const revisionId = document.revision.revisionId;
         const key = toRevisionKey(lawId, revisionId);
         const existing = savedRevisions.get(key);
+        // その法令に現行版が 1 件も無いなら、基準日指定の保存でも空きスロットを埋める。
+        // 実リポジトリと同じ契約（既存の現行版は奪わない）を再現する。
+        const hasAnyCurrentRevision = findCurrentRevision(lawId) !== undefined;
         // 既に現行版として保存済みの版は、基準日指定の取得で降格させない。
-        const isCurrent = (options?.isCurrent ?? true) || (existing?.isCurrent ?? false);
+        const isCurrent =
+          (options?.isCurrent ?? true) || (existing?.isCurrent ?? false) || !hasAnyCurrentRevision;
         // savedAt はその版を初めて保存した時刻。再保存では updatedAt だけが進む。
         const writtenAt = now().toISOString();
         const nextSavedAt = existing?.savedAt ?? writtenAt;

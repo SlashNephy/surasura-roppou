@@ -497,6 +497,49 @@ describe("StorageRepository", () => {
     });
   });
 
+  it("promotes the first saved revision of a law to the current slot even when saved as non-current", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    // 基準日を指定して開いた場合、常に isCurrent: false で保存が呼ばれる。
+    // その法令にまだ現行版が無いなら、この保存が空きスロットを埋めないと
+    // オフライン時の getLawDocument によるフォールバックが永久に 1 件も引けなくなる。
+    await repository.saveLawDocument(
+      { law, revision, nodes: [articleNode, paragraphNode] },
+      { isCurrent: false },
+    );
+
+    await expect(repository.getLawDocument(law.lawId)).resolves.toEqual({
+      law,
+      revision,
+      nodes: [articleNode, paragraphNode],
+      savedAt: "2026-07-06T00:00:00.000Z",
+    });
+  });
+
+  it("does not steal the current slot from an existing current revision when saving another revision as non-current", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+    await repository.saveLawDocument(
+      { law, revision: olderRevision, nodes: [olderArticleNode] },
+      { isCurrent: false },
+    );
+
+    // 現行版スロットは既存の現行版のまま。空きスロットを埋める規則は既存の現行版を奪わない。
+    await expect(repository.getLawDocument(law.lawId)).resolves.toEqual({
+      law,
+      revision,
+      nodes: [articleNode, paragraphNode],
+      savedAt: "2026-07-06T00:00:00.000Z",
+    });
+  });
+
   it("keeps user bookmark, collection, annotation, and study records queryable by their public contract", async () => {
     const repository = createStorageRepository({
       databaseName: createDatabaseName(),

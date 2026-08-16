@@ -146,8 +146,15 @@ export const createStorageRepository = (
         const lawId = document.law.lawId;
         const revisionId = document.revision.revisionId;
         const existing = await savedLaws.get([lawId, revisionId]);
+        // その法令に現行版が 1 件も無いなら、基準日指定の保存でも空きスロットを埋める。
+        // 基準日を設定したまま使うユーザーは常に isCurrent: false で保存するため、これが無いと
+        // by-law-current 索引が永久に空のままになり、getLawDocument によるオフライン
+        // フォールバックが 1 件も引けなくなる（既存の現行版を奪うことはない）。
+        const hasAnyCurrentRevision =
+          (await savedLaws.index("by-law-current").count([lawId, 1])) > 0;
         // 既に現行版として保存済みの版は、基準日指定の取得で降格させない。
-        const shouldBeCurrent = (options.isCurrent ?? true) || existing?.isCurrent === 1;
+        const shouldBeCurrent =
+          (options.isCurrent ?? true) || existing?.isCurrent === 1 || !hasAnyCurrentRevision;
         const isCurrent: 0 | 1 = shouldBeCurrent ? 1 : 0;
 
         // 同じ版を書き直すときだけ、その版のノードを消して入れ直す。
