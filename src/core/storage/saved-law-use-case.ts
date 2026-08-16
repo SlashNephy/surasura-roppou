@@ -37,10 +37,12 @@ export const createSavedLawUseCase = (
   // 変数に束ねてから `useCase.save` を呼ぶ形にする。
   const useCase: SavedLawUseCase = {
     async save(document, options) {
-      await repository.saveLawDocument(document, options);
+      const result = await repository.saveLawDocument(document, options);
 
-      // 索引は現行版の本文だけを持つ。基準日指定で取得した過去版で上書きしない。
-      if (options?.isCurrent !== false) {
+      // 索引は現行版の本文だけを持つ。要求した isCurrent ではなく、実際に現行版スロットへ
+      // 入ったかで判断する。現行版が 1 件も無い法令は isCurrent: false の保存でも空きスロット
+      // を埋めて現行版になるため、要求値だけで判断すると索引に一生反映されなくなる。
+      if (result.isCurrent) {
         await useCaseOptions.indexer?.indexLaw(document);
       }
     },

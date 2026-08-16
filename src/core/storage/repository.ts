@@ -74,6 +74,13 @@ export interface SaveLawDocumentOptions {
   isCurrent?: boolean;
 }
 
+// saveLawDocument の結果。要求した isCurrent と実際に現行版スロットへ入ったかは一致しない
+// ことがある（例: 現行版が 1 件も無い法令への isCurrent: false 保存は、空きスロットを
+// 埋めるため現行版になる）。呼び出し側はこの結果を見て索引更新の要否を判断する。
+export interface SaveLawDocumentResult {
+  isCurrent: boolean;
+}
+
 export interface LawScopedQuery {
   lawId?: string;
 }
@@ -85,7 +92,10 @@ export interface DueStudyCard {
 }
 
 export interface StorageRepository {
-  saveLawDocument(document: LawDocumentInput, options?: SaveLawDocumentOptions): Promise<void>;
+  saveLawDocument(
+    document: LawDocumentInput,
+    options?: SaveLawDocumentOptions,
+  ): Promise<SaveLawDocumentResult>;
   getLawDocument(lawId: string): Promise<SavedLawDocument | undefined>;
   getLawDocumentRevision(lawId: string, revisionId: string): Promise<SavedLawDocument | undefined>;
   listSavedLaws(): Promise<SavedLawSummary[]>;
@@ -138,7 +148,7 @@ export const createStorageRepository = (
 
   return {
     async saveLawDocument(document, options = {}) {
-      await withDatabase(async (db) => {
+      return withDatabase(async (db) => {
         const updatedAt = now().toISOString();
         const tx = db.transaction(["laws", "lawRevisions", "lawNodes", "savedLaws"], "readwrite");
         const nodes = tx.objectStore("lawNodes");
@@ -187,6 +197,9 @@ export const createStorageRepository = (
           updatedAt,
         });
         await tx.done;
+
+        // tx.done の後で返す。トランザクションが失敗した場合はここに到達せず reject される。
+        return { isCurrent: shouldBeCurrent };
       });
     },
 

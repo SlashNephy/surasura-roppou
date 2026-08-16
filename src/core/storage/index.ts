@@ -15,6 +15,7 @@ export type {
   LawDocumentInput,
   LawScopedQuery,
   SaveLawDocumentOptions,
+  SaveLawDocumentResult,
   SavedLawDocument,
   SavedLawRevisionSummary,
   SavedLawSummary,

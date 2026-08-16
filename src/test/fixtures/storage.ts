@@ -142,7 +142,7 @@ export const createMemoryStorageRepository = (
           savedAt: nextSavedAt,
           updatedAt: writtenAt,
         });
-        return Promise.resolve();
+        return Promise.resolve({ isCurrent });
       },
       getLawDocument(lawId) {
         return Promise.resolve(findCurrentRevision(lawId)?.document);

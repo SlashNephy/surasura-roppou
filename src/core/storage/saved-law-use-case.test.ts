@@ -81,7 +81,10 @@ describe("createSavedLawUseCase", () => {
     expect(removeLaw).toHaveBeenCalledWith("L1");
   });
 
-  it("skips search indexing when the revision is not the current one", async () => {
+  it("indexes a revision saved with isCurrent: false when it fills an empty current slot", async () => {
+    // その法令に現行版が 1 件も無いとき、isCurrent: false で要求した保存でも
+    // repository.saveLawDocument は空きスロットを埋めて現行版にする（a00dd05 の規則）。
+    // save は要求した options ではなく、その結果を見て索引更新の要否を決めるべき。
     const { repository } = createMemoryStorageRepository();
     const indexLaw = vi.fn<(document: LawDocumentInput) => Promise<void>>(() => Promise.resolve());
     const removeLaw = vi.fn<(lawId: string) => Promise<void>>(() => Promise.resolve());
@@ -89,12 +92,23 @@ describe("createSavedLawUseCase", () => {
 
     await useCase.save({ law, revision, nodes }, { isCurrent: false });
 
+    expect(indexLaw).toHaveBeenCalledWith({ law, revision, nodes });
+  });
+
+  it("skips search indexing when a revision is saved with isCurrent: false while another revision is already current", async () => {
+    const { repository } = createMemoryStorageRepository();
+    const indexLaw = vi.fn<(document: LawDocumentInput) => Promise<void>>(() => Promise.resolve());
+    const removeLaw = vi.fn<(lawId: string) => Promise<void>>(() => Promise.resolve());
+    const useCase = createSavedLawUseCase(repository, { indexer: { indexLaw, removeLaw } });
+
+    // 先に現行版を確立してから、別の版を基準日指定で保存する。
+    await useCase.save({ law, revision, nodes });
+    indexLaw.mockClear();
+
+    await useCase.save({ law, revision: pastRevision, nodes: pastNodes }, { isCurrent: false });
+
     // 索引は現行版の本文だけを持つ。過去版で上書きすると検索結果が過去版に化ける。
     expect(indexLaw).not.toHaveBeenCalled();
-
-    await useCase.save({ law, revision, nodes });
-
-    expect(indexLaw).toHaveBeenCalledTimes(1);
   });
 
   it("saves the document before pinning the law", async () => {
@@ -158,3 +172,19 @@ const articleNode = {
 } satisfies LawNode;
 
 const nodes = [articleNode];
+
+// 基準日指定で取得した過去版。revisionId を変え、現行版レコードと別キーで共存させる。
+const pastRevision = {
+  lawId: law.lawId,
+  revisionId: "129AC0000000089_20200401_508AC0000000012",
+  effectiveDate: "2020-04-01",
+  fetchedAt: "2026-07-06T00:00:00.000Z",
+} satisfies LawRevision;
+
+const pastArticleNode = {
+  ...articleNode,
+  id: "129AC0000000089:129AC0000000089_20200401_508AC0000000012:article:1",
+  revisionId: pastRevision.revisionId,
+} satisfies LawNode;
+
+const pastNodes = [pastArticleNode];
