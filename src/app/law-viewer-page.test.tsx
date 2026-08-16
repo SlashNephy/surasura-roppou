@@ -1039,6 +1039,73 @@ describe("LawViewerPageContent", () => {
     });
   });
 
+  it("pinned アンカーで固定解決した過去版を isCurrent: false で保存する", async () => {
+    // 表示中の版とは別の revisionId を pinned アンカーとして固定する。
+    const pinnedRevisionId = "129AC0000000089_20200401_501AC0000000034";
+    const pinnedDocument = {
+      law: sampleLawViewerDocument.law,
+      revision: {
+        ...sampleLawViewerDocument.revision,
+        revisionId: pinnedRevisionId,
+        effectiveDate: "2020-04-01",
+      },
+      nodes: sampleLawViewerDocument.nodes,
+      raw: {},
+    } satisfies LawDocument;
+    const pinnedBookmark: Bookmark = {
+      id: "bookmark-pinned",
+      target: {
+        lawId: sampleLawViewerDocument.law.lawId,
+        article: "1",
+        revisionId: pinnedRevisionId,
+        pinned: true,
+        fingerprint: "deadbeefdeadbeef",
+      },
+      title: "第一条",
+      tags: [],
+      createdAt: "2026-07-06T00:00:00.000Z",
+      updatedAt: "2026-07-06T00:00:00.000Z",
+    };
+    const { repository: storageRepository } = createMemoryStorageRepository({
+      bookmarks: [pinnedBookmark],
+    });
+    // pinned 解決先の版取得を実 e-Gov ではなくスタブへ向ける。
+    const pinnedRepository = {
+      listLaws: (): Promise<LawListResult> => Promise.reject(new Error("Not used in this test")),
+      getLaw: (): Promise<LawDocument> => Promise.resolve(pinnedDocument),
+      getLawMetadata: (): Promise<LawMetadata> =>
+        Promise.reject(new Error("Not used in this test")),
+    } satisfies LawRepository;
+
+    renderLawViewerContentRoute(
+      "/laws/129AC0000000089/articles/1",
+      { status: "ready", ...sampleLawViewerDocument },
+      storageRepository,
+      pinnedRepository,
+    );
+
+    // pinned 解決後の版が表示されるまで待つ（施行日ラベルが固定版のものに切り替わる。
+    // pinned 表示では「施行日 」と「2020/04/01 版」が別テキストノードになるため、
+    // 日付部分のみで照合する）。
+    await waitFor(async () => {
+      expect((await screen.findAllByText(/2020\/04\/01/)).length).toBeGreaterThan(0);
+    });
+
+    // 固定解決した過去版が保存されていること。
+    await waitFor(async () => {
+      await expect(
+        storageRepository.getLawDocumentRevision(sampleLawViewerDocument.law.lawId, pinnedRevisionId),
+      ).resolves.toBeDefined();
+    });
+
+    // 現行版スロットは奪われず、固定解決した版は isCurrent: false のままであること。
+    const revisions = await storageRepository.listSavedRevisions(sampleLawViewerDocument.law.lawId);
+    const pinnedSummary = revisions.find(
+      (summary) => summary.revision.revisionId === pinnedRevisionId,
+    );
+    expect(pinnedSummary).toMatchObject({ isCurrent: false });
+  });
+
   it("文書レベル操作を左レールに、選択条操作を右レールに配置する", async () => {
     renderLawViewerRoute("/laws/129AC0000000089/articles/1");
 
