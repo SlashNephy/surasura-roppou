@@ -51,10 +51,12 @@ savedLaws
   value:   { lawId, revisionId, isCurrent: 0 | 1, nodeCount, savedAt, updatedAt }
   indexes:
     by-law-id      : "lawId"                 版一覧の取得
-    by-current     : "isCurrent"             現行版の横断列挙
     by-law-current : ["lawId", "isCurrent"]  lawId から現行版を 1 件引く
+    by-saved-at    : "savedAt"               保存一覧の並び（現行版以外は読み飛ばす）
     by-updated-at  : "updatedAt"             LRU 用（PR 3）
 ```
+
+`isCurrent` 単独の索引は作らない。`listSavedLaws()` は `savedAt` の降順で返す必要があるため、`by-saved-at` を辿って履歴版を読み飛ばす方が索引を増やさずに済む。単独索引が要るのは PR 3 のエビクションで実測が必要になった場合に限られる。
 
 `isCurrent` は boolean ではなく `0 | 1` の数値にする。IndexedDB のキーに boolean は使えず、boolean にすると索引が作れないため。
 
@@ -172,6 +174,11 @@ loadLawViewerDocument(lawId, asOf?)
 
 `import-saved-data.ts` は `savedLaws.get(lawId)` を使っている箇所を `by-law-current` 索引経由に差し替え、投入するレコードに `isCurrent: 1` を付ける。
 エクスポート JSON の構造は変わらないため、旧形式のファイルはそのまま読める。
+
+インポート対象と異なる版が現行版だった場合は、`saveLawDocument` と対称に**降格して履歴版として残す**。レコードもノードも削除しない。
+インポートは他の法令を消さない以上「丸ごと復元」の意味論ではなく、ローカルの本文を破棄する理由がないため。
+一方、インポート対象の版と同じ版が既にある場合は、その版のノードを一度削除してから入れ直す。
+これを怠ると、ローカルにあってインポート側に無いノードが残留し、`nodeCount` と実件数がずれる。
 
 品質基準の第 7 節・第 8.4 節に従い、storage schema を変更する本 PR では export と全削除の監査を行う。
 
