@@ -1002,6 +1002,49 @@ describe("StorageRepository", () => {
     expect(targetExport).toEqual(sourceExport);
   });
 
+  it("exports only the current revision of each saved law", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.saveLawDocument({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+    });
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+
+    const exported = await createSavedDataExport(repository, fixedNow().toISOString());
+
+    expect(exported.savedLaws).toHaveLength(1);
+    expect(exported.savedLaws[0]?.revision).toEqual(revision);
+  });
+
+  it("imports a saved law into the current slot", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.saveLawDocument({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+    });
+
+    const sourceExport = createSavedDataExportFixture();
+    const parsed = parseSavedDataImport(JSON.stringify(sourceExport)).data;
+
+    await repository.importSavedData(parsed);
+
+    const savedLaws = await repository.listSavedLaws();
+
+    expect(savedLaws).toHaveLength(1);
+    expect(savedLaws[0]?.law.lawId).toBe(parsed.savedLaws[0]?.law.lawId);
+    expect(savedLaws[0]?.revision).toEqual(parsed.savedLaws[0]?.revision);
+  });
+
   it("closes the cached connection and can reopen on later operations", async () => {
     const repository = createStorageRepository({
       databaseName: createDatabaseName(),
