@@ -1094,7 +1094,10 @@ describe("LawViewerPageContent", () => {
     // 固定解決した過去版が保存されていること。
     await waitFor(async () => {
       await expect(
-        storageRepository.getLawDocumentRevision(sampleLawViewerDocument.law.lawId, pinnedRevisionId),
+        storageRepository.getLawDocumentRevision(
+          sampleLawViewerDocument.law.lawId,
+          pinnedRevisionId,
+        ),
       ).resolves.toBeDefined();
     });
 
