@@ -80,6 +80,46 @@ describe("createSavedLawUseCase", () => {
 
     expect(removeLaw).toHaveBeenCalledWith("L1");
   });
+
+  it("skips search indexing when the revision is not the current one", async () => {
+    const { repository } = createMemoryStorageRepository();
+    const indexLaw = vi.fn<(document: LawDocumentInput) => Promise<void>>(() => Promise.resolve());
+    const removeLaw = vi.fn<(lawId: string) => Promise<void>>(() => Promise.resolve());
+    const useCase = createSavedLawUseCase(repository, { indexer: { indexLaw, removeLaw } });
+
+    await useCase.save({ law, revision, nodes }, { isCurrent: false });
+
+    // 索引は現行版の本文だけを持つ。過去版で上書きすると検索結果が過去版に化ける。
+    expect(indexLaw).not.toHaveBeenCalled();
+
+    await useCase.save({ law, revision, nodes });
+
+    expect(indexLaw).toHaveBeenCalledTimes(1);
+  });
+
+  it("saves the document before pinning the law", async () => {
+    const { repository } = createMemoryStorageRepository();
+    const useCase = createSavedLawUseCase(repository);
+
+    await useCase.pin({ law, revision, nodes });
+
+    await expect(useCase.isPinned(law.lawId)).resolves.toBe(true);
+    await expect(useCase.get(law.lawId)).resolves.toMatchObject({ law, revision, nodes });
+  });
+
+  it("does not pin the law when saving fails", async () => {
+    const { repository } = createMemoryStorageRepository();
+    const failing = {
+      ...repository,
+      saveLawDocument: () => Promise.reject(new Error("quota exceeded")),
+    };
+    const useCase = createSavedLawUseCase(failing);
+
+    await expect(useCase.pin({ law, revision, nodes })).rejects.toThrow("quota exceeded");
+
+    // 本文の無いピンを作らない。
+    await expect(useCase.isPinned(law.lawId)).resolves.toBe(false);
+  });
 });
 
 const createDatabaseName = (): string => {
