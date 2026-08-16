@@ -39,9 +39,9 @@ export const importSavedDataIntoDatabase = async (
 
     for (const savedLaw of data.savedLaws) {
       const lawId = savedLaw.law.lawId;
-      const existingSavedLaw = await savedLaws.get(lawId);
+      const currentRecords = await savedLaws.index("by-law-current").getAll([lawId, 1]);
 
-      if (existingSavedLaw !== undefined) {
+      for (const existingSavedLaw of currentRecords) {
         const existingNodeKeys = await lawNodes
           .index("by-law-revision")
           .getAllKeys([lawId, existingSavedLaw.revisionId]);
@@ -50,6 +50,7 @@ export const importSavedDataIntoDatabase = async (
 
         if (existingSavedLaw.revisionId !== savedLaw.revision.revisionId) {
           await lawRevisions.delete(existingSavedLaw.revisionId);
+          await savedLaws.delete([lawId, existingSavedLaw.revisionId]);
         }
       }
 
@@ -69,6 +70,7 @@ export const importSavedDataIntoDatabase = async (
         savedLaws.put({
           lawId,
           revisionId: savedLaw.revision.revisionId,
+          isCurrent: 1,
           nodeCount: savedLaw.nodes.length,
           savedAt: savedLaw.savedAt,
           updatedAt: importedAt,

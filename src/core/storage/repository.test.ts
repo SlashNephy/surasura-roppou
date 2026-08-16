@@ -81,7 +81,7 @@ describe("StorageRepository", () => {
     ]);
   });
 
-  it("replaces previous revision nodes when a saved law is refreshed with another revision", async () => {
+  it("keeps the previous revision as history and demotes it when a saved law is refreshed with another revision", async () => {
     const databaseName = createDatabaseName();
     const repository = createStorageRepository({
       databaseName,
@@ -103,16 +103,23 @@ describe("StorageRepository", () => {
 
     const database = await openSurasuraDatabase(databaseName);
     try {
+      // 旧版のノードとレコードは履歴として残る。isCurrent だけ降格する。
       await expect(
         database.getAllFromIndex("lawNodes", "by-law-revision", [law.lawId, revision.revisionId]),
-      ).resolves.toEqual([]);
-      await expect(database.get("lawRevisions", revision.revisionId)).resolves.toBeUndefined();
+      ).resolves.toHaveLength(1);
+      await expect(database.get("lawRevisions", revision.revisionId)).resolves.toEqual(revision);
+      await expect(database.get("savedLaws", [law.lawId, revision.revisionId])).resolves.toEqual(
+        expect.objectContaining({ isCurrent: 0 }),
+      );
       await expect(
         database.getAllFromIndex("lawNodes", "by-law-revision", [
           law.lawId,
           nextRevision.revisionId,
         ]),
       ).resolves.toHaveLength(1);
+      await expect(
+        database.get("savedLaws", [law.lawId, nextRevision.revisionId]),
+      ).resolves.toEqual(expect.objectContaining({ isCurrent: 1 }));
     } finally {
       database.close();
     }

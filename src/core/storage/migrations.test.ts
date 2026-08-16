@@ -285,3 +285,139 @@ describe("v2 -> v3 migration", () => {
     }
   });
 });
+
+// v3 リリース当時の savedLaws を再現する。keyPath は lawId 単独だった。
+const seedVersion3Database = async (
+  databaseName: string,
+  savedLawRecords: Record<string, unknown>[],
+) => {
+  const database = await openDB(databaseName, 3, {
+    upgrade(db) {
+      const laws = db.createObjectStore("laws", { keyPath: "lawId" });
+      laws.createIndex("by-title", "title");
+      laws.createIndex("by-updated-at", "updatedAt");
+
+      const lawRevisions = db.createObjectStore("lawRevisions", { keyPath: "revisionId" });
+      lawRevisions.createIndex("by-law-id", "lawId");
+      lawRevisions.createIndex("by-effective-date", "effectiveDate");
+
+      const lawNodes = db.createObjectStore("lawNodes", { keyPath: "id" });
+      lawNodes.createIndex("by-law-revision", ["lawId", "revisionId"]);
+
+      const savedLaws = db.createObjectStore("savedLaws", { keyPath: "lawId" });
+      savedLaws.createIndex("by-saved-at", "savedAt");
+      savedLaws.createIndex("by-updated-at", "updatedAt");
+
+      const bookmarks = db.createObjectStore("bookmarks", { keyPath: "id" });
+      bookmarks.createIndex("by-law-id", "lawId");
+      bookmarks.createIndex("by-target-key", "targetKey");
+      bookmarks.createIndex("by-updated-at", "updatedAt");
+
+      const collections = db.createObjectStore("collections", { keyPath: "id" });
+      collections.createIndex("by-updated-at", "updatedAt");
+
+      const annotations = db.createObjectStore("annotations", { keyPath: "id" });
+      annotations.createIndex("by-law-id", "lawId");
+      annotations.createIndex("by-target-key", "targetKey");
+      annotations.createIndex("by-updated-at", "updatedAt");
+
+      const studyCards = db.createObjectStore("studyCards", { keyPath: "id" });
+      studyCards.createIndex("by-law-id", "lawId");
+      studyCards.createIndex("by-target-key", "targetKey");
+      studyCards.createIndex("by-updated-at", "updatedAt");
+
+      const studySessions = db.createObjectStore("studySessions", { keyPath: "id" });
+      studySessions.createIndex("by-started-at", "startedAt");
+
+      const ocrSessions = db.createObjectStore("ocrSessions", { keyPath: "id" });
+      ocrSessions.createIndex("by-created-at", "createdAt");
+      ocrSessions.createIndex("by-updated-at", "updatedAt");
+
+      const lawCatalog = db.createObjectStore("lawCatalog", { keyPath: "lawId" });
+      lawCatalog.createIndex("by-title", "title");
+      lawCatalog.createIndex("by-cached-at", "cachedAt");
+
+      const searchPostings = db.createObjectStore("searchPostings", {
+        keyPath: ["lawId", "bigram"],
+      });
+      searchPostings.createIndex("by-bigram", "bigram");
+      searchPostings.createIndex("by-law-id", "lawId");
+
+      const reviewLogs = db.createObjectStore("reviewLogs", { keyPath: "id" });
+      reviewLogs.createIndex("by-card-id", "cardId");
+      reviewLogs.createIndex("by-reviewed-at", "reviewedAt");
+
+      const cardSchedules = db.createObjectStore("cardSchedules", { keyPath: "cardId" });
+      cardSchedules.createIndex("by-due-at", "dueAt");
+    },
+  });
+
+  for (const record of savedLawRecords) {
+    await database.put("savedLaws", record);
+  }
+
+  database.close();
+};
+
+const legacySavedLaw = {
+  lawId: "129AC0000000089",
+  revisionId: "129AC0000000089_20260624_508AC0000000045",
+  nodeCount: 2,
+  savedAt: "2026-07-06T00:00:00.000Z",
+  updatedAt: "2026-07-07T00:00:00.000Z",
+};
+
+describe("v3 -> v4 migration", () => {
+  it("moves saved laws to the composite key and marks them current", async () => {
+    const databaseName = createDatabaseName();
+    await seedVersion3Database(databaseName, [legacySavedLaw]);
+
+    const database = await openSurasuraDatabase(databaseName);
+    try {
+      const record = await database.get("savedLaws", [
+        legacySavedLaw.lawId,
+        legacySavedLaw.revisionId,
+      ]);
+
+      expect(record).toEqual({
+        lawId: legacySavedLaw.lawId,
+        revisionId: legacySavedLaw.revisionId,
+        isCurrent: 1,
+        nodeCount: 2,
+        savedAt: "2026-07-06T00:00:00.000Z",
+        updatedAt: "2026-07-07T00:00:00.000Z",
+      });
+    } finally {
+      database.close();
+    }
+  });
+
+  it("opens a v3 database that has no saved laws", async () => {
+    const databaseName = createDatabaseName();
+    await seedVersion3Database(databaseName, []);
+
+    const database = await openSurasuraDatabase(databaseName);
+    try {
+      await expect(database.getAll("savedLaws")).resolves.toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
+  it("creates the indexes the current slot lookup depends on", async () => {
+    const databaseName = createDatabaseName();
+    await seedVersion3Database(databaseName, [legacySavedLaw]);
+
+    const database = await openSurasuraDatabase(databaseName);
+    try {
+      await expect(
+        database.getAllFromIndex("savedLaws", "by-law-current", [legacySavedLaw.lawId, 1]),
+      ).resolves.toHaveLength(1);
+      await expect(
+        database.getAllFromIndex("savedLaws", "by-law-id", legacySavedLaw.lawId),
+      ).resolves.toHaveLength(1);
+    } finally {
+      database.close();
+    }
+  });
+});
