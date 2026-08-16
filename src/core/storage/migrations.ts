@@ -1,8 +1,10 @@
+import type { IDBPDatabase } from "idb";
+
 import type { QuizRating, ReviewLog, StudyCard } from "@/core/domain";
 import { fixedIntervalScheduler } from "@/core/study";
 
 import type { VersionChangeTransaction } from "./repository";
-import type { TargetIndexes } from "./schema";
+import type { SurasuraDatabase, TargetIndexes } from "./schema";
 
 // v2 当時の studyCards レコード。スケジュール系フィールドが同居していた。
 // examPinned は v3 で追加されたため Omit して省略可能に再定義する。
@@ -118,5 +120,56 @@ export const migrateRecordsToVersion3 = async (
 
   // put 群の完了（= versionchange トランザクションの完了）を待つ。
   // 書き込み失敗をこの関数の reject として呼び出し元の abort 処理へ伝播させる。
+  await transaction.done;
+};
+
+// v3 当時の savedLaws レコード。keyPath は lawId 単独で、現行版フラグを持たなかった。
+// lawId / revisionId は実データが壊れている可能性があるため unknown にして呼び出し側で検証する。
+interface LegacySavedLawRecord {
+  lawId: unknown;
+  revisionId: unknown;
+  nodeCount: number;
+  savedAt: string;
+  updatedAt: string;
+}
+
+export const migrateRecordsToVersion4 = async (
+  database: IDBPDatabase<SurasuraDatabase>,
+  transaction: VersionChangeTransaction,
+): Promise<void> => {
+  // keyPath は後から変更できないため、旧レコードを退避してストアを作り直す。
+  const legacyRecords = (await transaction
+    .objectStore("savedLaws")
+    .getAll()) as unknown as LegacySavedLawRecord[];
+
+  database.deleteObjectStore("savedLaws");
+
+  const savedLaws = database.createObjectStore("savedLaws", {
+    keyPath: ["lawId", "revisionId"],
+  });
+  savedLaws.createIndex("by-law-id", "lawId");
+  savedLaws.createIndex("by-law-current", ["lawId", "isCurrent"]);
+  savedLaws.createIndex("by-saved-at", "savedAt");
+  savedLaws.createIndex("by-updated-at", "updatedAt");
+
+  // 旧スキーマは法令ごとに 1 版しか持てなかったので、すべて現行版として移す。
+  // lawId / revisionId は新しい複合キーの構成要素であり、欠けていると put が DataError を投げて
+  // 移行全体が abort し DB が開けなくなる。保存法令は e-Gov から再取得可能なキャッシュなので、
+  // 壊れたレコードはスキップして続行し、可用性を優先する（v3 移行の toReviewLog と同じ方針）。
+  for (const record of legacyRecords) {
+    if (typeof record.lawId !== "string" || typeof record.revisionId !== "string") {
+      continue;
+    }
+
+    void savedLaws.put({
+      lawId: record.lawId,
+      revisionId: record.revisionId,
+      isCurrent: 1,
+      nodeCount: record.nodeCount,
+      savedAt: record.savedAt,
+      updatedAt: record.updatedAt,
+    });
+  }
+
   await transaction.done;
 };

@@ -261,9 +261,12 @@ const createStorageRepositoryStub = ({
   getLawDocument?: StorageRepository["getLawDocument"];
 } = {}): StorageRepository => ({
   getLawDocument,
+  getLawDocumentRevision: vi.fn(),
   saveLawDocument: vi.fn(),
   listSavedLaws: vi.fn(),
+  listSavedRevisions: vi.fn(),
   deleteLawDocument: vi.fn(),
+  deleteLawRevision: vi.fn(),
   putBookmark: vi.fn(),
   listBookmarks: vi.fn(),
   putCollection: vi.fn(),

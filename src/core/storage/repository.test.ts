@@ -81,7 +81,7 @@ describe("StorageRepository", () => {
     ]);
   });
 
-  it("replaces previous revision nodes when a saved law is refreshed with another revision", async () => {
+  it("keeps the previous revision as history and demotes it when a saved law is refreshed with another revision", async () => {
     const databaseName = createDatabaseName();
     const repository = createStorageRepository({
       databaseName,
@@ -103,16 +103,172 @@ describe("StorageRepository", () => {
 
     const database = await openSurasuraDatabase(databaseName);
     try {
+      // 旧版のノードとレコードは履歴として残る。isCurrent だけ降格する。
       await expect(
         database.getAllFromIndex("lawNodes", "by-law-revision", [law.lawId, revision.revisionId]),
-      ).resolves.toEqual([]);
-      await expect(database.get("lawRevisions", revision.revisionId)).resolves.toBeUndefined();
+      ).resolves.toHaveLength(1);
+      await expect(database.get("lawRevisions", revision.revisionId)).resolves.toEqual(revision);
+      await expect(database.get("savedLaws", [law.lawId, revision.revisionId])).resolves.toEqual(
+        expect.objectContaining({ isCurrent: 0 }),
+      );
       await expect(
         database.getAllFromIndex("lawNodes", "by-law-revision", [
           law.lawId,
           nextRevision.revisionId,
         ]),
       ).resolves.toHaveLength(1);
+      await expect(
+        database.get("savedLaws", [law.lawId, nextRevision.revisionId]),
+      ).resolves.toEqual(expect.objectContaining({ isCurrent: 1 }));
+    } finally {
+      database.close();
+    }
+  });
+
+  it("demotes the previous current revision and keeps it as history", async () => {
+    const databaseName = createDatabaseName();
+    const repository = createStorageRepository({ databaseName, now: fixedNow });
+
+    await repository.saveLawDocument({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+    });
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+
+    // 現行版は後から保存した版になる。
+    await expect(repository.getLawDocument(law.lawId)).resolves.toEqual({
+      law,
+      revision,
+      nodes: [articleNode, paragraphNode],
+      savedAt: "2026-07-06T00:00:00.000Z",
+    });
+
+    const database = await openSurasuraDatabase(databaseName);
+    try {
+      const records = await database.getAllFromIndex("savedLaws", "by-law-id", law.lawId);
+
+      expect(
+        records.map((record) => ({ revisionId: record.revisionId, isCurrent: record.isCurrent })),
+      ).toEqual(
+        expect.arrayContaining([
+          { revisionId: olderRevision.revisionId, isCurrent: 0 },
+          { revisionId: revision.revisionId, isCurrent: 1 },
+        ]),
+      );
+      expect(records).toHaveLength(2);
+    } finally {
+      database.close();
+    }
+  });
+
+  it("keeps updatedAt of the demoted revision unchanged when a newer revision is saved later", async () => {
+    let currentTime = new Date("2026-07-06T00:00:00.000Z");
+    const databaseName = createDatabaseName();
+    const repository = createStorageRepository({ databaseName, now: () => currentTime });
+
+    await repository.saveLawDocument({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+    });
+
+    currentTime = new Date("2026-07-07T00:00:00.000Z");
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+
+    const database = await openSurasuraDatabase(databaseName);
+    try {
+      // 降格されたレコードの updatedAt は最初の保存時刻のまま据え置かれる。後続の LRU 実装が依存する性質。
+      await expect(
+        database.get("savedLaws", [law.lawId, olderRevision.revisionId]),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          isCurrent: 0,
+          updatedAt: "2026-07-06T00:00:00.000Z",
+        }),
+      );
+      await expect(database.get("savedLaws", [law.lawId, revision.revisionId])).resolves.toEqual(
+        expect.objectContaining({
+          isCurrent: 1,
+          updatedAt: "2026-07-07T00:00:00.000Z",
+        }),
+      );
+    } finally {
+      database.close();
+    }
+  });
+
+  it("keeps the nodes of both revisions after saving a newer one", async () => {
+    const databaseName = createDatabaseName();
+    const repository = createStorageRepository({ databaseName, now: fixedNow });
+
+    await repository.saveLawDocument({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+    });
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+
+    const database = await openSurasuraDatabase(databaseName);
+    try {
+      await expect(
+        database.getAllFromIndex("lawNodes", "by-law-revision", [
+          law.lawId,
+          olderRevision.revisionId,
+        ]),
+      ).resolves.toHaveLength(1);
+      await expect(
+        database.getAllFromIndex("lawNodes", "by-law-revision", [law.lawId, revision.revisionId]),
+      ).resolves.toHaveLength(2);
+    } finally {
+      database.close();
+    }
+  });
+
+  it("lists only the current revision of each law", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.saveLawDocument({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+    });
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+
+    await expect(repository.listSavedLaws()).resolves.toEqual([
+      {
+        law,
+        revision,
+        nodeCount: 2,
+        savedAt: "2026-07-06T00:00:00.000Z",
+        updatedAt: "2026-07-06T00:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("removes every revision of a law when the law document is deleted", async () => {
+    const databaseName = createDatabaseName();
+    const repository = createStorageRepository({ databaseName, now: fixedNow });
+
+    await repository.saveLawDocument({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+    });
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+    await repository.deleteLawDocument(law.lawId);
+
+    await expect(repository.getLawDocument(law.lawId)).resolves.toBeUndefined();
+
+    const database = await openSurasuraDatabase(databaseName);
+    try {
+      await expect(database.getAll("savedLaws")).resolves.toEqual([]);
+      await expect(database.getAll("lawNodes")).resolves.toEqual([]);
+      await expect(database.getAll("lawRevisions")).resolves.toEqual([]);
+      await expect(database.getAll("laws")).resolves.toEqual([]);
     } finally {
       database.close();
     }
@@ -167,6 +323,178 @@ describe("StorageRepository", () => {
         updatedAt: "2026-07-06T00:00:00.000Z",
       },
     ]);
+  });
+
+  it("reads a specific saved revision", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.saveLawDocument({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+    });
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+
+    await expect(
+      repository.getLawDocumentRevision(law.lawId, olderRevision.revisionId),
+    ).resolves.toEqual({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+      savedAt: "2026-07-06T00:00:00.000Z",
+    });
+    await expect(
+      repository.getLawDocumentRevision(law.lawId, "129AC0000000089_19000101_missing"),
+    ).resolves.toBeUndefined();
+  });
+
+  it("lists every saved revision of a law with the current flag", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.saveLawDocument({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+    });
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+
+    // savedAt は 2 版とも同値。索引の返却順に依存せず revisionId 降順で並ぶこと。
+    await expect(repository.listSavedRevisions(law.lawId)).resolves.toEqual([
+      {
+        revision,
+        isCurrent: true,
+        nodeCount: 2,
+        savedAt: "2026-07-06T00:00:00.000Z",
+        updatedAt: "2026-07-06T00:00:00.000Z",
+      },
+      {
+        revision: olderRevision,
+        isCurrent: false,
+        nodeCount: 1,
+        savedAt: "2026-07-06T00:00:00.000Z",
+        updatedAt: "2026-07-06T00:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("deletes a single revision without touching the others", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.saveLawDocument({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+    });
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+    await repository.deleteLawRevision(law.lawId, olderRevision.revisionId);
+
+    await expect(
+      repository.getLawDocumentRevision(law.lawId, olderRevision.revisionId),
+    ).resolves.toBeUndefined();
+    await expect(repository.getLawDocument(law.lawId)).resolves.toEqual({
+      law,
+      revision,
+      nodes: [articleNode, paragraphNode],
+      savedAt: "2026-07-06T00:00:00.000Z",
+    });
+  });
+
+  it("leaves the law without a current revision when the current revision is deleted while history remains", async () => {
+    const databaseName = createDatabaseName();
+    const repository = createStorageRepository({ databaseName, now: fixedNow });
+
+    await repository.saveLawDocument({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+    });
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+
+    // 現行版 (revision) を削除する。deleteLawRevision は「現行版を最後に残す」規則を保証しない。
+    // これは PR 3 のエビクションが守るべき既知の仕様として固定する。
+    await repository.deleteLawRevision(law.lawId, revision.revisionId);
+
+    // 現行版が無くなったため getLawDocument は何も返さない。
+    await expect(repository.getLawDocument(law.lawId)).resolves.toBeUndefined();
+
+    // 履歴版 (olderRevision) は引き続き引ける。
+    await expect(
+      repository.getLawDocumentRevision(law.lawId, olderRevision.revisionId),
+    ).resolves.toEqual({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+      savedAt: "2026-07-06T00:00:00.000Z",
+    });
+    await expect(repository.listSavedRevisions(law.lawId)).resolves.toEqual([
+      expect.objectContaining({ revision: olderRevision, isCurrent: false }),
+    ]);
+
+    // 版がまだ残っているため、法令メタ (laws ストア) は削除されない。
+    const database = await openSurasuraDatabase(databaseName);
+    try {
+      await expect(database.get("laws", law.lawId)).resolves.toEqual(law);
+    } finally {
+      database.close();
+    }
+  });
+
+  it("saves a revision without promoting it to the current slot", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+    await repository.saveLawDocument(
+      { law, revision: olderRevision, nodes: [olderArticleNode] },
+      { isCurrent: false },
+    );
+
+    // 現行版スロットは最初に保存した版のまま。
+    await expect(repository.getLawDocument(law.lawId)).resolves.toEqual({
+      law,
+      revision,
+      nodes: [articleNode, paragraphNode],
+      savedAt: "2026-07-06T00:00:00.000Z",
+    });
+    await expect(
+      repository.getLawDocumentRevision(law.lawId, olderRevision.revisionId),
+    ).resolves.toEqual({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+      savedAt: "2026-07-06T00:00:00.000Z",
+    });
+  });
+
+  it("does not demote a revision that is already current when saving it as non-current", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+    await repository.saveLawDocument(
+      { law, revision, nodes: [articleNode, paragraphNode] },
+      { isCurrent: false },
+    );
+
+    await expect(repository.getLawDocument(law.lawId)).resolves.toEqual({
+      law,
+      revision,
+      nodes: [articleNode, paragraphNode],
+      savedAt: "2026-07-06T00:00:00.000Z",
+    });
   });
 
   it("keeps user bookmark, collection, annotation, and study records queryable by their public contract", async () => {
@@ -484,7 +812,7 @@ describe("StorageRepository", () => {
     });
   });
 
-  it("replaces the previous revision and nodes when importing the same saved law", async () => {
+  it("demotes the previous revision instead of deleting it when importing a newer revision of the same law", async () => {
     const fixture = createSavedDataExportFixture();
     const incoming = createSavedDataExportFixture();
     const previousDocument = fixture.savedLaws[0];
@@ -521,15 +849,30 @@ describe("StorageRepository", () => {
 
     const database = await openSurasuraDatabase(databaseName);
     try {
+      // saveLawDocument と対称に、旧版のレコードとノードは削除せず、履歴として残る（isCurrent だけ降格する）。
       await expect(
         database.get("lawRevisions", previousDocument.revision.revisionId),
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual(previousDocument.revision);
       await expect(
         database.getAllFromIndex("lawNodes", "by-law-revision", [
           previousDocument.law.lawId,
           previousDocument.revision.revisionId,
         ]),
-      ).resolves.toEqual([]);
+      ).resolves.toEqual([
+        {
+          id: previousNode.id,
+          lawId: previousNode.lawId,
+          revisionId: previousNode.revisionId,
+          sortOrder: 0,
+          node: previousNode,
+        },
+      ]);
+      await expect(
+        database.get("savedLaws", [
+          previousDocument.law.lawId,
+          previousDocument.revision.revisionId,
+        ]),
+      ).resolves.toEqual(expect.objectContaining({ isCurrent: 0 }));
       await expect(database.get("lawRevisions", nextRevision.revisionId)).resolves.toEqual(
         nextRevision,
       );
@@ -713,6 +1056,167 @@ describe("StorageRepository", () => {
     expect(targetExport).toEqual(sourceExport);
   });
 
+  it("exports only the current revision of each saved law", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.saveLawDocument({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+    });
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+
+    const exported = await createSavedDataExport(repository, fixedNow().toISOString());
+
+    expect(exported.savedLaws).toHaveLength(1);
+    expect(exported.savedLaws[0]?.revision).toEqual(revision);
+  });
+
+  it("imports a saved law into the current slot without breaking existing history revisions", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    // 先に旧版を保存して現行版にし、続けて新版を保存して旧版を履歴へ降格させる。
+    await repository.saveLawDocument({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+    });
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+
+    const sourceExport = createSavedDataExportFixture();
+    const parsed = parseSavedDataImport(JSON.stringify(sourceExport)).data;
+
+    await repository.importSavedData(parsed);
+
+    const savedLaws = await repository.listSavedLaws();
+
+    expect(savedLaws).toHaveLength(1);
+    expect(savedLaws[0]?.law.lawId).toBe(parsed.savedLaws[0]?.law.lawId);
+    expect(savedLaws[0]?.revision).toEqual(parsed.savedLaws[0]?.revision);
+
+    // 既存の履歴版 (olderRevision) がインポートによって失われていないことを検証する。
+    const revisions = await repository.listSavedRevisions(law.lawId);
+    expect(revisions).toContainEqual(
+      expect.objectContaining({
+        revision: olderRevision,
+        isCurrent: false,
+      }),
+    );
+  });
+
+  it("demotes the previous current revision instead of deleting it when importing a different revision", async () => {
+    const databaseName = createDatabaseName();
+    const repository = createStorageRepository({ databaseName, now: fixedNow });
+
+    // 版 A (olderRevision) だけを保存して現行版にする。
+    await repository.saveLawDocument({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+    });
+
+    // フィクスチャは同じ法令の版 B (revision) を含む。
+    const sourceExport = createSavedDataExportFixture();
+    const parsed = parseSavedDataImport(JSON.stringify(sourceExport)).data;
+    const importedSavedLaw = parsed.savedLaws[0];
+
+    await repository.importSavedData(parsed);
+
+    // インポートした版 B が現行版になる。
+    await expect(repository.getLawDocument(law.lawId)).resolves.toEqual({
+      law: importedSavedLaw.law,
+      revision: importedSavedLaw.revision,
+      nodes: importedSavedLaw.nodes,
+      savedAt: importedSavedLaw.savedAt,
+    });
+
+    // 版 A は saveLawDocument と対称に、レコードを残したまま履歴へ降格する（削除しない）。
+    const revisions = await repository.listSavedRevisions(law.lawId);
+    expect(revisions).toContainEqual(
+      expect.objectContaining({
+        revision: olderRevision,
+        isCurrent: false,
+      }),
+    );
+
+    // ノードも消えていないため、版 A の本文をそのまま引ける。
+    // laws ストアは lawId 単位のため、law 自体はインポートで上書きされたものになる。
+    await expect(
+      repository.getLawDocumentRevision(law.lawId, olderRevision.revisionId),
+    ).resolves.toEqual({
+      law: importedSavedLaw.law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+      savedAt: "2026-07-06T00:00:00.000Z",
+    });
+  });
+
+  it("does not leave ghost nodes when importing a saved law whose revision is a demoted history entry", async () => {
+    const databaseName = createDatabaseName();
+    const repository = createStorageRepository({
+      databaseName,
+      now: fixedNow,
+    });
+
+    // 版 A (olderRevision) を保存して現行版にし、続けて版 B (revision) を保存して A を履歴へ降格させる。
+    await repository.saveLawDocument({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+    });
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+
+    // 版 A を含むエクスポートをインポートする。インポート側のノードは既存の olderArticleNode とは別物。
+    const importedNode = {
+      ...olderArticleNode,
+      id: "civil-code-article-1-imported",
+      rawText: "第一条　私権は、公共の福祉に適合しなければならない。インポート版",
+      plainText: "第一条 私権は、公共の福祉に適合しなければならない。インポート版",
+      normalizedText: "第一条 私権は 公共の福祉に適合しなければならない インポート版",
+    } satisfies LawNode;
+    const sourceExport = createSavedDataExportFixture();
+    sourceExport.savedLaws = [
+      {
+        law,
+        revision: olderRevision,
+        nodes: [importedNode],
+        savedAt: "2026-07-14T01:00:00.000Z",
+      },
+    ];
+    const parsed = parseSavedDataImport(JSON.stringify(sourceExport)).data;
+
+    await repository.importSavedData(parsed);
+
+    const importedDocument = await repository.getLawDocumentRevision(
+      law.lawId,
+      olderRevision.revisionId,
+    );
+
+    // インポート後の版 A の本文は、インポートされたノードだけであるべき（旧 olderArticleNode が幽霊ノードとして残ってはいけない）。
+    expect(importedDocument?.nodes).toEqual([importedNode]);
+
+    const database = await openSurasuraDatabase(databaseName);
+    try {
+      const savedLawRecord = await database.get("savedLaws", [law.lawId, olderRevision.revisionId]);
+      const actualNodes = await database.getAllFromIndex("lawNodes", "by-law-revision", [
+        law.lawId,
+        olderRevision.revisionId,
+      ]);
+
+      // nodeCount と実際に保存されているノード件数が一致することを検証する。
+      expect(savedLawRecord?.nodeCount).toBe(actualNodes.length);
+      expect(actualNodes).toHaveLength(1);
+    } finally {
+      database.close();
+    }
+  });
+
   it("closes the cached connection and can reopen on later operations", async () => {
     const repository = createStorageRepository({
       databaseName: createDatabaseName(),
@@ -787,6 +1291,28 @@ const paragraphNode = {
   normalizedText: "私権は、公共の福祉に適合しなければならない。",
   children: [],
   parentId: articleNode.id,
+} satisfies LawNode;
+
+const olderRevision = {
+  lawId: law.lawId,
+  revisionId: "129AC0000000089_20200401_502AC0000000033",
+  effectiveDate: "2020-04-01",
+  fetchedAt: "2026-07-06T00:00:00.000Z",
+  sourceUrl: "https://laws.e-gov.go.jp/api/2/law_data/129AC0000000089",
+} satisfies LawRevision;
+
+const olderArticleNode = {
+  id: "129AC0000000089:129AC0000000089_20200401_502AC0000000033:article:1",
+  lawId: law.lawId,
+  revisionId: olderRevision.revisionId,
+  type: "Article",
+  path: "article:1",
+  number: "1",
+  title: "第一条",
+  rawText: "第一条　私権は、公共の福祉に適合しなければならない。",
+  plainText: "第一条 私権は、公共の福祉に適合しなければならない。",
+  normalizedText: "第一条 私権は、公共の福祉に適合しなければならない。",
+  children: [],
 } satisfies LawNode;
 
 const bookmark = {

@@ -16,11 +16,13 @@ import type {
 } from "@/core/domain";
 
 export const surasuraDatabaseName = "surasura-roppou";
-export const surasuraDatabaseVersion = 3;
+export const surasuraDatabaseVersion = 4;
 
 export interface SavedLawRecord {
   lawId: string;
   revisionId: string;
+  // IndexedDB のキーに boolean は使えないため、現行版フラグは 0 | 1 で持つ。
+  isCurrent: 0 | 1;
   nodeCount: number;
   savedAt: ISODateString;
   updatedAt: ISODateString;
@@ -81,9 +83,11 @@ export interface SurasuraDatabase extends DBSchema {
     };
   };
   savedLaws: {
-    key: string;
+    key: [string, string];
     value: SavedLawRecord;
     indexes: {
+      "by-law-id": string;
+      "by-law-current": [string, number];
       "by-saved-at": string;
       "by-updated-at": string;
     };

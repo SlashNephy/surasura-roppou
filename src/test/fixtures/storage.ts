@@ -40,6 +40,10 @@ export const createMemoryStorageRepository = (
       ? { savedLawDocument: initialDocumentOrOptions }
       : initialDocumentOrOptions;
   const initialDocument = options.savedLawDocument;
+  // 実リポジトリと同じく保存時刻は注入された時計から採る。既定を固定値にしているのは、
+  // 時刻を注入しないテストの savedAt / updatedAt を決定的に保つため。
+  // 保存のたびに時刻が進む振る舞いを検証したいテストは now を渡す。
+  const now = options.now ?? (() => new Date(defaultMemoryStorageClock));
   let annotations = [...(options.annotations ?? [])];
   let bookmarks = [...(options.bookmarks ?? [])];
   let collections = [...(options.collections ?? [])];
@@ -47,13 +51,46 @@ export const createMemoryStorageRepository = (
   let studySessions = [...(options.studySessions ?? [])];
   let reviewLogs = [...(options.reviewLogs ?? [])];
   let cardSchedules = [...(options.cardSchedules ?? [])];
-  let savedDocument = initialDocument;
-  let savedAt = initialDocument?.savedAt;
-  let updatedAt = initialDocument?.revision.fetchedAt ?? initialDocument?.savedAt;
+  // IndexedDB 実装と同じく [lawId, revisionId] を複合キーにして版を共存させる。
+  // 現行版スロット（1 法令につき isCurrent な版は高々 1 件）もここで再現する。
+  const savedRevisions = new Map<string, MemorySavedRevision>();
+
+  if (initialDocument !== undefined) {
+    savedRevisions.set(
+      toRevisionKey(initialDocument.law.lawId, initialDocument.revision.revisionId),
+      {
+        document: initialDocument,
+        isCurrent: true,
+        savedAt: initialDocument.savedAt,
+        updatedAt: initialDocument.revision.fetchedAt,
+      },
+    );
+  }
+
+  const findCurrentRevision = (lawId: string): MemorySavedRevision | undefined =>
+    [...savedRevisions.values()].find(
+      (entry) => entry.isCurrent && entry.document.law.lawId === lawId,
+    );
+  const demoteOtherCurrentRevisions = (lawId: string, keepRevisionId: string): void => {
+    for (const [key, entry] of savedRevisions) {
+      if (
+        entry.isCurrent &&
+        entry.document.law.lawId === lawId &&
+        entry.document.revision.revisionId !== keepRevisionId
+      ) {
+        savedRevisions.set(key, { ...entry, isCurrent: false });
+      }
+    }
+  };
+  // 新しく保存したものが先。savedAt が同値のときは revisionId 降順で決定的にする。
+  const byNewestFirst = (left: MemorySavedRevision, right: MemorySavedRevision): number =>
+    left.savedAt === right.savedAt
+      ? right.document.revision.revisionId.localeCompare(left.document.revision.revisionId)
+      : right.savedAt.localeCompare(left.savedAt);
 
   return {
     getSavedDocument() {
-      return savedDocument;
+      return [...savedRevisions.values()].find((entry) => entry.isCurrent)?.document;
     },
     getBookmarks() {
       return bookmarks;
@@ -77,37 +114,73 @@ export const createMemoryStorageRepository = (
       return cardSchedules;
     },
     repository: {
-      saveLawDocument(document) {
-        const nextSavedAt = savedAt ?? document.revision.fetchedAt;
-        savedAt = nextSavedAt;
-        updatedAt = document.revision.fetchedAt;
-        savedDocument = { ...document, savedAt: nextSavedAt };
+      saveLawDocument(document, options) {
+        const lawId = document.law.lawId;
+        const revisionId = document.revision.revisionId;
+        const key = toRevisionKey(lawId, revisionId);
+        const existing = savedRevisions.get(key);
+        // 既に現行版として保存済みの版は、基準日指定の取得で降格させない。
+        const isCurrent = (options?.isCurrent ?? true) || (existing?.isCurrent ?? false);
+        // savedAt はその版を初めて保存した時刻。再保存では updatedAt だけが進む。
+        const writtenAt = now().toISOString();
+        const nextSavedAt = existing?.savedAt ?? writtenAt;
+
+        if (isCurrent) {
+          demoteOtherCurrentRevisions(lawId, revisionId);
+        }
+
+        savedRevisions.set(key, {
+          document: { ...document, savedAt: nextSavedAt },
+          isCurrent,
+          savedAt: nextSavedAt,
+          updatedAt: writtenAt,
+        });
         return Promise.resolve();
       },
       getLawDocument(lawId) {
-        return Promise.resolve(savedDocument?.law.lawId === lawId ? savedDocument : undefined);
+        return Promise.resolve(findCurrentRevision(lawId)?.document);
+      },
+      getLawDocumentRevision(lawId, revisionId) {
+        return Promise.resolve(savedRevisions.get(toRevisionKey(lawId, revisionId))?.document);
       },
       listSavedLaws() {
-        if (savedDocument === undefined || savedAt === undefined || updatedAt === undefined) {
-          return Promise.resolve([]);
-        }
-
-        return Promise.resolve([
-          {
-            law: savedDocument.law,
-            revision: savedDocument.revision,
-            nodeCount: savedDocument.nodes.length,
-            savedAt,
-            updatedAt,
-          },
-        ]);
+        return Promise.resolve(
+          [...savedRevisions.values()]
+            .filter((entry) => entry.isCurrent)
+            .sort(byNewestFirst)
+            .map((entry) => ({
+              law: entry.document.law,
+              revision: entry.document.revision,
+              nodeCount: entry.document.nodes.length,
+              savedAt: entry.savedAt,
+              updatedAt: entry.updatedAt,
+            })),
+        );
+      },
+      listSavedRevisions(lawId) {
+        return Promise.resolve(
+          [...savedRevisions.values()]
+            .filter((entry) => entry.document.law.lawId === lawId)
+            .sort(byNewestFirst)
+            .map((entry) => ({
+              revision: entry.document.revision,
+              isCurrent: entry.isCurrent,
+              nodeCount: entry.document.nodes.length,
+              savedAt: entry.savedAt,
+              updatedAt: entry.updatedAt,
+            })),
+        );
       },
       deleteLawDocument(lawId) {
-        if (savedDocument?.law.lawId === lawId) {
-          savedDocument = undefined;
-          savedAt = undefined;
-          updatedAt = undefined;
+        for (const [key, entry] of savedRevisions) {
+          if (entry.document.law.lawId === lawId) {
+            savedRevisions.delete(key);
+          }
         }
+        return Promise.resolve();
+      },
+      deleteLawRevision(lawId, revisionId) {
+        savedRevisions.delete(toRevisionKey(lawId, revisionId));
         return Promise.resolve();
       },
       putBookmark(bookmark) {
@@ -257,15 +330,18 @@ export const createMemoryStorageRepository = (
           ...cardSchedules.filter((schedule) => !affectedCardIds.has(schedule.cardId)),
           ...rebuiltSchedules,
         ];
-        let nextSavedDocument = savedDocument;
-        let nextSavedAt = savedAt;
-        let nextUpdatedAt = updatedAt;
+        // 実装と対称に、インポート対象の版を現行版として入れ、旧現行版は履歴として降格する。
+        for (const importedDocument of data.savedLaws) {
+          const lawId = importedDocument.law.lawId;
+          const revisionId = importedDocument.revision.revisionId;
 
-        if (data.savedLaws.length > 0) {
-          const importedDocument = data.savedLaws[0];
-          nextSavedDocument = importedDocument;
-          nextSavedAt = importedDocument.savedAt;
-          nextUpdatedAt = data.exportedAt;
+          demoteOtherCurrentRevisions(lawId, revisionId);
+          savedRevisions.set(toRevisionKey(lawId, revisionId), {
+            document: importedDocument,
+            isCurrent: true,
+            savedAt: importedDocument.savedAt,
+            updatedAt: data.exportedAt,
+          });
         }
 
         const result = {
@@ -280,9 +356,6 @@ export const createMemoryStorageRepository = (
         studySessions = nextStudySessions;
         reviewLogs = nextReviewLogs;
         cardSchedules = nextCardSchedules;
-        savedDocument = nextSavedDocument;
-        savedAt = nextSavedAt;
-        updatedAt = nextUpdatedAt;
 
         return Promise.resolve(result);
       },
@@ -292,6 +365,17 @@ export const createMemoryStorageRepository = (
     },
   };
 };
+
+// メモリ実装が保持する 1 版分のレコード。IndexedDB の savedLaws レコードに対応する。
+interface MemorySavedRevision {
+  document: SavedLawDocument;
+  isCurrent: boolean;
+  savedAt: string;
+  updatedAt: string;
+}
+
+// Map のキーで [lawId, revisionId] の複合キーを表現する。区切りは ID に現れない文字を使う。
+const toRevisionKey = (lawId: string, revisionId: string): string => `${lawId} ${revisionId}`;
 
 const mergeById = <T extends { id: string }>(existing: T[], incoming: T[]): T[] => {
   const merged = new Map(existing.map((record) => [record.id, record]));
@@ -303,8 +387,13 @@ const mergeById = <T extends { id: string }>(existing: T[], incoming: T[]): T[] 
   return [...merged.values()];
 };
 
+// 時刻を注入しないときの既定。createSavedLawDocument の既定 savedAt と揃えている。
+const defaultMemoryStorageClock = "2026-07-06T00:00:00.000Z";
+
 interface MemoryStorageRepositoryOptions {
   savedLawDocument?: SavedLawDocument;
+  // 保存時刻の供給源。実リポジトリの StorageRepositoryOptions.now と同じ役割。
+  now?: () => Date;
   annotations?: Annotation[];
   bookmarks?: Bookmark[];
   collections?: Collection[];

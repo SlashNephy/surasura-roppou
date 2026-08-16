@@ -2,6 +2,7 @@ import type { IDBPDatabase } from "idb";
 
 import { fixedIntervalScheduler } from "@/core/study";
 
+import { deleteRevisionNodes, demoteOtherCurrentRevisions } from "./current-revision-slot";
 import type { SavedDataExport } from "./export-data";
 import { countSavedData, type SavedDataImportResult } from "./import-data";
 import type { SurasuraDatabase } from "./schema";
@@ -39,19 +40,11 @@ export const importSavedDataIntoDatabase = async (
 
     for (const savedLaw of data.savedLaws) {
       const lawId = savedLaw.law.lawId;
-      const existingSavedLaw = await savedLaws.get(lawId);
+      const revisionId = savedLaw.revision.revisionId;
 
-      if (existingSavedLaw !== undefined) {
-        const existingNodeKeys = await lawNodes
-          .index("by-law-revision")
-          .getAllKeys([lawId, existingSavedLaw.revisionId]);
-
-        await Promise.all(existingNodeKeys.map((key) => lawNodes.delete(key)));
-
-        if (existingSavedLaw.revisionId !== savedLaw.revision.revisionId) {
-          await lawRevisions.delete(existingSavedLaw.revisionId);
-        }
-      }
+      // インポートはローカルの本文を破棄しない。旧現行版は saveLawDocument と対称に降格して残す。
+      await demoteOtherCurrentRevisions(savedLaws, lawId, revisionId);
+      await deleteRevisionNodes(lawNodes, lawId, revisionId);
 
       // 大量の法令ノードを1件ずつ完了待ちせず、同じ transaction の request queue へまとめて渡す。
       await Promise.all([
@@ -69,6 +62,7 @@ export const importSavedDataIntoDatabase = async (
         savedLaws.put({
           lawId,
           revisionId: savedLaw.revision.revisionId,
+          isCurrent: 1,
           nodeCount: savedLaw.nodes.length,
           savedAt: savedLaw.savedAt,
           updatedAt: importedAt,
