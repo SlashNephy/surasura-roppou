@@ -80,7 +80,7 @@ importers:
         version: 10.0.1(eslint@10.8.1(jiti@2.7.0))
       '@tailwindcss/vite':
         specifier: 4.3.3
-        version: 4.3.3(vite@8.1.5(@types/node@26.1.2)(jiti@2.7.0)(terser@5.49.0))
+        version: 4.3.3(vite@8.1.5(@types/node@26.2.0)(jiti@2.7.0)(terser@5.49.0))
       '@testing-library/jest-dom':
         specifier: 6.9.1
         version: 6.9.1
@@ -91,8 +91,8 @@ importers:
         specifier: 14.6.4
         version: 14.6.4(@testing-library/dom@10.4.1)
       '@types/node':
-        specifier: 26.1.2
-        version: 26.1.2
+        specifier: 26.2.0
+        version: 26.2.0
       '@types/react':
         specifier: 19.2.18
         version: 19.2.18
@@ -101,7 +101,7 @@ importers:
         version: 19.2.4(@types/react@19.2.18)
       '@vitejs/plugin-react':
         specifier: 6.0.5
-        version: 6.0.5(vite@8.1.5(@types/node@26.1.2)(jiti@2.7.0)(terser@5.49.0))
+        version: 6.0.5(vite@8.1.5(@types/node@26.2.0)(jiti@2.7.0)(terser@5.49.0))
       eslint:
         specifier: 10.8.1
         version: 10.8.1(jiti@2.7.0)
@@ -134,16 +134,16 @@ importers:
         version: 8.66.0(eslint@10.8.1(jiti@2.7.0))(typescript@6.0.3)
       vite:
         specifier: 8.1.5
-        version: 8.1.5(@types/node@26.1.2)(jiti@2.7.0)(terser@5.49.0)
+        version: 8.1.5(@types/node@26.2.0)(jiti@2.7.0)(terser@5.49.0)
       vite-plugin-pwa:
         specifier: 1.3.0
-        version: 1.3.0(vite@8.1.5(@types/node@26.1.2)(jiti@2.7.0)(terser@5.49.0))(workbox-build@7.4.1)(workbox-window@7.4.1)
+        version: 1.3.0(vite@8.1.5(@types/node@26.2.0)(jiti@2.7.0)(terser@5.49.0))(workbox-build@7.4.1)(workbox-window@7.4.1)
       vite-plugin-static-copy:
         specifier: 4.1.1
-        version: 4.1.1(vite@8.1.5(@types/node@26.1.2)(jiti@2.7.0)(terser@5.49.0))
+        version: 4.1.1(vite@8.1.5(@types/node@26.2.0)(jiti@2.7.0)(terser@5.49.0))
       vitest:
         specifier: 4.1.10
-        version: 4.1.10(@types/node@26.1.2)(jsdom@29.1.1)(vite@8.1.5(@types/node@26.1.2)(jiti@2.7.0)(terser@5.49.0))
+        version: 4.1.10(@types/node@26.2.0)(jsdom@29.1.1)(vite@8.1.5(@types/node@26.2.0)(jiti@2.7.0)(terser@5.49.0))
       workbox-window:
         specifier: 7.4.1
         version: 7.4.1
@@ -2004,8 +2004,8 @@ packages:
   '@types/json-schema@7.0.15':
     resolution: {integrity: sha512-5+fP8P8MFNC+AyZCDxrB2pkZFPGzqQWUzpSeuuVLvm8VMcorNYavBqoFcxK8bQz4Qsbn4oUEEem4wDLfcysGHA==}
 
-  '@types/node@26.1.2':
-    resolution: {integrity: sha512-Vu4a5UFA9rIIFJ7rB/Vaafh9lrCQszopTCx6KjFboXTGQbPNasehVR5TEiithSDGyd1DEiUByggTZsg8jukeIg==}
+  '@types/node@26.2.0':
+    resolution: {integrity: sha512-5IviulTZeRNp2vAJ514cc/HUlY5nZ9fCbq9DMyC52BrhFZACo3nI0R7qBxhQmo/d27NFe96ur/b7Wwxklda+kg==}
 
   '@types/react-dom@19.2.4':
     resolution: {integrity: sha512-Bsc+QHgp+P/F02XDzNCY9jnZNCUuLki36KT7VKrTXXLdHf+vHMNZnW1rVu5DNW/rCK+fya3DATySbLM4yhtKUw==}
@@ -5699,12 +5699,12 @@ snapshots:
       '@tailwindcss/oxide-win32-arm64-msvc': 4.3.3
       '@tailwindcss/oxide-win32-x64-msvc': 4.3.3
 
-  '@tailwindcss/vite@4.3.3(vite@8.1.5(@types/node@26.1.2)(jiti@2.7.0)(terser@5.49.0))':
+  '@tailwindcss/vite@4.3.3(vite@8.1.5(@types/node@26.2.0)(jiti@2.7.0)(terser@5.49.0))':
     dependencies:
       '@tailwindcss/node': 4.3.3
       '@tailwindcss/oxide': 4.3.3
       tailwindcss: 4.3.3
-      vite: 8.1.5(@types/node@26.1.2)(jiti@2.7.0)(terser@5.49.0)
+      vite: 8.1.5(@types/node@26.2.0)(jiti@2.7.0)(terser@5.49.0)
 
   '@tanstack/history@1.162.1': {}
 
@@ -5794,7 +5794,7 @@ snapshots:
 
   '@types/json-schema@7.0.15': {}
 
-  '@types/node@26.1.2':
+  '@types/node@26.2.0':
     dependencies:
       undici-types: 8.3.0
 
@@ -5901,10 +5901,10 @@ snapshots:
       '@typescript-eslint/types': 8.66.0
       eslint-visitor-keys: 5.0.1
 
-  '@vitejs/plugin-react@6.0.5(vite@8.1.5(@types/node@26.1.2)(jiti@2.7.0)(terser@5.49.0))':
+  '@vitejs/plugin-react@6.0.5(vite@8.1.5(@types/node@26.2.0)(jiti@2.7.0)(terser@5.49.0))':
     dependencies:
       '@rolldown/pluginutils': 1.0.1
-      vite: 8.1.5(@types/node@26.1.2)(jiti@2.7.0)(terser@5.49.0)
+      vite: 8.1.5(@types/node@26.2.0)(jiti@2.7.0)(terser@5.49.0)
 
   '@vitest/expect@4.1.10':
     dependencies:
@@ -5915,13 +5915,13 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.1.0
 
-  '@vitest/mocker@4.1.10(vite@8.1.5(@types/node@26.1.2)(jiti@2.7.0)(terser@5.49.0))':
+  '@vitest/mocker@4.1.10(vite@8.1.5(@types/node@26.2.0)(jiti@2.7.0)(terser@5.49.0))':
     dependencies:
       '@vitest/spy': 4.1.10
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
-      vite: 8.1.5(@types/node@26.1.2)(jiti@2.7.0)(terser@5.49.0)
+      vite: 8.1.5(@types/node@26.2.0)(jiti@2.7.0)(terser@5.49.0)
 
   '@vitest/pretty-format@4.1.10':
     dependencies:
@@ -7596,26 +7596,26 @@ snapshots:
     dependencies:
       react: 19.2.8
 
-  vite-plugin-pwa@1.3.0(vite@8.1.5(@types/node@26.1.2)(jiti@2.7.0)(terser@5.49.0))(workbox-build@7.4.1)(workbox-window@7.4.1):
+  vite-plugin-pwa@1.3.0(vite@8.1.5(@types/node@26.2.0)(jiti@2.7.0)(terser@5.49.0))(workbox-build@7.4.1)(workbox-window@7.4.1):
     dependencies:
       debug: 4.4.3
       pretty-bytes: 6.1.1
       tinyglobby: 0.2.17
-      vite: 8.1.5(@types/node@26.1.2)(jiti@2.7.0)(terser@5.49.0)
+      vite: 8.1.5(@types/node@26.2.0)(jiti@2.7.0)(terser@5.49.0)
       workbox-build: 7.4.1
       workbox-window: 7.4.1
     transitivePeerDependencies:
       - supports-color
 
-  vite-plugin-static-copy@4.1.1(vite@8.1.5(@types/node@26.1.2)(jiti@2.7.0)(terser@5.49.0)):
+  vite-plugin-static-copy@4.1.1(vite@8.1.5(@types/node@26.2.0)(jiti@2.7.0)(terser@5.49.0)):
     dependencies:
       chokidar: 3.6.0
       p-map: 7.0.5
       picocolors: 1.1.1
       tinyglobby: 0.2.17
-      vite: 8.1.5(@types/node@26.1.2)(jiti@2.7.0)(terser@5.49.0)
+      vite: 8.1.5(@types/node@26.2.0)(jiti@2.7.0)(terser@5.49.0)
 
-  vite@8.1.5(@types/node@26.1.2)(jiti@2.7.0)(terser@5.49.0):
+  vite@8.1.5(@types/node@26.2.0)(jiti@2.7.0)(terser@5.49.0):
     dependencies:
       lightningcss: 1.32.0
       picomatch: 4.0.5
@@ -7623,15 +7623,15 @@ snapshots:
       rolldown: 1.1.5
       tinyglobby: 0.2.17
     optionalDependencies:
-      '@types/node': 26.1.2
+      '@types/node': 26.2.0
       fsevents: 2.3.3
       jiti: 2.7.0
       terser: 5.49.0
 
-  vitest@4.1.10(@types/node@26.1.2)(jsdom@29.1.1)(vite@8.1.5(@types/node@26.1.2)(jiti@2.7.0)(terser@5.49.0)):
+  vitest@4.1.10(@types/node@26.2.0)(jsdom@29.1.1)(vite@8.1.5(@types/node@26.2.0)(jiti@2.7.0)(terser@5.49.0)):
     dependencies:
       '@vitest/expect': 4.1.10
-      '@vitest/mocker': 4.1.10(vite@8.1.5(@types/node@26.1.2)(jiti@2.7.0)(terser@5.49.0))
+      '@vitest/mocker': 4.1.10(vite@8.1.5(@types/node@26.2.0)(jiti@2.7.0)(terser@5.49.0))
       '@vitest/pretty-format': 4.1.10
       '@vitest/runner': 4.1.10
       '@vitest/snapshot': 4.1.10
@@ -7648,10 +7648,10 @@ snapshots:
       tinyexec: 1.2.4
       tinyglobby: 0.2.17
       tinyrainbow: 3.1.0
-      vite: 8.1.5(@types/node@26.1.2)(jiti@2.7.0)(terser@5.49.0)
+      vite: 8.1.5(@types/node@26.2.0)(jiti@2.7.0)(terser@5.49.0)
       why-is-node-running: 2.3.0
     optionalDependencies:
-      '@types/node': 26.1.2
+      '@types/node': 26.2.0
       jsdom: 29.1.1
     transitivePeerDependencies:
       - msw
