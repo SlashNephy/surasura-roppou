@@ -170,6 +170,47 @@ export const migrateRecordsToVersion4 = async (
       updatedAt: record.updatedAt,
     });
   }
+};
+
+export const migrateRecordsToVersion5 = async (
+  database: IDBPDatabase<SurasuraDatabase>,
+  transaction: VersionChangeTransaction,
+): Promise<void> => {
+  const pinnedLaws = database.createObjectStore("pinnedLaws", { keyPath: "lawId" });
+  pinnedLaws.createIndex("by-pinned-at", "pinnedAt");
+
+  // v4 までの保存はすべてユーザーの明示操作の結果なので、ピン留めの意図として引き継ぐ。
+  const savedLaws = await transaction.objectStore("savedLaws").getAll();
+  const pinnedAtByLawId = new Map<string, string>();
+
+  for (const record of savedLaws) {
+    const existing = pinnedAtByLawId.get(record.lawId);
+
+    // 法令単位のピン留めなので版をまたいで 1 件にまとめ、最も古い保存時刻を採る。
+    if (existing === undefined || record.savedAt < existing) {
+      pinnedAtByLawId.set(record.lawId, record.savedAt);
+    }
+  }
+
+  for (const [lawId, pinnedAt] of pinnedAtByLawId) {
+    void pinnedLaws.put({ lawId, pinnedAt });
+  }
+};
+
+// savedLaws 系の移行は v4 → v5 の順に直列で走らせる。v4 は savedLaws を作り直すため、
+// v5 が並行して読むと削除済みのストアに当たる。
+export const migrateSavedLawStores = async (
+  database: IDBPDatabase<SurasuraDatabase>,
+  transaction: VersionChangeTransaction,
+  oldVersion: number,
+): Promise<void> => {
+  if (oldVersion < 4) {
+    await migrateRecordsToVersion4(database, transaction);
+  }
+
+  if (oldVersion < 5) {
+    await migrateRecordsToVersion5(database, transaction);
+  }
 
   await transaction.done;
 };

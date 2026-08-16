@@ -3,7 +3,7 @@ import type { IDBPDatabase, IDBPTransaction, StoreNames } from "idb";
 
 import { fixedIntervalScheduler } from "@/core/study";
 import { deleteRevisionNodes, demoteOtherCurrentRevisions } from "./current-revision-slot";
-import { migrateRecordsToVersion3, migrateRecordsToVersion4 } from "./migrations";
+import { migrateRecordsToVersion3, migrateSavedLawStores } from "./migrations";
 import type {
   Annotation,
   Bookmark,
@@ -575,10 +575,11 @@ export const openSurasuraDatabase = async (
         }
       }
 
-      if (oldVersion < 4) {
-        // savedLaws は keyPath を変えるためストアごと作り直す。新規作成の DB でも
+      if (oldVersion < 5) {
+        // savedLaws は v4 で keyPath を変えるためストアごと作り直す。新規作成の DB でも
         // createVersion1Stores が旧 keyPath で作るため、バージョンに関わらず実行する。
-        void migrateRecordsToVersion4(database, transaction).catch((error: unknown) => {
+        // v5 の pinnedLaws は v4 の結果を読むので、同じ chain で直列に走らせる。
+        void migrateSavedLawStores(database, transaction, oldVersion).catch((error: unknown) => {
           console.error("saved law migration failed", error);
           try {
             transaction.abort();

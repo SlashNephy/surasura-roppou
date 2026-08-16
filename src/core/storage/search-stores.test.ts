@@ -22,7 +22,7 @@ describe("search stores (version 2)", () => {
     const database = await openSurasuraDatabase(createDatabaseName());
 
     // 宣言したバージョンで実際に DB が開けていることを検証する。
-    expect(database.version).toBe(4);
+    expect(database.version).toBe(5);
     expect([...database.objectStoreNames]).toEqual(
       expect.arrayContaining(["lawCatalog", "searchPostings"]),
     );

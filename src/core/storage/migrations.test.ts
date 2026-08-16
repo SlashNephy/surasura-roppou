@@ -493,3 +493,99 @@ describe("v3 -> v4 migration", () => {
     }
   });
 });
+
+describe("version 5 migration", () => {
+  it("carries existing saved laws over as pinned laws", async () => {
+    const databaseName = createDatabaseName();
+
+    await seedVersion4Database(databaseName, [
+      {
+        lawId: "129AC0000000089",
+        revisionId: "129AC0000000089_20200401_502AC0000000033",
+        isCurrent: 0,
+        nodeCount: 1,
+        savedAt: "2026-07-06T00:00:00.000Z",
+        updatedAt: "2026-07-06T00:00:00.000Z",
+      },
+      {
+        lawId: "129AC0000000089",
+        revisionId: "129AC0000000089_20260624_508AC0000000045",
+        isCurrent: 1,
+        nodeCount: 2,
+        savedAt: "2026-07-08T00:00:00.000Z",
+        updatedAt: "2026-07-08T00:00:00.000Z",
+      },
+      {
+        lawId: "132AC0000000048",
+        revisionId: "132AC0000000048_20200401_502AC0000000033",
+        isCurrent: 1,
+        nodeCount: 3,
+        savedAt: "2026-07-07T00:00:00.000Z",
+        updatedAt: "2026-07-07T00:00:00.000Z",
+      },
+    ]);
+
+    const database = await openSurasuraDatabase(databaseName);
+
+    try {
+      // 版が複数ある法令でもピン留めは 1 件。pinnedAt は最も古い savedAt。
+      await expect(database.getAll("pinnedLaws")).resolves.toEqual([
+        { lawId: "129AC0000000089", pinnedAt: "2026-07-06T00:00:00.000Z" },
+        { lawId: "132AC0000000048", pinnedAt: "2026-07-07T00:00:00.000Z" },
+      ]);
+    } finally {
+      database.close();
+    }
+  });
+
+  it("creates an empty pinned law store when nothing was saved", async () => {
+    const databaseName = createDatabaseName();
+
+    await seedVersion4Database(databaseName, []);
+
+    const database = await openSurasuraDatabase(databaseName);
+
+    try {
+      await expect(database.getAll("pinnedLaws")).resolves.toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+});
+
+// v4 当時の savedLaws レコード。移行テストは「当時の形の DB」から始まらなければ意味がないため、
+// 現行のスキーマ定義を流用せず手書きする。
+interface Version4SavedLawRecord {
+  lawId: string;
+  revisionId: string;
+  isCurrent: 0 | 1;
+  nodeCount: number;
+  savedAt: string;
+  updatedAt: string;
+}
+
+const seedVersion4Database = async (
+  databaseName: string,
+  savedLaws: Version4SavedLawRecord[],
+): Promise<void> => {
+  const database = await openDB(databaseName, 4, {
+    upgrade(db) {
+      const store = db.createObjectStore("savedLaws", { keyPath: ["lawId", "revisionId"] });
+      store.createIndex("by-law-id", "lawId");
+      store.createIndex("by-law-current", ["lawId", "isCurrent"]);
+      store.createIndex("by-saved-at", "savedAt");
+      store.createIndex("by-updated-at", "updatedAt");
+    },
+  });
+
+  try {
+    const tx = database.transaction("savedLaws", "readwrite");
+
+    for (const savedLaw of savedLaws) {
+      void tx.objectStore("savedLaws").put(savedLaw);
+    }
+    await tx.done;
+  } finally {
+    database.close();
+  }
+};
