@@ -506,10 +506,14 @@ describe("StorageRepository", () => {
     // 基準日を指定して開いた場合、常に isCurrent: false で保存が呼ばれる。
     // その法令にまだ現行版が無いなら、この保存が空きスロットを埋めないと
     // オフライン時の getLawDocument によるフォールバックが永久に 1 件も引けなくなる。
-    await repository.saveLawDocument(
-      { law, revision, nodes: [articleNode, paragraphNode] },
-      { isCurrent: false },
-    );
+    // 戻り値は「要求」ではなく「実際に現行版スロットへ入ったか」を表すため、
+    // 呼び出し側（索引判断）はこの戻り値だけを見て良いことを永続化状態と対で固定する。
+    await expect(
+      repository.saveLawDocument(
+        { law, revision, nodes: [articleNode, paragraphNode] },
+        { isCurrent: false },
+      ),
+    ).resolves.toEqual({ isCurrent: true });
 
     await expect(repository.getLawDocument(law.lawId)).resolves.toEqual({
       law,
@@ -526,10 +530,13 @@ describe("StorageRepository", () => {
     });
 
     await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
-    await repository.saveLawDocument(
-      { law, revision: olderRevision, nodes: [olderArticleNode] },
-      { isCurrent: false },
-    );
+    // 戻り値も永続化状態と対で固定する。既存の現行版があるため isCurrent: false のまま返る。
+    await expect(
+      repository.saveLawDocument(
+        { law, revision: olderRevision, nodes: [olderArticleNode] },
+        { isCurrent: false },
+      ),
+    ).resolves.toEqual({ isCurrent: false });
 
     // 現行版スロットは既存の現行版のまま。空きスロットを埋める規則は既存の現行版を奪わない。
     await expect(repository.getLawDocument(law.lawId)).resolves.toEqual({

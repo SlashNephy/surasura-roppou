@@ -17,7 +17,7 @@ import { createEgovLawRepository } from "@/core/egov";
 import type { LawDocument, LawListResult, LawMetadata, LawRepository } from "@/core/egov";
 import { DISPLAY_PREFERENCES_STORAGE_KEYS, setBaseDate } from "@/core/settings";
 import { createJsonFetchStub, fixedTestNow as now, lawDataFixture } from "@/test/fixtures/egov";
-import type { StorageRepository } from "@/core/storage";
+import type { SavedLawDocument, StorageRepository } from "@/core/storage";
 import { createMemoryStorageRepository, createSavedLawDocument } from "@/test/fixtures/storage";
 import { setupScrollMocks } from "@/test/scrollMocks";
 
@@ -206,6 +206,58 @@ const renderLawViewerContentRoute = (
     history,
     user: userEvent.setup(),
   };
+};
+
+// 表示中の版とは別の revisionId を pinned アンカーとして固定するシナリオの共通セットアップ。
+// 差分は「現行版が既に保存済みか」だけなので、初期保存状態を引数に取り、
+// 呼び出し側は自分のテストが検証したい最後の表明だけを書けばよい。
+const setupPinnedRevisionScenario = (
+  initialOptions: { savedLawDocument?: SavedLawDocument } = {},
+): { pinnedRevisionId: string; storageRepository: StorageRepository } => {
+  const pinnedRevisionId = "129AC0000000089_20200401_501AC0000000034";
+  const pinnedDocument = {
+    law: sampleLawViewerDocument.law,
+    revision: {
+      ...sampleLawViewerDocument.revision,
+      revisionId: pinnedRevisionId,
+      effectiveDate: "2020-04-01",
+    },
+    nodes: sampleLawViewerDocument.nodes,
+    raw: {},
+  } satisfies LawDocument;
+  const pinnedBookmark: Bookmark = {
+    id: "bookmark-pinned",
+    target: {
+      lawId: sampleLawViewerDocument.law.lawId,
+      article: "1",
+      revisionId: pinnedRevisionId,
+      pinned: true,
+      fingerprint: "deadbeefdeadbeef",
+    },
+    title: "第一条",
+    tags: [],
+    createdAt: "2026-07-06T00:00:00.000Z",
+    updatedAt: "2026-07-06T00:00:00.000Z",
+  };
+  const { repository: storageRepository } = createMemoryStorageRepository({
+    ...initialOptions,
+    bookmarks: [pinnedBookmark],
+  });
+  // pinned 解決先の版取得を実 e-Gov ではなくスタブへ向ける。
+  const pinnedRepository = {
+    listLaws: (): Promise<LawListResult> => Promise.reject(new Error("Not used in this test")),
+    getLaw: (): Promise<LawDocument> => Promise.resolve(pinnedDocument),
+    getLawMetadata: (): Promise<LawMetadata> => Promise.reject(new Error("Not used in this test")),
+  } satisfies LawRepository;
+
+  renderLawViewerContentRoute(
+    "/laws/129AC0000000089/articles/1",
+    { status: "ready", ...sampleLawViewerDocument },
+    storageRepository,
+    pinnedRepository,
+  );
+
+  return { pinnedRevisionId, storageRepository };
 };
 
 const nonNumericArticleState = {
@@ -1040,60 +1092,17 @@ describe("LawViewerPageContent", () => {
   });
 
   it("pinned アンカーで固定解決した過去版を保存しても既存の現行版スロットを奪わない", async () => {
-    // 表示中の版とは別の revisionId を pinned アンカーとして固定する。
-    const pinnedRevisionId = "129AC0000000089_20200401_501AC0000000034";
-    const pinnedDocument = {
-      law: sampleLawViewerDocument.law,
-      revision: {
-        ...sampleLawViewerDocument.revision,
-        revisionId: pinnedRevisionId,
-        effectiveDate: "2020-04-01",
-      },
-      nodes: sampleLawViewerDocument.nodes,
-      raw: {},
-    } satisfies LawDocument;
-    const pinnedBookmark: Bookmark = {
-      id: "bookmark-pinned",
-      target: {
-        lawId: sampleLawViewerDocument.law.lawId,
-        article: "1",
-        revisionId: pinnedRevisionId,
-        pinned: true,
-        fingerprint: "deadbeefdeadbeef",
-      },
-      title: "第一条",
-      tags: [],
-      createdAt: "2026-07-06T00:00:00.000Z",
-      updatedAt: "2026-07-06T00:00:00.000Z",
-    };
     // 現行版が既に保存されている状態を作る。現行版が無い法令では固定解決した過去版が
     // 空いた現行版スロットを埋めるため（次のテストで検証）、ここでは「既存の現行版を
     // 奪わない」という本来の回帰対象を検証できるよう現行版を用意しておく。
-    const { repository: storageRepository } = createMemoryStorageRepository({
+    const { pinnedRevisionId, storageRepository } = setupPinnedRevisionScenario({
       savedLawDocument: createSavedLawDocument(sampleLawViewerDocument),
-      bookmarks: [pinnedBookmark],
     });
-    // pinned 解決先の版取得を実 e-Gov ではなくスタブへ向ける。
-    const pinnedRepository = {
-      listLaws: (): Promise<LawListResult> => Promise.reject(new Error("Not used in this test")),
-      getLaw: (): Promise<LawDocument> => Promise.resolve(pinnedDocument),
-      getLawMetadata: (): Promise<LawMetadata> =>
-        Promise.reject(new Error("Not used in this test")),
-    } satisfies LawRepository;
-
-    renderLawViewerContentRoute(
-      "/laws/129AC0000000089/articles/1",
-      { status: "ready", ...sampleLawViewerDocument },
-      storageRepository,
-      pinnedRepository,
-    );
 
     // pinned 解決後の版が表示されるまで待つ（施行日ラベルが固定版のものに切り替わる。
     // pinned 表示では「施行日 」と「2020/04/01 版」が別テキストノードになるため、
-    // 日付部分のみで照合する）。
-    await waitFor(async () => {
-      expect((await screen.findAllByText(/2020\/04\/01/)).length).toBeGreaterThan(0);
-    });
+    // 日付部分のみで照合する）。findAllByText 自体がリトライするため二重に待つ必要はない。
+    await screen.findAllByText(/2020\/04\/01/);
 
     // 固定解決した過去版が保存されていること。
     await waitFor(async () => {
@@ -1114,54 +1123,12 @@ describe("LawViewerPageContent", () => {
   });
 
   it("pinned アンカーで固定解決した過去版しか保存が無い法令ではその版が現行版になる", async () => {
-    // 表示中の版とは別の revisionId を pinned アンカーとして固定する。
-    const pinnedRevisionId = "129AC0000000089_20200401_501AC0000000034";
-    const pinnedDocument = {
-      law: sampleLawViewerDocument.law,
-      revision: {
-        ...sampleLawViewerDocument.revision,
-        revisionId: pinnedRevisionId,
-        effectiveDate: "2020-04-01",
-      },
-      nodes: sampleLawViewerDocument.nodes,
-      raw: {},
-    } satisfies LawDocument;
-    const pinnedBookmark: Bookmark = {
-      id: "bookmark-pinned",
-      target: {
-        lawId: sampleLawViewerDocument.law.lawId,
-        article: "1",
-        revisionId: pinnedRevisionId,
-        pinned: true,
-        fingerprint: "deadbeefdeadbeef",
-      },
-      title: "第一条",
-      tags: [],
-      createdAt: "2026-07-06T00:00:00.000Z",
-      updatedAt: "2026-07-06T00:00:00.000Z",
-    };
     // この法令はまだ何も保存されていない。基準日を設定したまま使うユーザーが
     // 初めてこの法令を開いた場合を再現する。
-    const { repository: storageRepository } = createMemoryStorageRepository({
-      bookmarks: [pinnedBookmark],
-    });
-    const pinnedRepository = {
-      listLaws: (): Promise<LawListResult> => Promise.reject(new Error("Not used in this test")),
-      getLaw: (): Promise<LawDocument> => Promise.resolve(pinnedDocument),
-      getLawMetadata: (): Promise<LawMetadata> =>
-        Promise.reject(new Error("Not used in this test")),
-    } satisfies LawRepository;
+    const { pinnedRevisionId, storageRepository } = setupPinnedRevisionScenario();
 
-    renderLawViewerContentRoute(
-      "/laws/129AC0000000089/articles/1",
-      { status: "ready", ...sampleLawViewerDocument },
-      storageRepository,
-      pinnedRepository,
-    );
-
-    await waitFor(async () => {
-      expect((await screen.findAllByText(/2020\/04\/01/)).length).toBeGreaterThan(0);
-    });
+    // findAllByText 自体がリトライするため二重に待つ必要はない。
+    await screen.findAllByText(/2020\/04\/01/);
 
     // 現行版スロットが 1 件も無い法令では、isCurrent: false で保存要求された版でも
     // 空いたスロットを埋める。これが無いとオフラインフォールバック（getLawDocument）が
