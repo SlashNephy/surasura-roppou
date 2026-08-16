@@ -48,13 +48,9 @@ export const importSavedDataIntoDatabase = async (
           continue;
         }
 
-        const existingNodeKeys = await lawNodes
-          .index("by-law-revision")
-          .getAllKeys([lawId, existingSavedLaw.revisionId]);
-
-        await Promise.all(existingNodeKeys.map((key) => lawNodes.delete(key)));
-        await lawRevisions.delete(existingSavedLaw.revisionId);
-        await savedLaws.delete([lawId, existingSavedLaw.revisionId]);
+        // saveLawDocument と対称に、旧現行版はレコードとノードを残したまま降格する。
+        // インポートはローカルの本文を破棄しない。updatedAt は据え置く（LRU が使うため）。
+        await savedLaws.put({ ...existingSavedLaw, isCurrent: 0 });
       }
 
       // saveLawDocument と対称にするため、インポート対象の版のノードも常に一度消してから入れ直す。
