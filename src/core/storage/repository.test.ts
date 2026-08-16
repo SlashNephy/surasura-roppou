@@ -1021,17 +1021,19 @@ describe("StorageRepository", () => {
     expect(exported.savedLaws[0]?.revision).toEqual(revision);
   });
 
-  it("imports a saved law into the current slot", async () => {
+  it("imports a saved law into the current slot without breaking existing history revisions", async () => {
     const repository = createStorageRepository({
       databaseName: createDatabaseName(),
       now: fixedNow,
     });
 
+    // 先に旧版を保存して現行版にし、続けて新版を保存して旧版を履歴へ降格させる。
     await repository.saveLawDocument({
       law,
       revision: olderRevision,
       nodes: [olderArticleNode],
     });
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
 
     const sourceExport = createSavedDataExportFixture();
     const parsed = parseSavedDataImport(JSON.stringify(sourceExport)).data;
@@ -1043,6 +1045,15 @@ describe("StorageRepository", () => {
     expect(savedLaws).toHaveLength(1);
     expect(savedLaws[0]?.law.lawId).toBe(parsed.savedLaws[0]?.law.lawId);
     expect(savedLaws[0]?.revision).toEqual(parsed.savedLaws[0]?.revision);
+
+    // 既存の履歴版 (olderRevision) がインポートによって失われていないことを検証する。
+    const revisions = await repository.listSavedRevisions(law.lawId);
+    expect(revisions).toContainEqual(
+      expect.objectContaining({
+        revision: olderRevision,
+        isCurrent: false,
+      }),
+    );
   });
 
   it("closes the cached connection and can reopen on later operations", async () => {
