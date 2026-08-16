@@ -125,6 +125,155 @@ describe("StorageRepository", () => {
     }
   });
 
+  it("demotes the previous current revision and keeps it as history", async () => {
+    const databaseName = createDatabaseName();
+    const repository = createStorageRepository({ databaseName, now: fixedNow });
+
+    await repository.saveLawDocument({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+    });
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+
+    // 現行版は後から保存した版になる。
+    await expect(repository.getLawDocument(law.lawId)).resolves.toEqual({
+      law,
+      revision,
+      nodes: [articleNode, paragraphNode],
+      savedAt: "2026-07-06T00:00:00.000Z",
+    });
+
+    const database = await openSurasuraDatabase(databaseName);
+    try {
+      const records = await database.getAllFromIndex("savedLaws", "by-law-id", law.lawId);
+
+      expect(
+        records.map((record) => ({ revisionId: record.revisionId, isCurrent: record.isCurrent })),
+      ).toEqual(
+        expect.arrayContaining([
+          { revisionId: olderRevision.revisionId, isCurrent: 0 },
+          { revisionId: revision.revisionId, isCurrent: 1 },
+        ]),
+      );
+      expect(records).toHaveLength(2);
+    } finally {
+      database.close();
+    }
+  });
+
+  it("keeps updatedAt of the demoted revision unchanged when a newer revision is saved later", async () => {
+    let currentTime = new Date("2026-07-06T00:00:00.000Z");
+    const databaseName = createDatabaseName();
+    const repository = createStorageRepository({ databaseName, now: () => currentTime });
+
+    await repository.saveLawDocument({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+    });
+
+    currentTime = new Date("2026-07-07T00:00:00.000Z");
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+
+    const database = await openSurasuraDatabase(databaseName);
+    try {
+      // 降格されたレコードの updatedAt は最初の保存時刻のまま据え置かれる。後続の LRU 実装が依存する性質。
+      await expect(
+        database.get("savedLaws", [law.lawId, olderRevision.revisionId]),
+      ).resolves.toEqual(
+        expect.objectContaining({
+          isCurrent: 0,
+          updatedAt: "2026-07-06T00:00:00.000Z",
+        }),
+      );
+      await expect(database.get("savedLaws", [law.lawId, revision.revisionId])).resolves.toEqual(
+        expect.objectContaining({
+          isCurrent: 1,
+          updatedAt: "2026-07-07T00:00:00.000Z",
+        }),
+      );
+    } finally {
+      database.close();
+    }
+  });
+
+  it("keeps the nodes of both revisions after saving a newer one", async () => {
+    const databaseName = createDatabaseName();
+    const repository = createStorageRepository({ databaseName, now: fixedNow });
+
+    await repository.saveLawDocument({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+    });
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+
+    const database = await openSurasuraDatabase(databaseName);
+    try {
+      await expect(
+        database.getAllFromIndex("lawNodes", "by-law-revision", [
+          law.lawId,
+          olderRevision.revisionId,
+        ]),
+      ).resolves.toHaveLength(1);
+      await expect(
+        database.getAllFromIndex("lawNodes", "by-law-revision", [law.lawId, revision.revisionId]),
+      ).resolves.toHaveLength(2);
+    } finally {
+      database.close();
+    }
+  });
+
+  it("lists only the current revision of each law", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.saveLawDocument({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+    });
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+
+    await expect(repository.listSavedLaws()).resolves.toEqual([
+      {
+        law,
+        revision,
+        nodeCount: 2,
+        savedAt: "2026-07-06T00:00:00.000Z",
+        updatedAt: "2026-07-06T00:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("removes every revision of a law when the law document is deleted", async () => {
+    const databaseName = createDatabaseName();
+    const repository = createStorageRepository({ databaseName, now: fixedNow });
+
+    await repository.saveLawDocument({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+    });
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+    await repository.deleteLawDocument(law.lawId);
+
+    await expect(repository.getLawDocument(law.lawId)).resolves.toBeUndefined();
+
+    const database = await openSurasuraDatabase(databaseName);
+    try {
+      await expect(database.getAll("savedLaws")).resolves.toEqual([]);
+      await expect(database.getAll("lawNodes")).resolves.toEqual([]);
+      await expect(database.getAll("lawRevisions")).resolves.toEqual([]);
+      await expect(database.getAll("laws")).resolves.toEqual([]);
+    } finally {
+      database.close();
+    }
+  });
+
   it("lists saved laws from newest to oldest", async () => {
     let currentTime = new Date("2026-07-06T00:00:00.000Z");
     const repository = createStorageRepository({
@@ -794,6 +943,28 @@ const paragraphNode = {
   normalizedText: "私権は、公共の福祉に適合しなければならない。",
   children: [],
   parentId: articleNode.id,
+} satisfies LawNode;
+
+const olderRevision = {
+  lawId: law.lawId,
+  revisionId: "129AC0000000089_20200401_502AC0000000033",
+  effectiveDate: "2020-04-01",
+  fetchedAt: "2026-07-06T00:00:00.000Z",
+  sourceUrl: "https://laws.e-gov.go.jp/api/2/law_data/129AC0000000089",
+} satisfies LawRevision;
+
+const olderArticleNode = {
+  id: "129AC0000000089:129AC0000000089_20200401_502AC0000000033:article:1",
+  lawId: law.lawId,
+  revisionId: olderRevision.revisionId,
+  type: "Article",
+  path: "article:1",
+  number: "1",
+  title: "第一条",
+  rawText: "第一条　私権は、公共の福祉に適合しなければならない。",
+  plainText: "第一条 私権は、公共の福祉に適合しなければならない。",
+  normalizedText: "第一条 私権は、公共の福祉に適合しなければならない。",
+  children: [],
 } satisfies LawNode;
 
 const bookmark = {

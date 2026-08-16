@@ -21,7 +21,8 @@ describe("search stores (version 2)", () => {
   it("version 2 で lawCatalog と searchPostings を作る", async () => {
     const database = await openSurasuraDatabase(createDatabaseName());
 
-    expect(database.version).toBe(surasuraDatabaseVersion);
+    // 宣言したバージョンで実際に DB が開けていることを検証する。
+    expect(database.version).toBe(4);
     expect([...database.objectStoreNames]).toEqual(
       expect.arrayContaining(["lawCatalog", "searchPostings"]),
     );
