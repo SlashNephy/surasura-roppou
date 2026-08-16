@@ -40,6 +40,10 @@ export const createMemoryStorageRepository = (
       ? { savedLawDocument: initialDocumentOrOptions }
       : initialDocumentOrOptions;
   const initialDocument = options.savedLawDocument;
+  // 実リポジトリと同じく保存時刻は注入された時計から採る。既定を固定値にしているのは、
+  // 時刻を注入しないテストの savedAt / updatedAt を決定的に保つため。
+  // 保存のたびに時刻が進む振る舞いを検証したいテストは now を渡す。
+  const now = options.now ?? (() => new Date(defaultMemoryStorageClock));
   let annotations = [...(options.annotations ?? [])];
   let bookmarks = [...(options.bookmarks ?? [])];
   let collections = [...(options.collections ?? [])];
@@ -117,7 +121,9 @@ export const createMemoryStorageRepository = (
         const existing = savedRevisions.get(key);
         // 既に現行版として保存済みの版は、基準日指定の取得で降格させない。
         const isCurrent = (options?.isCurrent ?? true) || (existing?.isCurrent ?? false);
-        const nextSavedAt = existing?.savedAt ?? document.revision.fetchedAt;
+        // savedAt はその版を初めて保存した時刻。再保存では updatedAt だけが進む。
+        const writtenAt = now().toISOString();
+        const nextSavedAt = existing?.savedAt ?? writtenAt;
 
         if (isCurrent) {
           demoteOtherCurrentRevisions(lawId, revisionId);
@@ -127,7 +133,7 @@ export const createMemoryStorageRepository = (
           document: { ...document, savedAt: nextSavedAt },
           isCurrent,
           savedAt: nextSavedAt,
-          updatedAt: document.revision.fetchedAt,
+          updatedAt: writtenAt,
         });
         return Promise.resolve();
       },
@@ -381,8 +387,13 @@ const mergeById = <T extends { id: string }>(existing: T[], incoming: T[]): T[] 
   return [...merged.values()];
 };
 
+// 時刻を注入しないときの既定。createSavedLawDocument の既定 savedAt と揃えている。
+const defaultMemoryStorageClock = "2026-07-06T00:00:00.000Z";
+
 interface MemoryStorageRepositoryOptions {
   savedLawDocument?: SavedLawDocument;
+  // 保存時刻の供給源。実リポジトリの StorageRepositoryOptions.now と同じ役割。
+  now?: () => Date;
   annotations?: Annotation[];
   bookmarks?: Bookmark[];
   collections?: Collection[];
