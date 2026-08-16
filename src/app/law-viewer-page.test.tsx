@@ -326,9 +326,9 @@ describe("LawViewerPageContent", () => {
     renderLawViewerRoute("/laws/129AC0000000089", repository);
 
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
-    // 未保存は左レールの保存ボタンが「オフライン保存」であることで判別する。
-    expect(screen.getByRole("button", { name: "オフライン保存" })).toBeInTheDocument();
-    expect(screen.queryByText("オフライン保存済み")).not.toBeInTheDocument();
+    // 未ピン留めは左レールの操作ボタンが「ピン留め」であることで判別する。
+    expect(screen.getByRole("button", { name: "ピン留め" })).toBeInTheDocument();
+    expect(screen.queryByText("ピン留め中")).not.toBeInTheDocument();
     expect(calls).toEqual([
       {
         input:
@@ -338,7 +338,7 @@ describe("LawViewerPageContent", () => {
     ]);
   });
 
-  it("saves the loaded law document for offline viewing", async () => {
+  it("pins and unpins the law from the viewer", async () => {
     const storage = createMemoryStorageRepository();
     const { user } = renderLawViewerRoute(
       "/laws/129AC0000000089",
@@ -348,14 +348,24 @@ describe("LawViewerPageContent", () => {
 
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "オフライン保存" }));
+    await user.click(screen.getByRole("button", { name: "ピン留め" }));
 
-    expect(screen.getByText("オフライン保存済み")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "保存解除" })).toBeInTheDocument();
+    // pin は保存に成功してからピンを立てる契約のため、本文も保存されていること。
+    expect(screen.getByText("ピン留め中")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ピン留めを解除" })).toBeInTheDocument();
     expect(storage.getSavedDocument()?.law.title).toBe("民法");
+    await expect(storage.repository.isLawPinned("129AC0000000089")).resolves.toBe(true);
+
+    await user.click(screen.getByRole("button", { name: "ピン留めを解除" }));
+
+    expect(screen.getByRole("button", { name: "ピン留め" })).toBeInTheDocument();
+    expect(screen.queryByText("ピン留め中")).not.toBeInTheDocument();
+    await expect(storage.repository.isLawPinned("129AC0000000089")).resolves.toBe(false);
+    // ピン留めの解除は本文を消さない（LRU 対象からは外れるだけ）。
+    expect(storage.getSavedDocument()).toBeDefined();
   });
 
-  it("shows a recoverable error when offline save fails", async () => {
+  it("shows an error and keeps the law unpinned when pinning fails", async () => {
     const storageRepository = {
       ...createMemoryStorageRepository().repository,
       saveLawDocument: () => Promise.reject(new Error("Quota exceeded")),
@@ -368,16 +378,17 @@ describe("LawViewerPageContent", () => {
 
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "オフライン保存" }));
+    await user.click(screen.getByRole("button", { name: "ピン留め" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "オフライン保存を更新できませんでした。",
+      "ピン留めできませんでした。端末の保存領域を確認してください。",
     );
-    expect(screen.getByRole("button", { name: "オフライン保存" })).toBeEnabled();
-    expect(screen.queryByText("オフライン保存済み")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ピン留め" })).toBeEnabled();
+    expect(screen.queryByText("ピン留め中")).not.toBeInTheDocument();
+    await expect(storageRepository.isLawPinned("129AC0000000089")).resolves.toBe(false);
   });
 
-  it("removes a saved law document without leaving the viewer", async () => {
+  it("unpins a law without deleting its saved document", async () => {
     const storage = createMemoryStorageRepository(
       createSavedLawDocument({
         law: sampleLawViewerDocument.law,
@@ -386,7 +397,7 @@ describe("LawViewerPageContent", () => {
       }),
     );
     // ローダーの初期表示はピン留め状態から決まる。保存済みでもピン留めしていなければ
-    // 「保存解除」ボタンは表示されないため、事前にピン留めしておく。
+    // 「ピン留めを解除」ボタンは表示されないため、事前にピン留めしておく。
     await storage.repository.pinLaw(sampleLawViewerDocument.law.lawId);
     const { user } = renderLawViewerRoute(
       "/laws/129AC0000000089",
@@ -394,13 +405,14 @@ describe("LawViewerPageContent", () => {
       storage.repository,
     );
 
-    expect(await screen.findByRole("button", { name: "保存解除" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "ピン留めを解除" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "保存解除" }));
+    await user.click(screen.getByRole("button", { name: "ピン留めを解除" }));
 
-    expect(screen.getByRole("button", { name: "オフライン保存" })).toBeInTheDocument();
-    expect(screen.queryByText("オフライン保存済み")).not.toBeInTheDocument();
-    expect(storage.getSavedDocument()).toBeUndefined();
+    expect(screen.getByRole("button", { name: "ピン留め" })).toBeInTheDocument();
+    expect(screen.queryByText("ピン留め中")).not.toBeInTheDocument();
+    // LRU（PR 3）対象から外れるだけで、本文は消えない。
+    expect(storage.getSavedDocument()).toBeDefined();
   });
 
   it("shows the saved law body when the network is unavailable", async () => {
@@ -1148,10 +1160,10 @@ describe("LawViewerPageContent", () => {
     await screen.findByRole("article", { name: "民法" });
 
     const leftRail = screen.getByRole("complementary", { name: "法令の目次" });
-    // 条番号ジャンプ・オフライン保存は文書レベル操作として左レールに入る
+    // 条番号ジャンプ・ピン留めは文書レベル操作として左レールに入る
     expect(within(leftRail).getByRole("button", { name: "移動" })).toBeInTheDocument();
     expect(
-      within(leftRail).getByRole("button", { name: /オフライン保存|保存解除/ }),
+      within(leftRail).getByRole("button", { name: /^ピン留め(を解除)?$/ }),
     ).toBeInTheDocument();
 
     const rightRail = screen.getByRole("complementary", { name: "学習コンテキスト" });
@@ -1181,9 +1193,7 @@ describe("LawViewerPageContent", () => {
 
     const sheet = await screen.findByRole("dialog");
     expect(within(sheet).getByRole("button", { name: "移動" })).toBeInTheDocument();
-    expect(
-      within(sheet).getByRole("button", { name: /オフライン保存|保存解除/ }),
-    ).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: /^ピン留め(を解除)?$/ })).toBeInTheDocument();
     expect(within(sheet).getByRole("navigation", { name: "法令目次" })).toBeInTheDocument();
   });
 
