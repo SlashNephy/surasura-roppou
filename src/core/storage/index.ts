@@ -30,4 +30,10 @@ export type {
   SavedDataImportResult,
 } from "./import-data";
 export type { LawIndexHook, SavedLawUseCase, SavedLawUseCaseOptions } from "./saved-law-use-case";
-export type { LawCatalogEntry, SavedLawRecord, SearchPosting, SurasuraDatabase } from "./schema";
+export type {
+  LawCatalogEntry,
+  PinnedLawRecord,
+  SavedLawRecord,
+  SearchPosting,
+  SurasuraDatabase,
+} from "./schema";

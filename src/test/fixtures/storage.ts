@@ -17,6 +17,7 @@ import {
   type SavedDataImportResult,
   DueStudyCard,
   LawDocumentInput,
+  PinnedLawRecord,
   SavedLawDocument,
   SavedLawSummary,
   StorageRepository,
@@ -54,6 +55,7 @@ export const createMemoryStorageRepository = (
   // IndexedDB 実装と同じく [lawId, revisionId] を複合キーにして版を共存させる。
   // 現行版スロット（1 法令につき isCurrent な版は高々 1 件）もここで再現する。
   const savedRevisions = new Map<string, MemorySavedRevision>();
+  const pinnedLaws = new Map<string, PinnedLawRecord>();
 
   if (initialDocument !== undefined) {
     savedRevisions.set(
@@ -182,6 +184,27 @@ export const createMemoryStorageRepository = (
       deleteLawRevision(lawId, revisionId) {
         savedRevisions.delete(toRevisionKey(lawId, revisionId));
         return Promise.resolve();
+      },
+      pinLaw(lawId) {
+        // 既にピン留めされているなら pinnedAt を据え置く（実リポジトリと同じ契約）。
+        if (!pinnedLaws.has(lawId)) {
+          pinnedLaws.set(lawId, { lawId, pinnedAt: now().toISOString() });
+        }
+        return Promise.resolve();
+      },
+      unpinLaw(lawId) {
+        pinnedLaws.delete(lawId);
+        return Promise.resolve();
+      },
+      isLawPinned(lawId) {
+        return Promise.resolve(pinnedLaws.has(lawId));
+      },
+      listPinnedLaws() {
+        return Promise.resolve(
+          [...pinnedLaws.values()].sort((left, right) =>
+            right.pinnedAt.localeCompare(left.pinnedAt),
+          ),
+        );
       },
       putBookmark(bookmark) {
         bookmarks = [

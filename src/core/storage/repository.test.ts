@@ -1217,6 +1217,53 @@ describe("StorageRepository", () => {
     }
   });
 
+  it("pins and unpins a law without touching its saved documents", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+
+    await expect(repository.isLawPinned(law.lawId)).resolves.toBe(false);
+
+    await repository.pinLaw(law.lawId);
+
+    await expect(repository.isLawPinned(law.lawId)).resolves.toBe(true);
+    await expect(repository.listPinnedLaws()).resolves.toEqual([
+      { lawId: law.lawId, pinnedAt: "2026-07-06T00:00:00.000Z" },
+    ]);
+
+    await repository.unpinLaw(law.lawId);
+
+    await expect(repository.isLawPinned(law.lawId)).resolves.toBe(false);
+    await expect(repository.listPinnedLaws()).resolves.toEqual([]);
+
+    // ピン留めの解除は本文を消さない。
+    await expect(repository.getLawDocument(law.lawId)).resolves.toEqual({
+      law,
+      revision,
+      nodes: [articleNode, paragraphNode],
+      savedAt: "2026-07-06T00:00:00.000Z",
+    });
+  });
+
+  it("keeps the first pinned time when the same law is pinned again", async () => {
+    let currentTime = new Date("2026-07-06T00:00:00.000Z");
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: () => currentTime,
+    });
+
+    await repository.pinLaw(law.lawId);
+    currentTime = new Date("2026-07-09T00:00:00.000Z");
+    await repository.pinLaw(law.lawId);
+
+    await expect(repository.listPinnedLaws()).resolves.toEqual([
+      { lawId: law.lawId, pinnedAt: "2026-07-06T00:00:00.000Z" },
+    ]);
+  });
+
   it("closes the cached connection and can reopen on later operations", async () => {
     const repository = createStorageRepository({
       databaseName: createDatabaseName(),

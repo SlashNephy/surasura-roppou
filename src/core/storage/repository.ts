@@ -25,6 +25,7 @@ import type { SavedDataImportResult } from "./import-data";
 import {
   surasuraDatabaseName,
   surasuraDatabaseVersion,
+  type PinnedLawRecord,
   type SavedLawRecord,
   type StoredLawNode,
   type SurasuraDatabase,
@@ -90,6 +91,10 @@ export interface StorageRepository {
   listSavedRevisions(lawId: string): Promise<SavedLawRevisionSummary[]>;
   deleteLawDocument(lawId: string): Promise<void>;
   deleteLawRevision(lawId: string, revisionId: string): Promise<void>;
+  pinLaw(lawId: string): Promise<void>;
+  unpinLaw(lawId: string): Promise<void>;
+  isLawPinned(lawId: string): Promise<boolean>;
+  listPinnedLaws(): Promise<PinnedLawRecord[]>;
   putBookmark(bookmark: Bookmark): Promise<void>;
   listBookmarks(query?: LawScopedQuery): Promise<Bookmark[]>;
   putCollection(collection: Collection): Promise<void>;
@@ -347,6 +352,39 @@ export const createStorageRepository = (
           void tx.objectStore("laws").delete(lawId);
         }
         await tx.done;
+      });
+    },
+
+    async pinLaw(lawId) {
+      await withDatabase(async (db) => {
+        const tx = db.transaction("pinnedLaws", "readwrite");
+        const store = tx.objectStore("pinnedLaws");
+        const existing = await store.get(lawId);
+
+        // 既にピン留めされているなら pinnedAt を据え置く。一覧の並びが操作のたびに動かないようにする。
+        if (existing === undefined) {
+          void store.put({ lawId, pinnedAt: now().toISOString() });
+        }
+        await tx.done;
+      });
+    },
+
+    async unpinLaw(lawId) {
+      await withDatabase(async (db) => {
+        await db.delete("pinnedLaws", lawId);
+      });
+    },
+
+    async isLawPinned(lawId) {
+      return withDatabase(async (db) => (await db.get("pinnedLaws", lawId)) !== undefined);
+    },
+
+    async listPinnedLaws() {
+      return withDatabase(async (db) => {
+        const records = await db.getAllFromIndex("pinnedLaws", "by-pinned-at");
+
+        // 新しくピン留めしたものから並べる。索引は昇順で返すため反転する。
+        return records.reverse();
       });
     },
 
