@@ -1056,6 +1056,66 @@ describe("StorageRepository", () => {
     );
   });
 
+  it("does not leave ghost nodes when importing a saved law whose revision is a demoted history entry", async () => {
+    const databaseName = createDatabaseName();
+    const repository = createStorageRepository({
+      databaseName,
+      now: fixedNow,
+    });
+
+    // 版 A (olderRevision) を保存して現行版にし、続けて版 B (revision) を保存して A を履歴へ降格させる。
+    await repository.saveLawDocument({
+      law,
+      revision: olderRevision,
+      nodes: [olderArticleNode],
+    });
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+
+    // 版 A を含むエクスポートをインポートする。インポート側のノードは既存の olderArticleNode とは別物。
+    const importedNode = {
+      ...olderArticleNode,
+      id: "civil-code-article-1-imported",
+      rawText: "第一条　私権は、公共の福祉に適合しなければならない。インポート版",
+      plainText: "第一条 私権は、公共の福祉に適合しなければならない。インポート版",
+      normalizedText: "第一条 私権は 公共の福祉に適合しなければならない インポート版",
+    } satisfies LawNode;
+    const sourceExport = createSavedDataExportFixture();
+    sourceExport.savedLaws = [
+      {
+        law,
+        revision: olderRevision,
+        nodes: [importedNode],
+        savedAt: "2026-07-14T01:00:00.000Z",
+      },
+    ];
+    const parsed = parseSavedDataImport(JSON.stringify(sourceExport)).data;
+
+    await repository.importSavedData(parsed);
+
+    const importedDocument = await repository.getLawDocumentRevision(
+      law.lawId,
+      olderRevision.revisionId,
+    );
+
+    // インポート後の版 A の本文は、インポートされたノードだけであるべき（旧 olderArticleNode が幽霊ノードとして残ってはいけない）。
+    expect(importedDocument?.nodes).toEqual([importedNode]);
+
+    const database = await openSurasuraDatabase(databaseName);
+    try {
+      const savedLawRecord = await database.get("savedLaws", [law.lawId, olderRevision.revisionId]);
+      const actualNodes = await database.getAllFromIndex("lawNodes", "by-law-revision", [
+        law.lawId,
+        olderRevision.revisionId,
+      ]);
+
+      // nodeCount と実際に保存されているノード件数が一致することを検証する。
+      expect(savedLawRecord?.nodeCount).toBe(actualNodes.length);
+      expect(actualNodes).toHaveLength(1);
+    } finally {
+      database.close();
+    }
+  });
+
   it("closes the cached connection and can reopen on later operations", async () => {
     const repository = createStorageRepository({
       databaseName: createDatabaseName(),

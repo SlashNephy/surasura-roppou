@@ -29,6 +29,7 @@ const seedVersion2Database = async (
   records: {
     studyCards?: Record<string, unknown>[];
     studySessions?: Record<string, unknown>[];
+    savedLaws?: Record<string, unknown>[];
   },
 ) => {
   const database = await openDB(databaseName, 2, {
@@ -92,6 +93,10 @@ const seedVersion2Database = async (
 
   for (const session of records.studySessions ?? []) {
     await database.put("studySessions", session);
+  }
+
+  for (const savedLaw of records.savedLaws ?? []) {
+    await database.put("savedLaws", savedLaw);
   }
 
   database.close();
@@ -284,6 +289,36 @@ describe("v2 -> v3 migration", () => {
       database.close();
     }
   });
+
+  // v2 -> v4 は実ユーザーで最も古い経路（v3 の savedLaws スキーマ変更を経ずに一気に上がる）。
+  // 保存法令がこの経路でも生き延び、複合キーで引けて現行版になることを確認する。
+  it("carries a saved law through the composite key migration", async () => {
+    const databaseName = createDatabaseName();
+    const savedLaw = {
+      lawId: "129AC0000000089",
+      revisionId: "129AC0000000089_20260624_508AC0000000045",
+      nodeCount: 2,
+      savedAt: "2026-07-06T00:00:00.000Z",
+      updatedAt: "2026-07-07T00:00:00.000Z",
+    };
+    await seedVersion2Database(databaseName, { savedLaws: [savedLaw] });
+
+    const database = await openSurasuraDatabase(databaseName);
+    try {
+      const record = await database.get("savedLaws", [savedLaw.lawId, savedLaw.revisionId]);
+
+      expect(record).toEqual({
+        lawId: savedLaw.lawId,
+        revisionId: savedLaw.revisionId,
+        isCurrent: 1,
+        nodeCount: 2,
+        savedAt: "2026-07-06T00:00:00.000Z",
+        updatedAt: "2026-07-07T00:00:00.000Z",
+      });
+    } finally {
+      database.close();
+    }
+  });
 });
 
 // v3 リリース当時の savedLaws を再現する。keyPath は lawId 単独だった。
@@ -416,6 +451,43 @@ describe("v3 -> v4 migration", () => {
       await expect(
         database.getAllFromIndex("savedLaws", "by-law-id", legacySavedLaw.lawId),
       ).resolves.toHaveLength(1);
+    } finally {
+      database.close();
+    }
+  });
+
+  it("skips a record missing revisionId instead of aborting the whole migration", async () => {
+    const databaseName = createDatabaseName();
+    // revisionId を欠くレコード（壊れたデータ）。複合キーの put は DataError を投げるため、
+    // ガードがないと migrateRecordsToVersion4 全体が abort し、DB が開けなくなる。
+    const brokenSavedLaw = {
+      lawId: "129AC0000000999",
+      nodeCount: 1,
+      savedAt: "2026-07-06T00:00:00.000Z",
+      updatedAt: "2026-07-07T00:00:00.000Z",
+    };
+    await seedVersion3Database(databaseName, [legacySavedLaw, brokenSavedLaw]);
+
+    const database = await openSurasuraDatabase(databaseName);
+    try {
+      // DB が開けること自体が主張。壊れたレコードに巻き込まれてブックマークや学習カードまで
+      // 失われることのないよう、可用性を優先してスキップする。
+      const record = await database.get("savedLaws", [
+        legacySavedLaw.lawId,
+        legacySavedLaw.revisionId,
+      ]);
+
+      expect(record).toEqual({
+        lawId: legacySavedLaw.lawId,
+        revisionId: legacySavedLaw.revisionId,
+        isCurrent: 1,
+        nodeCount: 2,
+        savedAt: "2026-07-06T00:00:00.000Z",
+        updatedAt: "2026-07-07T00:00:00.000Z",
+      });
+
+      const allRecords = await database.getAll("savedLaws");
+      expect(allRecords).toHaveLength(1);
     } finally {
       database.close();
     }

@@ -140,7 +140,8 @@ export const createStorageRepository = (
         const revisionId = document.revision.revisionId;
         const existing = await savedLaws.get([lawId, revisionId]);
         // 既に現行版として保存済みの版は、基準日指定の取得で降格させない。
-        const isCurrent: 0 | 1 = (options.isCurrent ?? true) || existing?.isCurrent === 1 ? 1 : 0;
+        const shouldBeCurrent = (options.isCurrent ?? true) || existing?.isCurrent === 1;
+        const isCurrent: 0 | 1 = shouldBeCurrent ? 1 : 0;
 
         // 同じ版を書き直すときだけ、その版のノードを消して入れ直す。
         // 他の版のノードは残す（削除はエビクションの責務）。

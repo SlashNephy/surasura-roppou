@@ -39,20 +39,32 @@ export const importSavedDataIntoDatabase = async (
 
     for (const savedLaw of data.savedLaws) {
       const lawId = savedLaw.law.lawId;
+      const revisionId = savedLaw.revision.revisionId;
       const currentRecords = await savedLaws.index("by-law-current").getAll([lawId, 1]);
 
       for (const existingSavedLaw of currentRecords) {
+        // インポート対象の版と一致するレコードは、下の共通処理でノードを消してから入れ直す。
+        if (existingSavedLaw.revisionId === revisionId) {
+          continue;
+        }
+
         const existingNodeKeys = await lawNodes
           .index("by-law-revision")
           .getAllKeys([lawId, existingSavedLaw.revisionId]);
 
         await Promise.all(existingNodeKeys.map((key) => lawNodes.delete(key)));
-
-        if (existingSavedLaw.revisionId !== savedLaw.revision.revisionId) {
-          await lawRevisions.delete(existingSavedLaw.revisionId);
-          await savedLaws.delete([lawId, existingSavedLaw.revisionId]);
-        }
+        await lawRevisions.delete(existingSavedLaw.revisionId);
+        await savedLaws.delete([lawId, existingSavedLaw.revisionId]);
       }
+
+      // saveLawDocument と対称にするため、インポート対象の版のノードも常に一度消してから入れ直す。
+      // これを怠ると、インポート対象の版が既に履歴版（isCurrent: 0）へ降格済みの場合に
+      // ローカルのノードがインポート側に無くても残留し、nodeCount と実件数がずれる。
+      const targetNodeKeys = await lawNodes
+        .index("by-law-revision")
+        .getAllKeys([lawId, revisionId]);
+
+      await Promise.all(targetNodeKeys.map((key) => lawNodes.delete(key)));
 
       // 大量の法令ノードを1件ずつ完了待ちせず、同じ transaction の request queue へまとめて渡す。
       await Promise.all([

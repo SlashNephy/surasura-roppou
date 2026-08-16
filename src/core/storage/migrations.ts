@@ -124,9 +124,10 @@ export const migrateRecordsToVersion3 = async (
 };
 
 // v3 当時の savedLaws レコード。keyPath は lawId 単独で、現行版フラグを持たなかった。
+// lawId / revisionId は実データが壊れている可能性があるため unknown にして呼び出し側で検証する。
 interface LegacySavedLawRecord {
-  lawId: string;
-  revisionId: string;
+  lawId: unknown;
+  revisionId: unknown;
   nodeCount: number;
   savedAt: string;
   updatedAt: string;
@@ -152,7 +153,14 @@ export const migrateRecordsToVersion4 = async (
   savedLaws.createIndex("by-updated-at", "updatedAt");
 
   // 旧スキーマは法令ごとに 1 版しか持てなかったので、すべて現行版として移す。
+  // lawId / revisionId は新しい複合キーの構成要素であり、欠けていると put が DataError を投げて
+  // 移行全体が abort し DB が開けなくなる。保存法令は e-Gov から再取得可能なキャッシュなので、
+  // 壊れたレコードはスキップして続行し、可用性を優先する（v3 移行の toReviewLog と同じ方針）。
   for (const record of legacyRecords) {
+    if (typeof record.lawId !== "string" || typeof record.revisionId !== "string") {
+      continue;
+    }
+
     void savedLaws.put({
       lawId: record.lawId,
       revisionId: record.revisionId,
