@@ -69,7 +69,13 @@ export const createSavedLawUseCase = (
         throw error;
       }
 
-      await useCase.evict(limitBytes);
+      try {
+        await useCase.evict(limitBytes);
+      } catch {
+        // エビクションの失敗で元の quota エラーを見失わない。呼び出し側は
+        // isQuotaExceededError で quota を判定するため、ここで別の例外に
+        // 化けさせず、まずは再送を試みる。
+      }
 
       return repository.saveLawDocument(document, options);
     }

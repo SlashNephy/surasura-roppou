@@ -259,6 +259,44 @@ describe("createSavedLawUseCase", () => {
     await expect(useCase.get(law.lawId)).resolves.toBeDefined();
   });
 
+  it("evicts an old unpinned law before retrying the save when the quota is exceeded", async () => {
+    const { repository } = createMemoryStorageRepository();
+    // 古い未ピン法令を大きめの本文であらかじめ保存しておく。単独でも上限を超えるが、
+    // これから保存する法令 1 件だけなら上限内に収まるよう、サイズの間を上限にする。
+    const bulkyNodes = [articleNode, articleNode, articleNode, articleNode];
+
+    await repository.saveLawDocument({ law: otherLaw, revision: otherRevision, nodes: bulkyNodes });
+
+    const lawByteSize = new Blob([JSON.stringify(nodes)]).size;
+    const otherLawByteSize = new Blob([JSON.stringify(bulkyNodes)]).size;
+    const limitBytes = Math.floor((lawByteSize + otherLawByteSize) / 2);
+
+    let shouldFail = true;
+    const saveLawDocument = vi.fn(
+      (document: LawDocumentInput, options?: SaveLawDocumentOptions) => {
+        if (shouldFail) {
+          shouldFail = false;
+          const error = new Error("quota exceeded");
+
+          error.name = "QuotaExceededError";
+          return Promise.reject(error);
+        }
+        return repository.saveLawDocument(document, options);
+      },
+    );
+    const useCase = createSavedLawUseCase(
+      { ...repository, saveLawDocument },
+      { getStorageLimitBytes: () => limitBytes },
+    );
+
+    await useCase.save({ law, revision, nodes });
+
+    expect(saveLawDocument).toHaveBeenCalledTimes(2);
+    // quota 再試行がエビクションを挟んだ証拠として、古い法令が消えている。
+    await expect(useCase.get(otherLaw.lawId)).resolves.toBeUndefined();
+    await expect(useCase.get(law.lawId)).resolves.toBeDefined();
+  });
+
   it("gives up when the retried save fails again", async () => {
     const { repository } = createMemoryStorageRepository();
     const quotaError = new Error("quota exceeded");
@@ -272,6 +310,70 @@ describe("createSavedLawUseCase", () => {
 
     await expect(useCase.save({ law, revision, nodes })).rejects.toThrow("quota exceeded");
     expect(saveLawDocument).toHaveBeenCalledTimes(2);
+  });
+
+  it("still retries the save when the eviction inside the quota retry itself fails", async () => {
+    const { repository } = createMemoryStorageRepository();
+    let shouldFail = true;
+    const saveLawDocument = vi.fn(
+      (document: LawDocumentInput, options?: SaveLawDocumentOptions) => {
+        if (shouldFail) {
+          shouldFail = false;
+          const error = new Error("quota exceeded");
+
+          error.name = "QuotaExceededError";
+          return Promise.reject(error);
+        }
+        return repository.saveLawDocument(document, options);
+      },
+    );
+    const useCase = createSavedLawUseCase(
+      {
+        ...repository,
+        saveLawDocument,
+        // evict 自身が失敗する状況（別の IndexedDB エラー等）を模す。
+        listSavedLawRecords: () => Promise.reject(new Error("index broken")),
+      },
+      { getStorageLimitBytes: () => 1_000_000 },
+    );
+
+    // エビクションが失敗しても、それに化けず、1 度きりの再試行は行われて保存は成功する。
+    await expect(useCase.save({ law, revision, nodes })).resolves.toBeUndefined();
+    expect(saveLawDocument).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not fail save when the post-save eviction fails", async () => {
+    const { repository } = createMemoryStorageRepository();
+    const failingRepository = {
+      ...repository,
+      listSavedLawRecords: () => Promise.reject(new Error("index broken")),
+    };
+    const useCase = createSavedLawUseCase(failingRepository, { getStorageLimitBytes: () => 1 });
+
+    // エビクション（保存の要求ではない付随処理）が失敗しても、保存そのものは成功する。
+    await expect(useCase.save({ law, revision, nodes })).resolves.toBeUndefined();
+    await expect(useCase.get(law.lawId)).resolves.toMatchObject({ law, revision, nodes });
+  });
+
+  it("does not evict or retry when the save failure is not a quota error", async () => {
+    const { repository } = createMemoryStorageRepository();
+
+    // エビクションが誤って走れば消えてしまう、既存の未ピン法令をあらかじめ用意しておく。
+    await repository.saveLawDocument({ law: otherLaw, revision: otherRevision, nodes });
+
+    const error = new Error("Transaction inactive");
+    const saveLawDocument = vi.fn(() => Promise.reject(error));
+    const useCase = createSavedLawUseCase(
+      { ...repository, saveLawDocument },
+      { getStorageLimitBytes: () => 1 },
+    );
+
+    await expect(useCase.save({ law, revision, nodes })).rejects.toBe(error);
+
+    // quota 以外のエラーでは再試行しない。
+    expect(saveLawDocument).toHaveBeenCalledTimes(1);
+    // quota 以外のエラーでエビクションも走らない。既存の未ピン法令が残っている。
+    await expect(useCase.get(otherLaw.lawId)).resolves.toBeDefined();
   });
 
   it("backfills a missing byte size instead of treating the record as weightless", async () => {
@@ -298,6 +400,35 @@ describe("createSavedLawUseCase", () => {
     const records = await repository.listSavedLawRecords();
 
     expect(records[0]?.byteSize).toBeGreaterThan(0);
+  });
+
+  it("uses the backfilled byte size, not zero, to decide whether eviction is needed", async () => {
+    const { repository } = createMemoryStorageRepository();
+
+    await repository.saveLawDocument({ law, revision, nodes });
+    await repository.setSavedLawByteSize(law.lawId, revision.revisionId, 0);
+
+    const useCase = createSavedLawUseCase({
+      ...repository,
+      listSavedLawRecords: async () => {
+        // PR 3 より前に保存されたレコードを模す（byteSize を持たない）。
+        const records = await repository.listSavedLawRecords();
+
+        return records.map(({ byteSize, ...rest }) => {
+          void byteSize;
+          return rest;
+        });
+      },
+    });
+
+    const actualByteSize = new Blob([JSON.stringify(nodes)]).size;
+
+    // バックフィルした実測値を候補として使わなければ（0 のままなら）上限を超えず、
+    // 削除は起きない。
+    await useCase.evict(actualByteSize - 1);
+
+    // 未ピンの法令が丸ごと消えている: バックフィル値を候補として使った証拠。
+    await expect(useCase.get(law.lawId)).resolves.toBeUndefined();
   });
 });
 
