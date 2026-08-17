@@ -360,9 +360,8 @@ describe("LawViewerPageContent", () => {
     renderLawViewerRoute("/laws/129AC0000000089", repository);
 
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
-    // 未ピン留めは左レールの操作ボタンが「ピン留め」であることで判別する。
-    expect(screen.getByRole("button", { name: "ピン留め" })).toBeInTheDocument();
-    expect(screen.queryByText("ピン留め中")).not.toBeInTheDocument();
+    // 未ダウンロードは左レールの操作ボタンが「ダウンロード」であることで判別する。
+    expect(screen.getByRole("button", { name: "ダウンロード" })).toBeInTheDocument();
     expect(calls).toEqual([
       {
         input:
@@ -382,21 +381,19 @@ describe("LawViewerPageContent", () => {
 
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "ピン留め" }));
+    await user.click(screen.getByRole("button", { name: "ダウンロード" }));
 
     // pin は保存に成功してからピンを立てる契約のため、本文も保存されていること。
     // pin は save と pinLaw の 2 段の await を含むため、表示の反映は findBy で待つ。
-    expect(await screen.findByText("ピン留め中")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "ピン留めを解除" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "ダウンロード済み" })).toBeInTheDocument();
     expect(storage.getSavedDocument()?.law.title).toBe("民法");
     await expect(storage.repository.isLawPinned("129AC0000000089")).resolves.toBe(true);
 
-    await user.click(screen.getByRole("button", { name: "ピン留めを解除" }));
+    await user.click(screen.getByRole("button", { name: "ダウンロード済み" }));
 
-    expect(await screen.findByRole("button", { name: "ピン留め" })).toBeInTheDocument();
-    expect(screen.queryByText("ピン留め中")).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "ダウンロード" })).toBeInTheDocument();
     await expect(storage.repository.isLawPinned("129AC0000000089")).resolves.toBe(false);
-    // ピン留めの解除は本文を消さない（LRU 対象からは外れるだけ）。
+    // ダウンロード指定の解除は本文を消さない（LRU 対象からは外れるだけ）。
     expect(storage.getSavedDocument()).toBeDefined();
   });
 
@@ -436,10 +433,10 @@ describe("LawViewerPageContent", () => {
 
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "ピン留め" }));
+    await user.click(screen.getByRole("button", { name: "ダウンロード" }));
 
-    expect(await screen.findByText("ピン留め中")).toBeInTheDocument();
-    // 基準日指定で開いた過去版をピン留めしても、既存の現行版スロットは奪われない。
+    expect(await screen.findByRole("button", { name: "ダウンロード済み" })).toBeInTheDocument();
+    // 基準日指定で開いた過去版をダウンロード指定しても、既存の現行版スロットは奪われない。
     await expect(
       storageRepository.getLawDocument(sampleLawViewerDocument.law.lawId),
     ).resolves.toMatchObject({ revision: sampleLawViewerDocument.revision });
@@ -458,13 +455,12 @@ describe("LawViewerPageContent", () => {
 
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "ピン留め" }));
+    await user.click(screen.getByRole("button", { name: "ダウンロード" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "ピン留めできませんでした。端末の保存領域を確認してください。",
+      "ダウンロードできませんでした。端末の保存領域を確認してください。",
     );
-    expect(screen.getByRole("button", { name: "ピン留め" })).toBeEnabled();
-    expect(screen.queryByText("ピン留め中")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ダウンロード" })).toBeEnabled();
     await expect(storageRepository.isLawPinned("129AC0000000089")).resolves.toBe(false);
   });
 
@@ -476,8 +472,8 @@ describe("LawViewerPageContent", () => {
         nodes: sampleLawViewerDocument.nodes,
       }),
     );
-    // ローダーの初期表示はピン留め状態から決まる。保存済みでもピン留めしていなければ
-    // 「ピン留めを解除」ボタンは表示されないため、事前にピン留めしておく。
+    // ローダーの初期表示はダウンロード状態から決まる。保存済みでもダウンロード指定していなければ
+    // 「ダウンロード済み」ボタンは表示されないため、事前にダウンロード指定しておく。
     await storage.repository.pinLaw(sampleLawViewerDocument.law.lawId);
     const { user } = renderLawViewerRoute(
       "/laws/129AC0000000089",
@@ -485,12 +481,11 @@ describe("LawViewerPageContent", () => {
       storage.repository,
     );
 
-    expect(await screen.findByRole("button", { name: "ピン留めを解除" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "ダウンロード済み" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "ピン留めを解除" }));
+    await user.click(screen.getByRole("button", { name: "ダウンロード済み" }));
 
-    expect(screen.getByRole("button", { name: "ピン留め" })).toBeInTheDocument();
-    expect(screen.queryByText("ピン留め中")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ダウンロード" })).toBeInTheDocument();
     // LRU（PR 3）対象から外れるだけで、本文は消えない。
     expect(storage.getSavedDocument()).toBeDefined();
   });
@@ -1306,10 +1301,10 @@ describe("LawViewerPageContent", () => {
     await screen.findByRole("article", { name: "民法" });
 
     const leftRail = screen.getByRole("complementary", { name: "法令の目次" });
-    // 条番号ジャンプ・ピン留めは文書レベル操作として左レールに入る
+    // 条番号ジャンプ・ダウンロードは文書レベル操作として左レールに入る
     expect(within(leftRail).getByRole("button", { name: "移動" })).toBeInTheDocument();
     expect(
-      within(leftRail).getByRole("button", { name: /^ピン留め(を解除)?$/ }),
+      within(leftRail).getByRole("button", { name: /^ダウンロード(済み)?$/ }),
     ).toBeInTheDocument();
 
     const rightRail = screen.getByRole("complementary", { name: "学習コンテキスト" });
@@ -1339,7 +1334,9 @@ describe("LawViewerPageContent", () => {
 
     const sheet = await screen.findByRole("dialog");
     expect(within(sheet).getByRole("button", { name: "移動" })).toBeInTheDocument();
-    expect(within(sheet).getByRole("button", { name: /^ピン留め(を解除)?$/ })).toBeInTheDocument();
+    expect(
+      within(sheet).getByRole("button", { name: /^ダウンロード(済み)?$/ }),
+    ).toBeInTheDocument();
     expect(within(sheet).getByRole("navigation", { name: "法令目次" })).toBeInTheDocument();
   });
 

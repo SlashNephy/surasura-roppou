@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
-import { Clipboard, LinkIcon, ListTree, Pin, PinOff } from "lucide-react";
+import { CircleCheck, Clipboard, Download, LinkIcon, ListTree } from "lucide-react";
 
 import type { LawNode, LawRevision } from "@/core/domain";
 import { buildLawArticleUrl, computeArticleFingerprint } from "@/core/domain";
@@ -27,11 +27,11 @@ import {
   findArticleNode,
 } from "@/core/viewer";
 import type { LawTocItem } from "@/core/viewer";
-import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/shared/ui/sheet";
 import { Skeleton } from "@/shared/ui/skeleton";
+import { cn } from "@/shared/utils/cn";
 import { formatIsoDateLabel } from "@/shared/utils/dates";
 
 import { AnchorCompareDialog } from "./AnchorCompareDialog";
@@ -479,7 +479,8 @@ const LawViewerReadyState = ({
   };
 
   // 法令を開くと自動保存が走るため、「保存済み」は常に真になり情報量を失った。
-  // 代わりにユーザーの明示的な意図であるピン留め（PR 3 の自動削除対象外の印）を扱う。
+  // 代わりにユーザーの明示的な意図である「ダウンロード」（内部識別子は pin のまま。
+  // PR 3 の自動削除対象外の印）を扱う。
   const handleLawPinToggle = async () => {
     setIsSaving(true);
     setSaveError(undefined);
@@ -507,11 +508,11 @@ const LawViewerReadyState = ({
       setSavedState((previous) => ({ ...previous, isPinned: true }));
     } catch {
       // 解除の失敗は保存領域の空きと無関係（pinnedLaws からの削除は本文を書かない）なので、
-      // ピン留めと解除でメッセージを分け、ユーザーを誤誘導しないようにする。
+      // ダウンロードと取り消しでメッセージを分け、ユーザーを誤誘導しないようにする。
       setSaveError(
         savedState.isPinned
-          ? "ピン留めを解除できませんでした。時間をおいて再試行してください。"
-          : "ピン留めできませんでした。端末の保存領域を確認してください。",
+          ? "ダウンロードを取り消せませんでした。時間をおいて再試行してください。"
+          : "ダウンロードできませんでした。端末の保存領域を確認してください。",
       );
     } finally {
       setIsSaving(false);
@@ -618,17 +619,13 @@ const LawViewerReadyState = ({
                 施行日 {formatEffectiveDateLabel(state.revision)}
               </div>
             </div>
-            {savedState.isPinned ? (
-              <Badge variant="secondary" className="w-fit">
-                ピン留め中
-              </Badge>
-            ) : null}
-
-            {/* 文書レベル操作: ピン留め（基準日は法令番号の直下、条番号ジャンプは目次直下に置く） */}
+            {/* 文書レベル操作: ダウンロード（基準日は法令番号の直下、条番号ジャンプは目次直下に置く） */}
             <div className="grid gap-3 border-b pb-3">
               <Button
                 aria-describedby={saveError === undefined ? undefined : saveErrorId}
-                className="w-fit gap-2"
+                // 済みの状態は既存の主色で示す。このテーマの --primary は #166534
+                // （ダークは #4ade80）で既に緑なので、成功色のトークンを足す必要がない。
+                className={cn("w-fit gap-2", savedState.isPinned && "text-primary")}
                 disabled={isSaving}
                 onClick={() => {
                   void handleLawPinToggle();
@@ -637,11 +634,11 @@ const LawViewerReadyState = ({
                 variant={savedState.isPinned ? "outline" : "default"}
               >
                 {savedState.isPinned ? (
-                  <PinOff className="size-4" aria-hidden="true" />
+                  <CircleCheck className="size-4" aria-hidden="true" />
                 ) : (
-                  <Pin className="size-4" aria-hidden="true" />
+                  <Download className="size-4" aria-hidden="true" />
                 )}
-                {savedState.isPinned ? "ピン留めを解除" : "ピン留め"}
+                {savedState.isPinned ? "ダウンロード済み" : "ダウンロード"}
               </Button>
             </div>
 
@@ -912,10 +909,12 @@ const LawViewerReadyState = ({
                 指定された条文が見つかりません。
               </p>
             ) : null}
-            {/* ピン留め */}
+            {/* ダウンロード */}
             <Button
               aria-describedby={saveError === undefined ? undefined : `${saveErrorId}-mobile`}
-              className="w-fit gap-2"
+              // 済みの状態は既存の主色で示す。このテーマの --primary は #166534
+              // （ダークは #4ade80）で既に緑なので、成功色のトークンを足す必要がない。
+              className={cn("w-fit gap-2", savedState.isPinned && "text-primary")}
               disabled={isSaving}
               onClick={() => {
                 void handleLawPinToggle();
@@ -923,7 +922,12 @@ const LawViewerReadyState = ({
               type="button"
               variant={savedState.isPinned ? "outline" : "default"}
             >
-              {savedState.isPinned ? "ピン留めを解除" : "ピン留め"}
+              {savedState.isPinned ? (
+                <CircleCheck className="size-4" aria-hidden="true" />
+              ) : (
+                <Download className="size-4" aria-hidden="true" />
+              )}
+              {savedState.isPinned ? "ダウンロード済み" : "ダウンロード"}
             </Button>
             {/* 保存失敗はシート表示中だと本文側の alert が隠れるため、シート内にも通知する。 */}
             {saveError !== undefined ? (
