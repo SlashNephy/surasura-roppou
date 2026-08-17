@@ -15,8 +15,13 @@ import { computeArticleFingerprint } from "@/core/domain";
 import type { Bookmark } from "@/core/domain";
 import { createEgovLawRepository } from "@/core/egov";
 import type { LawDocument, LawListResult, LawMetadata, LawRepository } from "@/core/egov";
-import { DISPLAY_PREFERENCES_STORAGE_KEYS, setBaseDate } from "@/core/settings";
+import {
+  DISPLAY_PREFERENCES_STORAGE_KEYS,
+  STORAGE_LIMIT_STORAGE_KEY,
+  setBaseDate,
+} from "@/core/settings";
 import { createJsonFetchStub, fixedTestNow as now, lawDataFixture } from "@/test/fixtures/egov";
+import { createSavedLawUseCase } from "@/core/storage";
 import type { SavedLawDocument, StorageRepository } from "@/core/storage";
 import { createMemoryStorageRepository, createSavedLawDocument } from "@/test/fixtures/storage";
 import { setupScrollMocks } from "@/test/scrollMocks";
@@ -26,24 +31,23 @@ import { LawViewerPage, LawViewerPageContent } from "./law-viewer-page";
 import { sampleLawViewerDocument } from "./law-viewer-sample";
 import { createAppRouter } from "./router";
 import type { LawViewerState } from "./law-viewer-page";
-import type { useStorageLimit } from "./use-storage-limit";
 
 // 上限を超えさせるテスト（本ファイル末尾の "evicts an older law..." のみ）用に、
-// useStorageLimit をこの箱経由で差し替え可能にする。他のテストは override が
-// 未設定のまま実フックへ委譲されるため、通常の（実 localStorage 由来の）上限で動く。
+// getCurrentStorageLimitBytes をこの箱経由で差し替え可能にする。他のテストは override が
+// 未設定のまま実装へ委譲されるため、通常の（実 localStorage 由来の）上限で動く。
 const storageLimitMockState = vi.hoisted(() => ({
-  actual: undefined as unknown as typeof useStorageLimit,
-  override: undefined as typeof useStorageLimit | undefined,
+  actual: undefined as unknown as () => number,
+  override: undefined as (() => number) | undefined,
 }));
 
 vi.mock("./use-storage-limit", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./use-storage-limit")>();
-  storageLimitMockState.actual = actual.useStorageLimit;
+  storageLimitMockState.actual = actual.getCurrentStorageLimitBytes;
 
   return {
     ...actual,
-    useStorageLimit: (...args: Parameters<typeof actual.useStorageLimit>) =>
-      (storageLimitMockState.override ?? storageLimitMockState.actual)(...args),
+    getCurrentStorageLimitBytes: () =>
+      (storageLimitMockState.override ?? storageLimitMockState.actual)(),
   };
 });
 
@@ -166,6 +170,9 @@ const renderLawViewerContentRoute = (
   repository?: LawRepository,
   withDisplayPreferences = false,
 ) => {
+  // LawViewerPageContent は savedLawUseCase を必須 prop として要求する（無音の上限なし
+  // フォールバックを避けるため）。本番の Loader 経路を模し、ここで明示的に組み立てて渡す。
+  const savedLawUseCase = createSavedLawUseCase(storageRepository);
   const BaseLawViewerRoute = () => {
     const { lawId } = useParams({ from: "/laws/$lawId" });
 
@@ -173,6 +180,7 @@ const renderLawViewerContentRoute = (
       <LawViewerPageContent
         lawId={lawId}
         repository={repository}
+        savedLawUseCase={savedLawUseCase}
         state={state}
         storageRepository={storageRepository}
       />
@@ -186,6 +194,7 @@ const renderLawViewerContentRoute = (
         activeArticleNumber={article}
         lawId={lawId}
         repository={repository}
+        savedLawUseCase={savedLawUseCase}
         state={state}
         storageRepository={storageRepository}
       />
@@ -313,7 +322,12 @@ const nonNumericArticleState = {
 
 describe("LawViewerPageContent", () => {
   it("renders a loading state from the page state contract", () => {
-    render(<LawViewerPageContent state={{ status: "loading" }} />);
+    // "loading" 状態では savedLawUseCase は使われないが、必須 prop なので契約を満たす値を渡す。
+    const savedLawUseCase = createSavedLawUseCase(createMemoryStorageRepository().repository);
+
+    render(
+      <LawViewerPageContent savedLawUseCase={savedLawUseCase} state={{ status: "loading" }} />,
+    );
 
     expect(screen.getByLabelText("法令本文を読み込み中")).toBeInTheDocument();
   });
@@ -613,18 +627,14 @@ describe("LawViewerPageContent", () => {
   it("evicts an older law when opening a new one exceeds the limit", async () => {
     // 上限は選択肢の最小値でも 25 MB あり、fixture の本文では届かない。
     // 上限そのものではなく「上限を超えたら古い方が落ちる」振る舞いを見たいので、
-    // useStorageLimit をモックして小さい上限を注入し、既存の保存を実測で超える大きさに膨らませる。
+    // getCurrentStorageLimitBytes をモックして小さい上限を注入し、既存の保存を実測で超える大きさに膨らませる。
     const bulkyNodes = Array.from({ length: 200 }, (_node, index) => ({
       ...sampleLawViewerDocument.nodes[0],
       id: `bulky-${index.toString()}`,
       plainText: "あ".repeat(1_000),
     }));
 
-    storageLimitMockState.override = () => ({
-      limitMegabytes: 25,
-      limitBytes: 1_000,
-      setLimitMegabytes: vi.fn(),
-    });
+    storageLimitMockState.override = () => 1_000;
 
     try {
       const storage = createMemoryStorageRepository();
@@ -654,6 +664,30 @@ describe("LawViewerPageContent", () => {
     } finally {
       storageLimitMockState.override = undefined;
     }
+  });
+
+  it("does not refetch the law when the storage limit changes in another tab", async () => {
+    // 容量上限は useMemo/effect の依存に入れていないため、他タブでの上限変更（storage
+    // イベント）を受けても savedLawUseCase の参照は変わらず、読み込み effect は再実行されない
+    // （= e-Gov への再取得が走らない）ことを検証する。バグを再注入すると（limitBytes を
+    // useStorageLimit 経由で依存配列へ戻すと）、この event で effect が再実行され calls が増える。
+    const { calls, repository } = createFixtureRepository();
+
+    renderLawViewerRoute("/laws/129AC0000000089", repository);
+
+    expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+    const callCountAfterInitialLoad = calls.length;
+
+    await act(async () => {
+      // 他タブが容量上限を変更し、それを storage イベントで同期した状況を模す。
+      localStorage.setItem(STORAGE_LIMIT_STORAGE_KEY, "100");
+      window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_LIMIT_STORAGE_KEY }));
+      // 再取得が走るなら、ここまでの間に発火する余地を与える。
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(calls).toHaveLength(callCountAfterInitialLoad);
   });
 
   it("既定は読みやすい表示で本文を描画する", async () => {

@@ -19,6 +19,7 @@ import { formatIsoDateLabel } from "@/shared/utils/dates";
 
 import { downloadTextFile } from "./download-text-file";
 import { parseTags } from "./saved-page-utils";
+import { getCurrentStorageLimitBytes } from "./use-storage-limit";
 
 const defaultStorageRepository = createStorageRepository();
 
@@ -64,7 +65,10 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
   const [exportError, setExportError] = useState<string | undefined>();
   const [isExporting, setIsExporting] = useState(false);
   const savedLawUseCase = useMemo(
-    () => createSavedLawUseCase(storageRepository),
+    () =>
+      createSavedLawUseCase(storageRepository, {
+        getStorageLimitBytes: getCurrentStorageLimitBytes,
+      }),
     [storageRepository],
   );
   const savedLawTitlesById = useMemo(
@@ -242,7 +246,10 @@ export const SavedCollectionPage = ({
     status: "loading",
   });
   const savedLawUseCase = useMemo(
-    () => createSavedLawUseCase(storageRepository),
+    () =>
+      createSavedLawUseCase(storageRepository, {
+        getStorageLimitBytes: getCurrentStorageLimitBytes,
+      }),
     [storageRepository],
   );
 

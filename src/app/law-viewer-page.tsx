@@ -45,7 +45,7 @@ import type { LawViewerDocument } from "./law-viewer-sample";
 import { useAnchorVerification } from "./use-anchor-verification";
 import { useBaseDate } from "./use-base-date";
 import { useDisplayPreferences } from "./use-display-preferences";
-import { useStorageLimit } from "./use-storage-limit";
+import { getCurrentStorageLimitBytes } from "./use-storage-limit";
 
 const defaultStorageRepository = createStorageRepository();
 const defaultLawRepository = createEgovLawRepository();
@@ -108,10 +108,16 @@ const LawViewerPageLoader = ({
   storageRepository: StorageRepository;
 }) => {
   const [state, setState] = useState<LawViewerState>({ status: "loading" });
-  const { limitBytes } = useStorageLimit();
+  // 上限は useMemo の依存に入れない。依存に入れると上限変更のたびに参照が変わり、
+  // 下の読み込み effect（deps に savedLawUseCase を持つ）まで再実行されてしまう
+  // （e-Gov への不要な再取得を誘発する）。getStorageLimitBytes は呼ばれるたびに
+  // 評価される契約なので、クロージャで都度ストアを読めば参照の同一性を保ったまま最新値を使える。
   const savedLawUseCase = useMemo(
-    () => createSavedLawUseCase(storageRepository, { getStorageLimitBytes: () => limitBytes }),
-    [limitBytes, storageRepository],
+    () =>
+      createSavedLawUseCase(storageRepository, {
+        getStorageLimitBytes: getCurrentStorageLimitBytes,
+      }),
+    [storageRepository],
   );
 
   useEffect(() => {
@@ -168,7 +174,7 @@ export const LawViewerPageContent = ({
   activeArticleNumber?: string;
   lawId?: string;
   repository?: LawRepository;
-  savedLawUseCase?: SavedLawUseCase;
+  savedLawUseCase: SavedLawUseCase;
   state: LawViewerState;
   storageRepository?: StorageRepository;
 }) => {
@@ -201,26 +207,18 @@ const LawViewerReadyState = ({
   activeArticleNumber: routeArticleNumber,
   lawId,
   repository,
-  savedLawUseCase: injectedSavedLawUseCase,
+  savedLawUseCase,
   state: baseState,
   storageRepository,
 }: {
   activeArticleNumber?: string;
   lawId: string;
   repository?: LawRepository;
-  savedLawUseCase?: SavedLawUseCase;
+  savedLawUseCase: SavedLawUseCase;
   state: Extract<LawViewerState, { status: "ready" }>;
   storageRepository: StorageRepository;
 }) => {
   const navigate = useNavigate();
-  // 通常経路（LawViewerPageLoader 経由）では容量上限付きのユースケースが渡る。
-  // LawViewerPageContent を直接呼ぶテストなど、渡されなかった場合だけ
-  // storageRepository からその場限りのユースケース（上限なし）を作る。
-  const fallbackSavedLawUseCase = useMemo(
-    () => createSavedLawUseCase(storageRepository),
-    [storageRepository],
-  );
-  const savedLawUseCase = injectedSavedLawUseCase ?? fallbackSavedLawUseCase;
   // 表示モードは設定（DisplayPreferences）で永続管理し、ビューワーは読むだけにする。
   const { textDisplayMode: displayMode } = useDisplayPreferences();
   const [savedState, setSavedState] = useSavedViewerState(baseState);
