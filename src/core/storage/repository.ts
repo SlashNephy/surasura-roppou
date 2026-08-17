@@ -59,6 +59,8 @@ export interface SavedLawSummary {
   nodeCount: number;
   savedAt: ISODateString;
   updatedAt: ISODateString;
+  // その法令の全版の合計。どの版も byteSize を持たないときは undefined。
+  byteSize?: number;
 }
 
 export interface SavedLawRevisionSummary {
@@ -100,6 +102,8 @@ export interface StorageRepository {
   getLawDocumentRevision(lawId: string, revisionId: string): Promise<SavedLawDocument | undefined>;
   listSavedLaws(): Promise<SavedLawSummary[]>;
   listSavedRevisions(lawId: string): Promise<SavedLawRevisionSummary[]>;
+  listSavedLawRecords(): Promise<SavedLawRecord[]>;
+  setSavedLawByteSize(lawId: string, revisionId: string, byteSize: number): Promise<void>;
   deleteLawDocument(lawId: string): Promise<void>;
   deleteLawRevision(lawId: string, revisionId: string): Promise<void>;
   pinLaw(lawId: string): Promise<void>;
@@ -167,8 +171,14 @@ export const createStorageRepository = (
           (options.isCurrent ?? true) || existing?.isCurrent === 1 || !hasAnyCurrentRevision;
         const isCurrent: 0 | 1 = shouldBeCurrent ? 1 : 0;
 
+        const byteSize = measureNodesByteSize(document.nodes);
+        const rewritesNodes = shouldRewriteRevisionNodes(existing, byteSize, document.nodes.length);
+
         // 同じ版を書き直すときだけ、その版のノードを消して入れ直す。
-        await deleteRevisionNodes(nodes, lawId, revisionId);
+        // 中身が変わっていなければ、その入れ替えも省く。
+        if (rewritesNodes) {
+          await deleteRevisionNodes(nodes, lawId, revisionId);
+        }
 
         // 現行版スロットは 1 法令 1 件。旧現行版はフラグだけ降格し、履歴として残す。
         if (isCurrent === 1) {
@@ -178,14 +188,16 @@ export const createStorageRepository = (
         void tx.objectStore("laws").put(document.law);
         void tx.objectStore("lawRevisions").put(document.revision);
 
-        for (const [sortOrder, node] of document.nodes.entries()) {
-          void nodes.put({
-            id: node.id,
-            lawId: node.lawId,
-            revisionId: node.revisionId,
-            sortOrder,
-            node,
-          });
+        if (rewritesNodes) {
+          for (const [sortOrder, node] of document.nodes.entries()) {
+            void nodes.put({
+              id: node.id,
+              lawId: node.lawId,
+              revisionId: node.revisionId,
+              sortOrder,
+              node,
+            });
+          }
         }
 
         void savedLaws.put({
@@ -195,6 +207,7 @@ export const createStorageRepository = (
           nodeCount: document.nodes.length,
           savedAt: existing?.savedAt ?? updatedAt,
           updatedAt,
+          byteSize,
         });
         await tx.done;
 
@@ -246,9 +259,19 @@ export const createStorageRepository = (
         const laws = tx.objectStore("laws");
         const lawRevisions = tx.objectStore("lawRevisions");
         const summaries: SavedLawSummary[] = [];
+        // 容量は履歴版も含めた法令単位の合計にする。現行版だけだと、基準日を変えて
+        // 何度か開いた法令が実際より小さく見え、履歴版が消えても数字が動かない。
+        const byteSizeByLawId = new Map<string, number>();
 
         for await (const cursor of savedLaws.index("by-saved-at").iterate(null, "prev")) {
           const savedLaw = cursor.value;
+
+          if (savedLaw.byteSize !== undefined) {
+            byteSizeByLawId.set(
+              savedLaw.lawId,
+              (byteSizeByLawId.get(savedLaw.lawId) ?? 0) + savedLaw.byteSize,
+            );
+          }
 
           // 一覧は法令単位。履歴版は listSavedRevisions で扱う。
           if (savedLaw.isCurrent !== 1) {
@@ -274,7 +297,34 @@ export const createStorageRepository = (
         }
         await tx.done;
 
-        return summaries;
+        // 合計は全レコードを見終わってからでないと確定しない。
+        return summaries.map((summary) => {
+          const byteSize = byteSizeByLawId.get(summary.law.lawId);
+
+          return byteSize === undefined ? summary : { ...summary, byteSize };
+        });
+      });
+    },
+
+    async listSavedLawRecords() {
+      return withDatabase(async (db) => {
+        // updatedAt 昇順。先に消す候補が先頭に来る。
+        return db.getAllFromIndex("savedLaws", "by-updated-at");
+      });
+    },
+
+    async setSavedLawByteSize(lawId, revisionId, byteSize) {
+      await withDatabase(async (db) => {
+        const tx = db.transaction("savedLaws", "readwrite");
+        const store = tx.objectStore("savedLaws");
+        const record = await store.get([lawId, revisionId]);
+
+        // 走査中に削除された版に書き戻さない。
+        if (record !== undefined) {
+          // updatedAt は動かさない。書き戻しで LRU の順序が変わってはいけない。
+          void store.put({ ...record, byteSize });
+        }
+        await tx.done;
       });
     },
 
@@ -756,6 +806,31 @@ const createVersion3Stores = (
 
 const toOrderedNodes = (records: StoredLawNode[]): LawNode[] =>
   records.sort((left, right) => left.sortOrder - right.sortOrder).map((record) => record.node);
+
+// 保存した本文の概算バイト数。IndexedDB の実際の占有量は実装依存で取得できないため、
+// シリアライズした JSON の UTF-8 バイト数を代理値にする。上限の判断に使うだけなので
+// 厳密さは要らないが、法令ごとの大小関係が正しく出る必要がある。
+const measureNodesByteSize = (nodes: LawNode[]): number => new Blob([JSON.stringify(nodes)]).size;
+
+/**
+ * その版のノードを削除して入れ直す必要があるか。
+ *
+ * 同じ版を開き直すたびに全ノードを書き直すと、民法なら毎回 4,283 件の削除と挿入が走る。
+ * 自動保存があるため、これは法令を開くたびに発生する。
+ *
+ * 判断に `revisionId` の一致だけを使ってはいけない。e-Gov の版が同じでも、こちらの
+ * 正規化処理が変われば保存すべきノードは変わり、アプリ更新後に古い結果が残り続ける。
+ * バイト数とノード数の一致まで見れば、その変化も捕まえられる。
+ */
+export const shouldRewriteRevisionNodes = (
+  existing: SavedLawRecord | undefined,
+  byteSize: number,
+  nodeCount: number,
+): boolean =>
+  // 記録以前のレコードは中身を照合できないため、安全側に倒す。
+  existing?.byteSize === undefined ||
+  existing.byteSize !== byteSize ||
+  existing.nodeCount !== nodeCount;
 
 // 現行版は 1 件のはずだが、万一複数あっても結果が揺れないよう updatedAt が最大のものを選ぶ。
 // 読み取り経路では修復書き込みを行わない（閲覧が保存領域の状態に巻き込まれるのを避けるため）。

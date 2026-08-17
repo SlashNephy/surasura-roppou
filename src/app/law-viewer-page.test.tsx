@@ -15,8 +15,13 @@ import { computeArticleFingerprint } from "@/core/domain";
 import type { Bookmark } from "@/core/domain";
 import { createEgovLawRepository } from "@/core/egov";
 import type { LawDocument, LawListResult, LawMetadata, LawRepository } from "@/core/egov";
-import { DISPLAY_PREFERENCES_STORAGE_KEYS, setBaseDate } from "@/core/settings";
+import {
+  DISPLAY_PREFERENCES_STORAGE_KEYS,
+  STORAGE_LIMIT_STORAGE_KEY,
+  setBaseDate,
+} from "@/core/settings";
 import { createJsonFetchStub, fixedTestNow as now, lawDataFixture } from "@/test/fixtures/egov";
+import { PERSISTENCE_REQUESTED_STORAGE_KEY, createSavedLawUseCase } from "@/core/storage";
 import type { SavedLawDocument, StorageRepository } from "@/core/storage";
 import { createMemoryStorageRepository, createSavedLawDocument } from "@/test/fixtures/storage";
 import { setupScrollMocks } from "@/test/scrollMocks";
@@ -26,6 +31,25 @@ import { LawViewerPage, LawViewerPageContent } from "./law-viewer-page";
 import { sampleLawViewerDocument } from "./law-viewer-sample";
 import { createAppRouter } from "./router";
 import type { LawViewerState } from "./law-viewer-page";
+
+// 上限を超えさせるテスト（本ファイル末尾の "evicts an older law..." のみ）用に、
+// getCurrentStorageLimitBytes をこの箱経由で差し替え可能にする。他のテストは override が
+// 未設定のまま実装へ委譲されるため、通常の（実 localStorage 由来の）上限で動く。
+const storageLimitMockState = vi.hoisted(() => ({
+  actual: undefined as unknown as () => number,
+  override: undefined as (() => number) | undefined,
+}));
+
+vi.mock("./use-storage-limit", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./use-storage-limit")>();
+  storageLimitMockState.actual = actual.getCurrentStorageLimitBytes;
+
+  return {
+    ...actual,
+    getCurrentStorageLimitBytes: () =>
+      (storageLimitMockState.override ?? storageLimitMockState.actual)(),
+  };
+});
 
 const scrollMocks = setupScrollMocks();
 
@@ -60,6 +84,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   localStorage.clear();
   mediaListeners.clear();
   document.documentElement.className = "";
@@ -146,6 +171,9 @@ const renderLawViewerContentRoute = (
   repository?: LawRepository,
   withDisplayPreferences = false,
 ) => {
+  // LawViewerPageContent は savedLawUseCase を必須 prop として要求する（無音の上限なし
+  // フォールバックを避けるため）。本番の Loader 経路を模し、ここで明示的に組み立てて渡す。
+  const savedLawUseCase = createSavedLawUseCase(storageRepository);
   const BaseLawViewerRoute = () => {
     const { lawId } = useParams({ from: "/laws/$lawId" });
 
@@ -153,6 +181,7 @@ const renderLawViewerContentRoute = (
       <LawViewerPageContent
         lawId={lawId}
         repository={repository}
+        savedLawUseCase={savedLawUseCase}
         state={state}
         storageRepository={storageRepository}
       />
@@ -166,6 +195,7 @@ const renderLawViewerContentRoute = (
         activeArticleNumber={article}
         lawId={lawId}
         repository={repository}
+        savedLawUseCase={savedLawUseCase}
         state={state}
         storageRepository={storageRepository}
       />
@@ -293,7 +323,12 @@ const nonNumericArticleState = {
 
 describe("LawViewerPageContent", () => {
   it("renders a loading state from the page state contract", () => {
-    render(<LawViewerPageContent state={{ status: "loading" }} />);
+    // "loading" 状態では savedLawUseCase は使われないが、必須 prop なので契約を満たす値を渡す。
+    const savedLawUseCase = createSavedLawUseCase(createMemoryStorageRepository().repository);
+
+    render(
+      <LawViewerPageContent savedLawUseCase={savedLawUseCase} state={{ status: "loading" }} />,
+    );
 
     expect(screen.getByLabelText("法令本文を読み込み中")).toBeInTheDocument();
   });
@@ -326,9 +361,8 @@ describe("LawViewerPageContent", () => {
     renderLawViewerRoute("/laws/129AC0000000089", repository);
 
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
-    // 未ピン留めは左レールの操作ボタンが「ピン留め」であることで判別する。
-    expect(screen.getByRole("button", { name: "ピン留め" })).toBeInTheDocument();
-    expect(screen.queryByText("ピン留め中")).not.toBeInTheDocument();
+    // 未ダウンロードは左レールの操作ボタンが「ダウンロード」であることで判別する。
+    expect(screen.getByRole("button", { name: "ダウンロード" })).toBeInTheDocument();
     expect(calls).toEqual([
       {
         input:
@@ -348,22 +382,89 @@ describe("LawViewerPageContent", () => {
 
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "ピン留め" }));
+    await user.click(screen.getByRole("button", { name: "ダウンロード" }));
 
     // pin は保存に成功してからピンを立てる契約のため、本文も保存されていること。
     // pin は save と pinLaw の 2 段の await を含むため、表示の反映は findBy で待つ。
-    expect(await screen.findByText("ピン留め中")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "ピン留めを解除" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "ダウンロード済み" })).toBeInTheDocument();
     expect(storage.getSavedDocument()?.law.title).toBe("民法");
     await expect(storage.repository.isLawPinned("129AC0000000089")).resolves.toBe(true);
 
-    await user.click(screen.getByRole("button", { name: "ピン留めを解除" }));
+    await user.click(screen.getByRole("button", { name: "ダウンロード済み" }));
 
-    expect(await screen.findByRole("button", { name: "ピン留め" })).toBeInTheDocument();
-    expect(screen.queryByText("ピン留め中")).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "ダウンロード" })).toBeInTheDocument();
     await expect(storage.repository.isLawPinned("129AC0000000089")).resolves.toBe(false);
-    // ピン留めの解除は本文を消さない（LRU 対象からは外れるだけ）。
+    // ダウンロード指定の解除は本文を消さない（LRU 対象からは外れるだけ）。
     expect(storage.getSavedDocument()).toBeDefined();
+  });
+
+  it("requests storage persistence only on the first download, not on repeated downloads", async () => {
+    const persist = vi.fn(() => Promise.resolve(true));
+    vi.stubGlobal("navigator", {
+      storage: { persist, persisted: () => Promise.resolve(false) },
+    });
+
+    const storage = createMemoryStorageRepository();
+    const { user } = renderLawViewerRoute(
+      "/laws/129AC0000000089",
+      createFixtureRepository().repository,
+      storage.repository,
+    );
+
+    expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+
+    // 1 回目のダウンロード指定で要求が飛び、フラグが立つ。
+    await user.click(screen.getByRole("button", { name: "ダウンロード" }));
+    expect(await screen.findByRole("button", { name: "ダウンロード済み" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(persist).toHaveBeenCalledTimes(1);
+    });
+    expect(localStorage.getItem(PERSISTENCE_REQUESTED_STORAGE_KEY)).toBe("1");
+
+    // 解除してから再度ダウンロード指定しても、2 回目は要求しない。
+    await user.click(screen.getByRole("button", { name: "ダウンロード済み" }));
+    expect(await screen.findByRole("button", { name: "ダウンロード" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "ダウンロード" }));
+    expect(await screen.findByRole("button", { name: "ダウンロード済み" })).toBeInTheDocument();
+
+    expect(persist).toHaveBeenCalledTimes(1);
+  });
+
+  it("succeeds without a failure banner when localStorage access throws during download", async () => {
+    // Cookie を無効化した環境や Safari のプライベートブラウジングを模す。pin 自体は成功する
+    // (setSavedState も走る) のに、localStorage への素のアクセスが未保護だと後続の例外が
+    // catch に落ち、古い isPinned: false を見て失敗バナーを出す不整合になる回帰テスト。
+    const storage = createMemoryStorageRepository();
+    const { user } = renderLawViewerRoute(
+      "/laws/129AC0000000089",
+      createFixtureRepository().repository,
+      storage.repository,
+    );
+
+    expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+
+    const originalDescriptor = Object.getOwnPropertyDescriptor(window, "localStorage");
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      get() {
+        throw new DOMException("blocked", "SecurityError");
+      },
+    });
+
+    try {
+      await user.click(screen.getByRole("button", { name: "ダウンロード" }));
+
+      expect(await screen.findByRole("button", { name: "ダウンロード済み" })).toBeInTheDocument();
+      await expect(storage.repository.isLawPinned("129AC0000000089")).resolves.toBe(true);
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    } finally {
+      if (originalDescriptor === undefined) {
+        Reflect.deleteProperty(window, "localStorage");
+      } else {
+        Object.defineProperty(window, "localStorage", originalDescriptor);
+      }
+    }
   });
 
   it("pins a law opened with a base date without stealing the current revision slot", async () => {
@@ -402,10 +503,10 @@ describe("LawViewerPageContent", () => {
 
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "ピン留め" }));
+    await user.click(screen.getByRole("button", { name: "ダウンロード" }));
 
-    expect(await screen.findByText("ピン留め中")).toBeInTheDocument();
-    // 基準日指定で開いた過去版をピン留めしても、既存の現行版スロットは奪われない。
+    expect(await screen.findByRole("button", { name: "ダウンロード済み" })).toBeInTheDocument();
+    // 基準日指定で開いた過去版をダウンロード指定しても、既存の現行版スロットは奪われない。
     await expect(
       storageRepository.getLawDocument(sampleLawViewerDocument.law.lawId),
     ).resolves.toMatchObject({ revision: sampleLawViewerDocument.revision });
@@ -424,13 +525,12 @@ describe("LawViewerPageContent", () => {
 
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "ピン留め" }));
+    await user.click(screen.getByRole("button", { name: "ダウンロード" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "ピン留めできませんでした。端末の保存領域を確認してください。",
+      "ダウンロードできませんでした。端末の保存領域を確認してください。",
     );
-    expect(screen.getByRole("button", { name: "ピン留め" })).toBeEnabled();
-    expect(screen.queryByText("ピン留め中")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ダウンロード" })).toBeEnabled();
     await expect(storageRepository.isLawPinned("129AC0000000089")).resolves.toBe(false);
   });
 
@@ -442,8 +542,8 @@ describe("LawViewerPageContent", () => {
         nodes: sampleLawViewerDocument.nodes,
       }),
     );
-    // ローダーの初期表示はピン留め状態から決まる。保存済みでもピン留めしていなければ
-    // 「ピン留めを解除」ボタンは表示されないため、事前にピン留めしておく。
+    // ローダーの初期表示はダウンロード状態から決まる。保存済みでもダウンロード指定していなければ
+    // 「ダウンロード済み」ボタンは表示されないため、事前にダウンロード指定しておく。
     await storage.repository.pinLaw(sampleLawViewerDocument.law.lawId);
     const { user } = renderLawViewerRoute(
       "/laws/129AC0000000089",
@@ -451,12 +551,11 @@ describe("LawViewerPageContent", () => {
       storage.repository,
     );
 
-    expect(await screen.findByRole("button", { name: "ピン留めを解除" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "ダウンロード済み" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "ピン留めを解除" }));
+    await user.click(screen.getByRole("button", { name: "ダウンロード済み" }));
 
-    expect(screen.getByRole("button", { name: "ピン留め" })).toBeInTheDocument();
-    expect(screen.queryByText("ピン留め中")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ダウンロード" })).toBeInTheDocument();
     // LRU（PR 3）対象から外れるだけで、本文は消えない。
     expect(storage.getSavedDocument()).toBeDefined();
   });
@@ -588,6 +687,72 @@ describe("LawViewerPageContent", () => {
 
     // 自動保存はユーザーが要求した操作ではないため、失敗をバナーで知らせない。
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("evicts an older law when opening a new one exceeds the limit", async () => {
+    // 上限は選択肢の最小値でも 100 MB あり、fixture の本文では届かない。
+    // 上限そのものではなく「上限を超えたら古い方が落ちる」振る舞いを見たいので、
+    // getCurrentStorageLimitBytes をモックして小さい上限を注入し、既存の保存を実測で超える大きさに膨らませる。
+    const bulkyNodes = Array.from({ length: 200 }, (_node, index) => ({
+      ...sampleLawViewerDocument.nodes[0],
+      id: `bulky-${index.toString()}`,
+      plainText: "あ".repeat(1_000),
+    }));
+
+    storageLimitMockState.override = () => 1_000;
+
+    try {
+      const storage = createMemoryStorageRepository();
+
+      await storage.repository.saveLawDocument({
+        law: { ...sampleLawViewerDocument.law, lawId: "000AC0000000001", title: "古い法令" },
+        revision: {
+          ...sampleLawViewerDocument.revision,
+          lawId: "000AC0000000001",
+          revisionId: "000AC0000000001_rev",
+        },
+        nodes: bulkyNodes,
+      });
+
+      renderLawViewerRoute(
+        "/laws/129AC0000000089",
+        createFixtureRepository().repository,
+        storage.repository,
+      );
+
+      expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+
+      // 上限を超えたので、より古い法令が落ちる。
+      await waitFor(async () => {
+        await expect(storage.repository.getLawDocument("000AC0000000001")).resolves.toBeUndefined();
+      });
+    } finally {
+      storageLimitMockState.override = undefined;
+    }
+  });
+
+  it("does not refetch the law when the storage limit changes in another tab", async () => {
+    // 容量上限は useMemo/effect の依存に入れていないため、他タブでの上限変更（storage
+    // イベント）を受けても savedLawUseCase の参照は変わらず、読み込み effect は再実行されない
+    // （= e-Gov への再取得が走らない）ことを検証する。バグを再注入すると（limitBytes を
+    // useStorageLimit 経由で依存配列へ戻すと）、この event で effect が再実行され calls が増える。
+    const { calls, repository } = createFixtureRepository();
+
+    renderLawViewerRoute("/laws/129AC0000000089", repository);
+
+    expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+    const callCountAfterInitialLoad = calls.length;
+
+    await act(async () => {
+      // 他タブが容量上限を変更し、それを storage イベントで同期した状況を模す。
+      localStorage.setItem(STORAGE_LIMIT_STORAGE_KEY, "100");
+      window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_LIMIT_STORAGE_KEY }));
+      // 再取得が走るなら、ここまでの間に発火する余地を与える。
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(calls).toHaveLength(callCountAfterInitialLoad);
   });
 
   it("既定は読みやすい表示で本文を描画する", async () => {
@@ -1206,10 +1371,10 @@ describe("LawViewerPageContent", () => {
     await screen.findByRole("article", { name: "民法" });
 
     const leftRail = screen.getByRole("complementary", { name: "法令の目次" });
-    // 条番号ジャンプ・ピン留めは文書レベル操作として左レールに入る
+    // 条番号ジャンプ・ダウンロードは文書レベル操作として左レールに入る
     expect(within(leftRail).getByRole("button", { name: "移動" })).toBeInTheDocument();
     expect(
-      within(leftRail).getByRole("button", { name: /^ピン留め(を解除)?$/ }),
+      within(leftRail).getByRole("button", { name: /^ダウンロード(済み)?$/ }),
     ).toBeInTheDocument();
 
     const rightRail = screen.getByRole("complementary", { name: "学習コンテキスト" });
@@ -1239,7 +1404,9 @@ describe("LawViewerPageContent", () => {
 
     const sheet = await screen.findByRole("dialog");
     expect(within(sheet).getByRole("button", { name: "移動" })).toBeInTheDocument();
-    expect(within(sheet).getByRole("button", { name: /^ピン留め(を解除)?$/ })).toBeInTheDocument();
+    expect(
+      within(sheet).getByRole("button", { name: /^ダウンロード(済み)?$/ }),
+    ).toBeInTheDocument();
     expect(within(sheet).getByRole("navigation", { name: "法令目次" })).toBeInTheDocument();
   });
 

@@ -11,6 +11,7 @@ import {
 import { createStorageRepository } from "@/core/storage";
 import type { StorageRepository } from "@/core/storage";
 import { Button } from "@/shared/ui/button";
+import { formatByteSize } from "@/shared/utils/bytes";
 
 import { useSavedLaws } from "./use-saved-laws";
 import { useSearchPalette } from "./search-palette-context";
@@ -227,9 +228,11 @@ export const HomePage = ({
                   >
                     {savedLaw.law.title}
                   </Link>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {savedLaw.nodeCount.toLocaleString("ja-JP")} ノード
-                  </p>
+                  {savedLaw.byteSize === undefined ? null : (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {formatByteSize(savedLaw.byteSize)}
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>

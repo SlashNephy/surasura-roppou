@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Bookmark, Collection } from "@/core/domain";
 import type { SavedDataExport, StorageRepository } from "@/core/storage";
+import { formatByteSize } from "@/shared/utils/bytes";
 import { createMemoryStorageRepository, createSavedLawDocument } from "@/test/fixtures/storage";
 import { setupScrollMocks } from "@/test/scrollMocks";
 
@@ -19,10 +20,113 @@ describe("SavedPage", () => {
     renderSavedRoute("/saved");
 
     expect(await screen.findByRole("heading", { name: "保存リスト" })).toBeInTheDocument();
-    expect(screen.getByText("ピン留めした法令はまだありません。")).toBeInTheDocument();
+    expect(screen.getByText("ダウンロードした法令はまだありません。")).toBeInTheDocument();
     expect(screen.getByText("最近開いた法令はまだありません。")).toBeInTheDocument();
     expect(screen.getByText("保存項目はまだありません。")).toBeInTheDocument();
     expect(screen.getByText("コレクションはまだありません。")).toBeInTheDocument();
+  });
+
+  it("deletes a saved law after confirming", async () => {
+    const storage = createMemoryStorageRepository();
+
+    await storage.repository.saveLawDocument({
+      law: sampleLawViewerDocument.law,
+      nodes: sampleLawViewerDocument.nodes,
+      revision: sampleLawViewerDocument.revision,
+    });
+
+    const { user } = renderSavedRoute("/saved", storage.repository);
+
+    expect(await screen.findByRole("link", { name: "民法" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "民法を削除" }));
+    await user.click(await screen.findByRole("button", { name: "削除する" }));
+
+    await waitFor(async () => {
+      await expect(storage.repository.getLawDocument("129AC0000000089")).resolves.toBeUndefined();
+    });
+    expect(screen.queryByRole("link", { name: "民法" })).not.toBeInTheDocument();
+  });
+
+  it("shows a delete error inside the dialog and keeps the law when deletion fails", async () => {
+    const storage = createMemoryStorageRepository();
+
+    await storage.repository.saveLawDocument({
+      law: sampleLawViewerDocument.law,
+      nodes: sampleLawViewerDocument.nodes,
+      revision: sampleLawViewerDocument.revision,
+    });
+
+    const deleteLawDocument = vi.fn<StorageRepository["deleteLawDocument"]>(() =>
+      Promise.reject(new Error("storage unavailable")),
+    );
+    const repository: StorageRepository = { ...storage.repository, deleteLawDocument };
+
+    const { user } = renderSavedRoute("/saved", repository);
+
+    expect(await screen.findByRole("link", { name: "民法" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "民法を削除" }));
+    await user.click(await screen.findByRole("button", { name: "削除する" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      await within(dialog).findByText(
+        "法令を削除できませんでした。時間をおいて再試行してください。",
+      ),
+    ).toBeInTheDocument();
+
+    await expect(storage.repository.getLawDocument("129AC0000000089")).resolves.toBeDefined();
+  });
+
+  it("prevents duplicate delete requests while a deletion is in progress", async () => {
+    const storage = createMemoryStorageRepository();
+
+    await storage.repository.saveLawDocument({
+      law: sampleLawViewerDocument.law,
+      nodes: sampleLawViewerDocument.nodes,
+      revision: sampleLawViewerDocument.revision,
+    });
+
+    const deferred = createDeferred();
+    const deleteLawDocument = vi.fn<StorageRepository["deleteLawDocument"]>(() => deferred.promise);
+    const repository: StorageRepository = { ...storage.repository, deleteLawDocument };
+
+    const { user } = renderSavedRoute("/saved", repository);
+
+    expect(await screen.findByRole("link", { name: "民法" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "民法を削除" }));
+    const confirmButton = await screen.findByRole("button", { name: "削除する" });
+
+    await user.click(confirmButton);
+    expect(confirmButton).toBeDisabled();
+    await user.click(confirmButton);
+    expect(deleteLawDocument).toHaveBeenCalledTimes(1);
+
+    deferred.resolve();
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+  });
+
+  it("keeps the law when the confirmation is dismissed", async () => {
+    const storage = createMemoryStorageRepository();
+
+    await storage.repository.saveLawDocument({
+      law: sampleLawViewerDocument.law,
+      nodes: sampleLawViewerDocument.nodes,
+      revision: sampleLawViewerDocument.revision,
+    });
+
+    const { user } = renderSavedRoute("/saved", storage.repository);
+
+    expect(await screen.findByRole("link", { name: "民法" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "民法を削除" }));
+    await user.click(await screen.findByRole("button", { name: "キャンセル" }));
+
+    await expect(storage.repository.getLawDocument("129AC0000000089")).resolves.toBeDefined();
   });
 
   it("splits saved laws into a pinned section and a recently opened section", async () => {
@@ -48,13 +152,40 @@ describe("SavedPage", () => {
 
     renderSavedRoute("/saved", storage.repository);
 
-    const pinnedSection = await screen.findByRole("region", { name: "ピン留めした法令" });
+    const pinnedSection = await screen.findByRole("region", { name: "ダウンロード済み" });
     const recentSection = screen.getByRole("region", { name: "最近開いた法令" });
 
     expect(within(pinnedSection).getByText("民法")).toBeInTheDocument();
     expect(within(pinnedSection).queryByText("刑法")).not.toBeInTheDocument();
     expect(within(recentSection).getByText("刑法")).toBeInTheDocument();
     expect(within(recentSection).queryByText("民法")).not.toBeInTheDocument();
+  });
+
+  it("shows the stored size of each law and the total against the limit", async () => {
+    const storage = createMemoryStorageRepository();
+
+    await storage.repository.saveLawDocument({
+      law: sampleLawViewerDocument.law,
+      nodes: sampleLawViewerDocument.nodes,
+      revision: sampleLawViewerDocument.revision,
+    });
+
+    renderSavedRoute("/saved", storage.repository);
+
+    const recentSection = await screen.findByRole("region", { name: "最近開いた法令" });
+
+    // ノード数ではなく容量を出す。ノード数は判断材料にならない。
+    expect(within(recentSection).getByText(/KB|MB/)).toBeInTheDocument();
+    expect(within(recentSection).queryByText(/ノード/)).not.toBeInTheDocument();
+
+    // 合計と上限を出す。分母（上限）だけでなく分子（実際の使用量）も、保存した本文の
+    // 実測バイト数と一致していることを確認する。分子が 0 のまま出るバグは分母だけの
+    // 表明では検出できない。
+    const expectedUsedBytes = new Blob([JSON.stringify(sampleLawViewerDocument.nodes)]).size;
+
+    expect(
+      screen.getByText(`オフライン保存: ${formatByteSize(expectedUsedBytes)} / 250 MB`),
+    ).toBeInTheDocument();
   });
 
   it("orders each section by its own recency: pinnedAt for pinned laws, updatedAt for recent laws", async () => {
@@ -104,7 +235,7 @@ describe("SavedPage", () => {
 
     renderSavedRoute("/saved", storage.repository);
 
-    const pinnedSection = await screen.findByRole("region", { name: "ピン留めした法令" });
+    const pinnedSection = await screen.findByRole("region", { name: "ダウンロード済み" });
     const recentSection = screen.getByRole("region", { name: "最近開いた法令" });
 
     expect(
@@ -152,7 +283,7 @@ describe("SavedPage", () => {
 
     renderSavedRoute("/saved", storage.repository);
 
-    const pinnedSection = await screen.findByRole("region", { name: "ピン留めした法令" });
+    const pinnedSection = await screen.findByRole("region", { name: "ダウンロード済み" });
 
     expect(
       within(pinnedSection)
@@ -653,8 +784,11 @@ const renderSavedRoute = (
   storageRepository = createMemoryStorageRepository().repository,
 ) => {
   const history = createMemoryHistory({ initialEntries: [path] });
+  const user = userEvent.setup();
 
   render(<RouterProvider router={createAppRouter({ history, storageRepository })} />);
+
+  return { user };
 };
 
 const createBookmark = (): Bookmark => ({

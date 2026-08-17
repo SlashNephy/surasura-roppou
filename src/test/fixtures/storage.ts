@@ -141,6 +141,7 @@ export const createMemoryStorageRepository = (
           isCurrent,
           savedAt: nextSavedAt,
           updatedAt: writtenAt,
+          byteSize: new Blob([JSON.stringify(document.nodes)]).size,
         });
         return Promise.resolve({ isCurrent });
       },
@@ -151,18 +152,81 @@ export const createMemoryStorageRepository = (
         return Promise.resolve(savedRevisions.get(toRevisionKey(lawId, revisionId))?.document);
       },
       listSavedLaws() {
+        const byteSizeByLawId = new Map<string, number>();
+
+        for (const entry of savedRevisions.values()) {
+          if (entry.byteSize !== undefined) {
+            const lawId = entry.document.law.lawId;
+
+            byteSizeByLawId.set(lawId, (byteSizeByLawId.get(lawId) ?? 0) + entry.byteSize);
+          }
+        }
+
         return Promise.resolve(
           [...savedRevisions.values()]
             .filter((entry) => entry.isCurrent)
             .sort(byNewestFirst)
+            .map((entry) => {
+              const byteSize = byteSizeByLawId.get(entry.document.law.lawId);
+
+              return {
+                law: entry.document.law,
+                revision: entry.document.revision,
+                nodeCount: entry.document.nodes.length,
+                savedAt: entry.savedAt,
+                updatedAt: entry.updatedAt,
+                ...(byteSize === undefined ? {} : { byteSize }),
+              };
+            }),
+        );
+      },
+      listSavedLawRecords() {
+        return Promise.resolve(
+          [...savedRevisions.values()]
             .map((entry) => ({
-              law: entry.document.law,
-              revision: entry.document.revision,
+              lawId: entry.document.law.lawId,
+              revisionId: entry.document.revision.revisionId,
+              isCurrent: entry.isCurrent ? (1 as const) : (0 as const),
               nodeCount: entry.document.nodes.length,
               savedAt: entry.savedAt,
               updatedAt: entry.updatedAt,
-            })),
+              ...(entry.byteSize === undefined ? {} : { byteSize: entry.byteSize }),
+            }))
+            // 実リポジトリと同じく updatedAt 昇順。同値のときは savedLaws の複合主キー
+            // [lawId, revisionId] と同じ順序（lawId を先に比較し、次に revisionId）で決める。
+            // IndexedDB は索引キーが同値のレコードを主キー順で返すため、ここを revisionId
+            // だけで決めると実装間で順序が食い違う（この後始末は削除順に直結する）。
+            //
+            // ここでの比較は実 IndexedDB の getAllFromIndex 返却順を模倣する役割であり、
+            // IndexedDB のキー比較は UTF-16 コード単位による素の比較でロケール非依存。
+            // localeCompare は約物（アンダースコアなど）を主強度で無視する等コード単位比較
+            // とは異なる規則で並べ替えるため、素の比較演算子で揃える。updatedAt は ISO 8601
+            // の日時文字列で ASCII の数字と区切り文字のみからなり、コード単位比較でも
+            // localeCompare でも結果は変わらないが、模倣対象のアルゴリズムに合わせて統一する。
+            .sort((left, right) => {
+              if (left.updatedAt !== right.updatedAt) {
+                return left.updatedAt < right.updatedAt ? -1 : 1;
+              }
+
+              if (left.lawId !== right.lawId) {
+                return left.lawId < right.lawId ? -1 : 1;
+              }
+
+              return left.revisionId === right.revisionId
+                ? 0
+                : left.revisionId < right.revisionId
+                  ? -1
+                  : 1;
+            }),
         );
+      },
+      setSavedLawByteSize(lawId, revisionId, byteSize) {
+        const entry = savedRevisions.get(toRevisionKey(lawId, revisionId));
+
+        if (entry !== undefined) {
+          entry.byteSize = byteSize;
+        }
+        return Promise.resolve();
       },
       listSavedRevisions(lawId) {
         return Promise.resolve(
@@ -409,6 +473,7 @@ interface MemorySavedRevision {
   isCurrent: boolean;
   savedAt: string;
   updatedAt: string;
+  byteSize?: number;
 }
 
 // Map のキーで [lawId, revisionId] の複合キーを表現する。区切りは ID に現れない文字を使う。

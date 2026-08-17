@@ -1,6 +1,14 @@
 import { type SyntheticEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
-import { Archive, Download, FolderPlus, Pin, StickyNote, type LucideIcon } from "lucide-react";
+import {
+  Archive,
+  CircleCheck,
+  Download,
+  FolderPlus,
+  StickyNote,
+  Trash2,
+  type LucideIcon,
+} from "lucide-react";
 
 import type { Bookmark, Collection } from "@/core/domain";
 import { createSavedDataFile } from "@/core/native-integration";
@@ -14,11 +22,21 @@ import {
 } from "@/core/storage";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/shared/ui/dialog";
 import { Input } from "@/shared/ui/input";
+import { formatByteSize } from "@/shared/utils/bytes";
 import { formatIsoDateLabel } from "@/shared/utils/dates";
 
 import { downloadTextFile } from "./download-text-file";
 import { parseTags } from "./saved-page-utils";
+import { getCurrentStorageLimitBytes, useStorageLimit } from "./use-storage-limit";
 
 const defaultStorageRepository = createStorageRepository();
 
@@ -63,8 +81,15 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
   const [exportMessage, setExportMessage] = useState<string | undefined>();
   const [exportError, setExportError] = useState<string | undefined>();
   const [isExporting, setIsExporting] = useState(false);
+  const [lawPendingDeletion, setLawPendingDeletion] = useState<SavedLawSummary | undefined>();
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | undefined>();
+  const { limitBytes } = useStorageLimit();
   const savedLawUseCase = useMemo(
-    () => createSavedLawUseCase(storageRepository),
+    () =>
+      createSavedLawUseCase(storageRepository, {
+        getStorageLimitBytes: getCurrentStorageLimitBytes,
+      }),
     [storageRepository],
   );
   const savedLawTitlesById = useMemo(
@@ -105,6 +130,32 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
       setError("保存リストを読み込めませんでした。");
     }
   }, [applySavedPageData, loadSavedPageData]);
+
+  const handleConfirmDelete = async () => {
+    if (lawPendingDeletion === undefined || isDeleting) {
+      return;
+    }
+
+    setIsDeleting(true);
+    setDeleteError(undefined);
+
+    try {
+      await savedLawUseCase.remove(lawPendingDeletion.law.lawId);
+      setLawPendingDeletion(undefined);
+      await reload();
+    } catch {
+      // ダイアログはポータルで別ツリーに描画され開いている間はページ本体が
+      // aria-hidden になるため、失敗はダイアログ内で知らせて再試行できるようにする。
+      setDeleteError("法令を削除できませんでした。時間をおいて再試行してください。");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const requestDeleteLaw = (savedLaw: SavedLawSummary) => {
+    setDeleteError(undefined);
+    setLawPendingDeletion(savedLaw);
+  };
 
   useEffect(() => {
     let isCurrent = true;
@@ -163,6 +214,11 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
     }
   };
 
+  const usedBytes = savedLaws.reduce((sum, savedLaw) => sum + (savedLaw.byteSize ?? 0), 0);
+  const pinnedBytes = savedLaws
+    .filter((savedLaw) => pinnedAtByLawId.has(savedLaw.law.lawId))
+    .reduce((sum, savedLaw) => sum + (savedLaw.byteSize ?? 0), 0);
+
   return (
     <section className="mx-auto grid w-full max-w-6xl gap-8 px-5 py-8 md:px-6">
       <div className="flex min-w-0 flex-wrap items-start justify-between gap-4">
@@ -189,6 +245,14 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
         </Button>
       </div>
 
+      <p className="text-sm text-muted-foreground">
+        オフライン保存: {formatByteSize(usedBytes)} / {formatByteSize(limitBytes)}
+        <span className="ml-2">
+          （ダウンロード済み {formatByteSize(pinnedBytes)} ・ 最近開いた{" "}
+          {formatByteSize(usedBytes - pinnedBytes)}）
+        </span>
+      </p>
+
       {error === undefined ? null : <ErrorMessage>{error}</ErrorMessage>}
       {exportMessage === undefined ? null : <StatusMessage>{exportMessage}</StatusMessage>}
       {exportError === undefined ? null : <ErrorMessage>{exportError}</ErrorMessage>}
@@ -196,16 +260,19 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem] xl:items-start">
         <div className="grid gap-6">
           <SavedLawList
-            emptyMessage="ピン留めした法令はまだありません。"
+            emptyMessage="ダウンロードした法令はまだありません。"
             headingId="pinned-laws-heading"
-            icon={Pin}
+            icon={CircleCheck}
+            onRequestDelete={requestDeleteLaw}
             savedLaws={toPinnedSavedLaws(savedLaws, pinnedAtByLawId)}
-            title="ピン留めした法令"
+            title="ダウンロード済み"
           />
           <SavedLawList
+            description="空き容量が足りなくなると、下にあるものから削除されます。"
             emptyMessage="最近開いた法令はまだありません。"
             headingId="recent-laws-heading"
             icon={Archive}
+            onRequestDelete={requestDeleteLaw}
             // updatedAt 降順。PR 3 の LRU が消す順の逆順にあたる。
             savedLaws={savedLaws
               .filter((savedLaw) => !pinnedAtByLawId.has(savedLaw.law.lawId))
@@ -225,6 +292,51 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
           />
         </div>
       </div>
+
+      {lawPendingDeletion === undefined ? null : (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open && !isDeleting) {
+              setLawPendingDeletion(undefined);
+              setDeleteError(undefined);
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{lawPendingDeletion.law.title}を削除</DialogTitle>
+              <DialogDescription>
+                この法令の保存データを削除します。もう一度開けば再取得されます。
+              </DialogDescription>
+            </DialogHeader>
+            {deleteError === undefined ? null : <ErrorMessage>{deleteError}</ErrorMessage>}
+            <DialogFooter>
+              <Button
+                disabled={isDeleting}
+                onClick={() => {
+                  void handleConfirmDelete();
+                }}
+                type="button"
+                variant="destructive"
+              >
+                削除する
+              </Button>
+              <Button
+                disabled={isDeleting}
+                onClick={() => {
+                  setLawPendingDeletion(undefined);
+                  setDeleteError(undefined);
+                }}
+                type="button"
+                variant="outline"
+              >
+                キャンセル
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </section>
   );
 };
@@ -242,7 +354,10 @@ export const SavedCollectionPage = ({
     status: "loading",
   });
   const savedLawUseCase = useMemo(
-    () => createSavedLawUseCase(storageRepository),
+    () =>
+      createSavedLawUseCase(storageRepository, {
+        getStorageLimitBytes: getCurrentStorageLimitBytes,
+      }),
     [storageRepository],
   );
 
@@ -365,20 +480,27 @@ const toPinnedSavedLaws = (
     .map((entry) => entry.savedLaw);
 
 const SavedLawList = ({
+  description,
   emptyMessage,
   headingId,
   icon,
+  onRequestDelete,
   savedLaws,
   title,
 }: {
+  description?: string;
   emptyMessage: string;
   headingId: string;
   icon: LucideIcon;
+  onRequestDelete: (savedLaw: SavedLawSummary) => void;
   savedLaws: SavedLawSummary[];
   title: string;
 }) => (
   <section aria-labelledby={headingId} className="grid gap-3">
     <SectionHeading icon={icon} id={headingId} title={title} />
+    {description === undefined ? null : (
+      <p className="text-sm text-muted-foreground">{description}</p>
+    )}
     {savedLaws.length === 0 ? (
       <EmptyState>{emptyMessage}</EmptyState>
     ) : (
@@ -396,9 +518,23 @@ const SavedLawList = ({
                 </Link>
                 <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
                   <span>最終取得: {formatIsoDateLabel(savedLaw.revision.fetchedAt)}</span>
-                  <span>{savedLaw.nodeCount.toLocaleString("ja-JP")} ノード</span>
+                  {savedLaw.byteSize === undefined ? null : (
+                    <span>{formatByteSize(savedLaw.byteSize)}</span>
+                  )}
                 </div>
               </div>
+              <Button
+                aria-label={`${savedLaw.law.title}を削除`}
+                className="shrink-0"
+                onClick={() => {
+                  onRequestDelete(savedLaw);
+                }}
+                size="icon"
+                type="button"
+                variant="ghost"
+              >
+                <Trash2 className="size-4" aria-hidden="true" />
+              </Button>
             </div>
           </li>
         ))}

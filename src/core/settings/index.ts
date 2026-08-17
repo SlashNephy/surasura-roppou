@@ -31,4 +31,14 @@ export {
   type DisplayTheme,
 } from "./display-preferences";
 export { getOcrModelConsent, setOcrModelConsent } from "./ocr-consent";
+export {
+  DEFAULT_STORAGE_LIMIT_MEGABYTES,
+  getStorageLimitMegabytes,
+  megabytesToBytes,
+  selectableStorageLimits,
+  setStorageLimitMegabytes,
+  STORAGE_LIMIT_STORAGE_KEY,
+  subscribeStorageLimit,
+  type StorageLimitMegabytes,
+} from "./storage-limit";
 export { baseDateToStudyYear, listSelectableStudyYears, studyYearToBaseDate } from "./study-year";

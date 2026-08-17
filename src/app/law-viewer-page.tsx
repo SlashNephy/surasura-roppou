@@ -8,15 +8,22 @@ import {
   useState,
 } from "react";
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
-import { Clipboard, LinkIcon, ListTree, Pin, PinOff } from "lucide-react";
+import { CircleCheck, Clipboard, Download, LinkIcon, ListTree } from "lucide-react";
 
 import type { LawNode, LawRevision } from "@/core/domain";
 import { buildLawArticleUrl, computeArticleFingerprint } from "@/core/domain";
 import { createEgovLawRepository } from "@/core/egov";
 import type { LawRepository } from "@/core/egov";
 import { resolveAsOf } from "@/core/settings";
-import { createSavedLawUseCase, createStorageRepository, generateStorageId } from "@/core/storage";
-import type { StorageRepository } from "@/core/storage";
+import {
+  createSavedLawUseCase,
+  createStorageRepository,
+  generateStorageId,
+  hasRequestedPersistence,
+  markPersistenceRequested,
+  requestStoragePersistence,
+} from "@/core/storage";
+import type { SavedLawUseCase, StorageRepository } from "@/core/storage";
 import {
   LawDocumentView,
   LawTableOfContents,
@@ -27,11 +34,11 @@ import {
   findArticleNode,
 } from "@/core/viewer";
 import type { LawTocItem } from "@/core/viewer";
-import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/shared/ui/sheet";
 import { Skeleton } from "@/shared/ui/skeleton";
+import { cn } from "@/shared/utils/cn";
 import { formatIsoDateLabel } from "@/shared/utils/dates";
 
 import { AnchorCompareDialog } from "./AnchorCompareDialog";
@@ -45,6 +52,7 @@ import type { LawViewerDocument } from "./law-viewer-sample";
 import { useAnchorVerification } from "./use-anchor-verification";
 import { useBaseDate } from "./use-base-date";
 import { useDisplayPreferences } from "./use-display-preferences";
+import { getCurrentStorageLimitBytes } from "./use-storage-limit";
 
 const defaultStorageRepository = createStorageRepository();
 const defaultLawRepository = createEgovLawRepository();
@@ -107,8 +115,15 @@ const LawViewerPageLoader = ({
   storageRepository: StorageRepository;
 }) => {
   const [state, setState] = useState<LawViewerState>({ status: "loading" });
+  // 上限は useMemo の依存に入れない。依存に入れると上限変更のたびに参照が変わり、
+  // 下の読み込み effect（deps に savedLawUseCase を持つ）まで再実行されてしまう
+  // （e-Gov への不要な再取得を誘発する）。getStorageLimitBytes は呼ばれるたびに
+  // 評価される契約なので、クロージャで都度ストアを読めば参照の同一性を保ったまま最新値を使える。
   const savedLawUseCase = useMemo(
-    () => createSavedLawUseCase(storageRepository),
+    () =>
+      createSavedLawUseCase(storageRepository, {
+        getStorageLimitBytes: getCurrentStorageLimitBytes,
+      }),
     [storageRepository],
   );
 
@@ -148,6 +163,7 @@ const LawViewerPageLoader = ({
       activeArticleNumber={activeArticleNumber}
       lawId={lawId}
       repository={repository}
+      savedLawUseCase={savedLawUseCase}
       state={state}
       storageRepository={storageRepository}
     />
@@ -158,12 +174,14 @@ export const LawViewerPageContent = ({
   activeArticleNumber,
   lawId = "",
   repository,
+  savedLawUseCase,
   state,
   storageRepository = defaultStorageRepository,
 }: {
   activeArticleNumber?: string;
   lawId?: string;
   repository?: LawRepository;
+  savedLawUseCase: SavedLawUseCase;
   state: LawViewerState;
   storageRepository?: StorageRepository;
 }) => {
@@ -184,6 +202,7 @@ export const LawViewerPageContent = ({
           activeArticleNumber={activeArticleNumber}
           lawId={lawId}
           repository={repository}
+          savedLawUseCase={savedLawUseCase}
           state={state}
           storageRepository={storageRepository}
         />
@@ -195,20 +214,18 @@ const LawViewerReadyState = ({
   activeArticleNumber: routeArticleNumber,
   lawId,
   repository,
+  savedLawUseCase,
   state: baseState,
   storageRepository,
 }: {
   activeArticleNumber?: string;
   lawId: string;
   repository?: LawRepository;
+  savedLawUseCase: SavedLawUseCase;
   state: Extract<LawViewerState, { status: "ready" }>;
   storageRepository: StorageRepository;
 }) => {
   const navigate = useNavigate();
-  const savedLawUseCase = useMemo(
-    () => createSavedLawUseCase(storageRepository),
-    [storageRepository],
-  );
   // 表示モードは設定（DisplayPreferences）で永続管理し、ビューワーは読むだけにする。
   const { textDisplayMode: displayMode } = useDisplayPreferences();
   const [savedState, setSavedState] = useSavedViewerState(baseState);
@@ -469,7 +486,8 @@ const LawViewerReadyState = ({
   };
 
   // 法令を開くと自動保存が走るため、「保存済み」は常に真になり情報量を失った。
-  // 代わりにユーザーの明示的な意図であるピン留め（PR 3 の自動削除対象外の印）を扱う。
+  // 代わりにユーザーの明示的な意図である「ダウンロード」（内部識別子は pin のまま。
+  // PR 3 の自動削除対象外の印）を扱う。
   const handleLawPinToggle = async () => {
     setIsSaving(true);
     setSaveError(undefined);
@@ -495,13 +513,20 @@ const LawViewerReadyState = ({
         { isCurrent: state === baseState && baseState.requestedAsOf === undefined },
       );
       setSavedState((previous) => ({ ...previous, isPinned: true }));
+
+      // ダウンロードは「これを残しておきたい」という最も明確な意思表示であり、
+      // Firefox のプロンプトが出ても文脈が通る唯一の瞬間。以後は設定画面に委ねる。
+      if (!hasRequestedPersistence()) {
+        markPersistenceRequested();
+        void requestStoragePersistence();
+      }
     } catch {
       // 解除の失敗は保存領域の空きと無関係（pinnedLaws からの削除は本文を書かない）なので、
-      // ピン留めと解除でメッセージを分け、ユーザーを誤誘導しないようにする。
+      // ダウンロードと取り消しでメッセージを分け、ユーザーを誤誘導しないようにする。
       setSaveError(
         savedState.isPinned
-          ? "ピン留めを解除できませんでした。時間をおいて再試行してください。"
-          : "ピン留めできませんでした。端末の保存領域を確認してください。",
+          ? "ダウンロードを取り消せませんでした。時間をおいて再試行してください。"
+          : "ダウンロードできませんでした。端末の保存領域を確認してください。",
       );
     } finally {
       setIsSaving(false);
@@ -608,17 +633,13 @@ const LawViewerReadyState = ({
                 施行日 {formatEffectiveDateLabel(state.revision)}
               </div>
             </div>
-            {savedState.isPinned ? (
-              <Badge variant="secondary" className="w-fit">
-                ピン留め中
-              </Badge>
-            ) : null}
-
-            {/* 文書レベル操作: ピン留め（基準日は法令番号の直下、条番号ジャンプは目次直下に置く） */}
+            {/* 文書レベル操作: ダウンロード（基準日は法令番号の直下、条番号ジャンプは目次直下に置く） */}
             <div className="grid gap-3 border-b pb-3">
               <Button
                 aria-describedby={saveError === undefined ? undefined : saveErrorId}
-                className="w-fit gap-2"
+                // 済みの状態は既存の主色で示す。このテーマの --primary は #166534
+                // （ダークは #4ade80）で既に緑なので、成功色のトークンを足す必要がない。
+                className={cn("w-fit gap-2", savedState.isPinned && "text-primary")}
                 disabled={isSaving}
                 onClick={() => {
                   void handleLawPinToggle();
@@ -627,11 +648,11 @@ const LawViewerReadyState = ({
                 variant={savedState.isPinned ? "outline" : "default"}
               >
                 {savedState.isPinned ? (
-                  <PinOff className="size-4" aria-hidden="true" />
+                  <CircleCheck className="size-4" aria-hidden="true" />
                 ) : (
-                  <Pin className="size-4" aria-hidden="true" />
+                  <Download className="size-4" aria-hidden="true" />
                 )}
-                {savedState.isPinned ? "ピン留めを解除" : "ピン留め"}
+                {savedState.isPinned ? "ダウンロード済み" : "ダウンロード"}
               </Button>
             </div>
 
@@ -902,10 +923,12 @@ const LawViewerReadyState = ({
                 指定された条文が見つかりません。
               </p>
             ) : null}
-            {/* ピン留め */}
+            {/* ダウンロード */}
             <Button
               aria-describedby={saveError === undefined ? undefined : `${saveErrorId}-mobile`}
-              className="w-fit gap-2"
+              // 済みの状態は既存の主色で示す。このテーマの --primary は #166534
+              // （ダークは #4ade80）で既に緑なので、成功色のトークンを足す必要がない。
+              className={cn("w-fit gap-2", savedState.isPinned && "text-primary")}
               disabled={isSaving}
               onClick={() => {
                 void handleLawPinToggle();
@@ -913,7 +936,12 @@ const LawViewerReadyState = ({
               type="button"
               variant={savedState.isPinned ? "outline" : "default"}
             >
-              {savedState.isPinned ? "ピン留めを解除" : "ピン留め"}
+              {savedState.isPinned ? (
+                <CircleCheck className="size-4" aria-hidden="true" />
+              ) : (
+                <Download className="size-4" aria-hidden="true" />
+              )}
+              {savedState.isPinned ? "ダウンロード済み" : "ダウンロード"}
             </Button>
             {/* 保存失敗はシート表示中だと本文側の alert が隠れるため、シート内にも通知する。 */}
             {saveError !== undefined ? (

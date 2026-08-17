@@ -1,9 +1,14 @@
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { DISPLAY_PREFERENCES_STORAGE_KEYS, getBaseDate, setBaseDate } from "@/core/settings";
+import {
+  DISPLAY_PREFERENCES_STORAGE_KEYS,
+  STORAGE_LIMIT_STORAGE_KEY,
+  getBaseDate,
+  setBaseDate,
+} from "@/core/settings";
 
 import { DisplayPreferencesProvider } from "./display-preferences";
 import { createAppRouter } from "./router";
@@ -43,6 +48,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   localStorage.clear();
   mediaListeners.clear();
   document.documentElement.className = "";
@@ -304,6 +310,63 @@ describe("SettingsPage データ", () => {
       "href",
       "/settings/data-transfer",
     );
+  });
+});
+
+describe("SettingsPage オフライン保存", () => {
+  it("shows the persistence state and lets the user request it", async () => {
+    const persist = vi.fn(() => Promise.resolve(true));
+
+    vi.stubGlobal("navigator", {
+      storage: {
+        persisted: () => Promise.resolve(false),
+        persist,
+        estimate: () => Promise.resolve({ usage: 1_048_576, quota: 104_857_600 }),
+      },
+    });
+
+    const { user } = renderSettingsRoute();
+
+    expect(await screen.findByText("保護されていません")).toBeInTheDocument();
+    expect(await screen.findByText("このアプリ全体の使用量: 1 MB")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "保護を有効にする" }));
+
+    expect(persist).toHaveBeenCalled();
+    expect(await screen.findByText("保護されています")).toBeInTheDocument();
+  });
+
+  it("keeps the unprotected state and hides no banner when persistence is denied", async () => {
+    const persist = vi.fn(() => Promise.resolve(false));
+
+    vi.stubGlobal("navigator", {
+      storage: {
+        persisted: () => Promise.resolve(false),
+        persist,
+        estimate: () => Promise.resolve({ usage: 1_048_576, quota: 104_857_600 }),
+      },
+    });
+
+    const { user } = renderSettingsRoute();
+
+    expect(await screen.findByText("保護されていません")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "保護を有効にする" }));
+
+    expect(persist).toHaveBeenCalled();
+    expect(await screen.findByText("保護されていません")).toBeInTheDocument();
+    expect(screen.queryByText("保護されています")).not.toBeInTheDocument();
+    // 拒否時に別途エラーバナーやトーストを出さないのが設計方針。
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("lets the user choose the offline storage limit", async () => {
+    const { user } = renderSettingsRoute();
+
+    await user.selectOptions(await screen.findByLabelText("オフライン保存の上限"), "100");
+
+    expect(window.localStorage.getItem(STORAGE_LIMIT_STORAGE_KEY)).toBe("100");
   });
 });
 

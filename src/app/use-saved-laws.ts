@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import { createSavedLawUseCase } from "@/core/storage";
 import type { SavedLawSummary, StorageRepository } from "@/core/storage";
 
+import { getCurrentStorageLimitBytes } from "./use-storage-limit";
+
 interface UseSavedLawsResult {
   savedLaws: SavedLawSummary[];
   savedLawsError: string | undefined;
@@ -12,7 +14,10 @@ export const useSavedLaws = (storageRepository: StorageRepository): UseSavedLaws
   const [savedLaws, setSavedLaws] = useState<SavedLawSummary[]>([]);
   const [savedLawsError, setSavedLawsError] = useState<string | undefined>();
   const savedLawUseCase = useMemo(
-    () => createSavedLawUseCase(storageRepository),
+    () =>
+      createSavedLawUseCase(storageRepository, {
+        getStorageLimitBytes: getCurrentStorageLimitBytes,
+      }),
     [storageRepository],
   );
 

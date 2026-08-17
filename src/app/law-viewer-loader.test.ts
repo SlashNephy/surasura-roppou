@@ -299,6 +299,8 @@ const createStorageRepositoryStub = ({
   saveLawDocument: vi.fn(),
   listSavedLaws: vi.fn(),
   listSavedRevisions: vi.fn(),
+  listSavedLawRecords: vi.fn(),
+  setSavedLawByteSize: vi.fn(),
   deleteLawDocument: vi.fn(),
   deleteLawRevision: vi.fn(),
   pinLaw: vi.fn(),
