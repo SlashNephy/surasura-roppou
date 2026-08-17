@@ -12,7 +12,7 @@ export interface SavedLawUseCase {
   get(lawId: string): Promise<SavedLawDocument | undefined>;
   list(): Promise<SavedLawSummary[]>;
   remove(lawId: string): Promise<void>;
-  pin(document: LawDocumentInput): Promise<void>;
+  pin(document: LawDocumentInput, options?: SaveLawDocumentOptions): Promise<void>;
   unpin(lawId: string): Promise<void>;
   isPinned(lawId: string): Promise<boolean>;
   listPinned(): Promise<PinnedLawRecord[]>;
@@ -56,9 +56,11 @@ export const createSavedLawUseCase = (
       await repository.deleteLawDocument(lawId);
       await useCaseOptions.indexer?.removeLaw(lawId);
     },
-    async pin(document) {
-      // 本文の無いピンを作らないよう、保存に成功してからピンを立てる。
-      await useCase.save(document);
+    async pin(document, options) {
+      // 本文の無いピンを作らないよう、保存に成功してからピンを立てる。options を渡さないと
+      // save の既定 isCurrent: true が効き、基準日指定や版固定で開いた過去版のピン留めが
+      // 現行版スロットを奪ってしまう。呼び出し側（自動保存と同じ判断）に委ねる。
+      await useCase.save(document, options);
       await repository.pinLaw(document.law.lawId);
     },
     unpin(lawId) {

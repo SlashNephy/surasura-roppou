@@ -121,6 +121,25 @@ describe("createSavedLawUseCase", () => {
     await expect(useCase.get(law.lawId)).resolves.toMatchObject({ law, revision, nodes });
   });
 
+  it("pins a past revision without stealing the current revision slot", async () => {
+    // 基準日指定で開いた版や pinned アンカーで固定解決した過去版を pin() すると、
+    // options を渡し忘れた場合 save の既定 isCurrent: true が効いて既存の現行版を
+    // 降格させてしまう（このバグの回帰テスト）。呼び出し側と同じ isCurrent: false を通す。
+    const { repository } = createMemoryStorageRepository();
+    const useCase = createSavedLawUseCase(repository);
+
+    await repository.saveLawDocument({ law, revision, nodes });
+    await repository.saveLawDocument(
+      { law, revision: pastRevision, nodes: pastNodes },
+      { isCurrent: false },
+    );
+
+    await useCase.pin({ law, revision: pastRevision, nodes: pastNodes }, { isCurrent: false });
+
+    await expect(useCase.get(law.lawId)).resolves.toMatchObject({ revision });
+    await expect(useCase.isPinned(law.lawId)).resolves.toBe(true);
+  });
+
   it("does not pin the law when saving fails", async () => {
     const { repository } = createMemoryStorageRepository();
     const failing = {

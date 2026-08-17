@@ -365,6 +365,51 @@ describe("LawViewerPageContent", () => {
     expect(storage.getSavedDocument()).toBeDefined();
   });
 
+  it("pins a law opened with a base date without stealing the current revision slot", async () => {
+    // pin は保存と同じ isCurrent 判断を通す契約（このバグの回帰テスト）。忘れると pin が
+    // 常に isCurrent: true で保存し、基準日で開いた過去版が現行版スロットを奪ってしまう。
+    const olderRevision = {
+      ...sampleLawViewerDocument.revision,
+      revisionId: "129AC0000000089_20200401_501AC0000000034",
+      effectiveDate: "2020-04-01",
+    };
+    const repository = {
+      listLaws: (): Promise<LawListResult> => Promise.reject(new Error("Not used in this test")),
+      getLaw: (_lawId: string, query?: { asOf?: string }): Promise<LawDocument> =>
+        Promise.resolve({
+          law: sampleLawViewerDocument.law,
+          revision: query?.asOf === "2020-04-01" ? olderRevision : sampleLawViewerDocument.revision,
+          nodes: sampleLawViewerDocument.nodes,
+          raw: {},
+        }),
+      getLawMetadata: (): Promise<LawMetadata> =>
+        Promise.reject(new Error("Not used in this test")),
+    } satisfies LawRepository;
+    const { repository: storageRepository } = createMemoryStorageRepository();
+    // 現行版を先に確立しておく。奪われていないことを最後に確認できるようにするため。
+    await storageRepository.saveLawDocument({
+      law: sampleLawViewerDocument.law,
+      revision: sampleLawViewerDocument.revision,
+      nodes: sampleLawViewerDocument.nodes,
+    });
+
+    act(() => {
+      setBaseDate("2020-04-01");
+    });
+
+    const { user } = renderLawViewerRoute("/laws/129AC0000000089", repository, storageRepository);
+
+    expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "ピン留め" }));
+
+    expect(await screen.findByText("ピン留め中")).toBeInTheDocument();
+    // 基準日指定で開いた過去版をピン留めしても、既存の現行版スロットは奪われない。
+    await expect(
+      storageRepository.getLawDocument(sampleLawViewerDocument.law.lawId),
+    ).resolves.toMatchObject({ revision: sampleLawViewerDocument.revision });
+  });
+
   it("shows an error and keeps the law unpinned when pinning fails", async () => {
     const storageRepository = {
       ...createMemoryStorageRepository().repository,

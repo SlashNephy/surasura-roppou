@@ -482,14 +482,26 @@ const LawViewerReadyState = ({
       }
 
       // 本文の無いピンを作らないよう、保存に成功してからピンを立てる（pin の契約）。
-      await savedLawUseCase.pin({
-        law: state.law,
-        revision: state.revision,
-        nodes: state.nodes,
-      });
+      // 自動保存と同じ判断で isCurrent を渡す。表示中が pinnedState（版固定で解決した過去版）
+      // なら false、baseState でも基準日を指定していれば false にする。pinnedState は
+      // requestedAsOf を持たないため、state === baseState の判定を先に見る必要がある。
+      await savedLawUseCase.pin(
+        {
+          law: state.law,
+          revision: state.revision,
+          nodes: state.nodes,
+        },
+        { isCurrent: state === baseState && baseState.requestedAsOf === undefined },
+      );
       setSavedState({ ...savedState, isPinned: true });
     } catch {
-      setSaveError("ピン留めできませんでした。端末の保存領域を確認してください。");
+      // 解除の失敗は保存領域の空きと無関係（pinnedLaws からの削除は本文を書かない）なので、
+      // ピン留めと解除でメッセージを分け、ユーザーを誤誘導しないようにする。
+      setSaveError(
+        savedState.isPinned
+          ? "ピン留めを解除できませんでした。時間をおいて再試行してください。"
+          : "ピン留めできませんでした。端末の保存領域を確認してください。",
+      );
     } finally {
       setIsSaving(false);
     }
