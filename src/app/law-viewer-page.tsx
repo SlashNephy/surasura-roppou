@@ -477,7 +477,8 @@ const LawViewerReadyState = ({
     try {
       if (savedState.isPinned) {
         await savedLawUseCase.unpin(state.law.lawId);
-        setSavedState({ ...savedState, isPinned: false });
+        // await をまたぐため、閉じ込めた savedState ではなく最新値から更新する。
+        setSavedState((previous) => ({ ...previous, isPinned: false }));
         return;
       }
 
@@ -493,7 +494,7 @@ const LawViewerReadyState = ({
         },
         { isCurrent: state === baseState && baseState.requestedAsOf === undefined },
       );
-      setSavedState({ ...savedState, isPinned: true });
+      setSavedState((previous) => ({ ...previous, isPinned: true }));
     } catch {
       // 解除の失敗は保存領域の空きと無関係（pinnedLaws からの削除は本文を書かない）なので、
       // ピン留めと解除でメッセージを分け、ユーザーを誤誘導しないようにする。

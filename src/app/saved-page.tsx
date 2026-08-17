@@ -5,6 +5,7 @@ import { Archive, Download, FolderPlus, Pin, StickyNote, type LucideIcon } from 
 import type { Bookmark, Collection } from "@/core/domain";
 import { createSavedDataFile } from "@/core/native-integration";
 import {
+  comparePinnedLaws,
   createSavedLawUseCase,
   createStorageRepository,
   generateStorageId,
@@ -198,12 +199,14 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
             emptyMessage="ピン留めした法令はまだありません。"
             headingId="pinned-laws-heading"
             icon={Pin}
-            // pinnedAt 降順。新しくピン留めしたものが先。
+            // 並びはリポジトリと同じ comparePinnedLaws に委ねる。pinnedAt は移行で同値になりうる
+            // ため、ここで独自に比較すると同値のときだけ一覧の契約と食い違う。
             savedLaws={savedLaws
               .filter((savedLaw) => pinnedAtByLawId.has(savedLaw.law.lawId))
               .sort((left, right) =>
-                (pinnedAtByLawId.get(right.law.lawId) ?? "").localeCompare(
-                  pinnedAtByLawId.get(left.law.lawId) ?? "",
+                comparePinnedLaws(
+                  { lawId: left.law.lawId, pinnedAt: pinnedAtByLawId.get(left.law.lawId) ?? "" },
+                  { lawId: right.law.lawId, pinnedAt: pinnedAtByLawId.get(right.law.lawId) ?? "" },
                 ),
               )}
             title="ピン留めした法令"

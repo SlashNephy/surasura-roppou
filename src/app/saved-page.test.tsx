@@ -119,6 +119,48 @@ describe("SavedPage", () => {
     ).toEqual(["法令B", "法令A"]);
   });
 
+  it("breaks pinnedAt ties by law id so the pinned order does not depend on the saved law order", async () => {
+    // v4 -> v5 の移行は同じ savedAt を持つ法令に同じ pinnedAt を与えるため、同値は実際に起きる。
+    // 同値のとき comparePinnedLaws は lawId 降順に倒す。この規則を UI が持たないと、並びが
+    // 保存一覧の順（updatedAt 由来）に引きずられ、リポジトリの契約と食い違う。
+    let current = new Date("2026-08-01T00:00:00.000Z");
+    const lawA = { ...sampleLawViewerDocument.law, lawId: "law-a", title: "法令A" };
+    const lawB = { ...sampleLawViewerDocument.law, lawId: "law-b", title: "法令B" };
+    const revisionFor = (law: { lawId: string }) => ({
+      ...sampleLawViewerDocument.revision,
+      lawId: law.lawId,
+      revisionId: `${law.lawId}_rev`,
+    });
+    const storage = createMemoryStorageRepository({ now: () => current });
+
+    // 保存は B が先、A が後。保存一覧の順に従うと A が先に来て、期待と逆になる。
+    await storage.repository.saveLawDocument({
+      law: lawB,
+      nodes: sampleLawViewerDocument.nodes,
+      revision: revisionFor(lawB),
+    });
+    current = new Date("2026-08-02T00:00:00.000Z");
+    await storage.repository.saveLawDocument({
+      law: lawA,
+      nodes: sampleLawViewerDocument.nodes,
+      revision: revisionFor(lawA),
+    });
+
+    // 時計を止めたままピン留めするので pinnedAt は同値になる。
+    await storage.repository.pinLaw(lawA.lawId);
+    await storage.repository.pinLaw(lawB.lawId);
+
+    renderSavedRoute("/saved", storage.repository);
+
+    const pinnedSection = await screen.findByRole("region", { name: "ピン留めした法令" });
+
+    expect(
+      within(pinnedSection)
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual(["法令B", "法令A"]);
+  });
+
   it("renders preloaded saved laws, bookmarks, and collections on initial load", async () => {
     const bookmark = createBookmark();
     const collection = createCollection(bookmark.id);
