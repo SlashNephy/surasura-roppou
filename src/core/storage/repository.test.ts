@@ -1465,6 +1465,50 @@ describe("StorageRepository", () => {
     ]);
   });
 
+  it("breaks ties on updatedAt by lawId, not revisionId, matching the savedLaws composite primary key", async () => {
+    // 索引 by-updated-at のキーが同値のとき、IndexedDB は主キー([lawId, revisionId]) 順で
+    // レコードを返す。lawId の大小と revisionId の大小をわざと逆にして、どちらが効いているか
+    // 判別できるようにする。
+    const lawZ = { ...law, lawId: "zLaw", aliases: [] } satisfies Law;
+    const revisionForZ = {
+      ...revision,
+      lawId: lawZ.lawId,
+      revisionId: "1-revision",
+    } satisfies LawRevision;
+    const nodeForZ = {
+      ...articleNode,
+      id: "z-node",
+      lawId: lawZ.lawId,
+      revisionId: revisionForZ.revisionId,
+    };
+
+    const lawA = { ...law, lawId: "aLaw", aliases: [] } satisfies Law;
+    const revisionForA = {
+      ...revision,
+      lawId: lawA.lawId,
+      revisionId: "2-revision",
+    } satisfies LawRevision;
+    const nodeForA = {
+      ...articleNode,
+      id: "a-node",
+      lawId: lawA.lawId,
+      revisionId: revisionForA.revisionId,
+    };
+
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    // 同一時刻で保存し、updatedAt を同値にする。
+    await repository.saveLawDocument({ law: lawZ, revision: revisionForZ, nodes: [nodeForZ] });
+    await repository.saveLawDocument({ law: lawA, revision: revisionForA, nodes: [nodeForA] });
+
+    const records = await repository.listSavedLawRecords();
+
+    expect(records.map((record) => record.lawId)).toEqual([lawA.lawId, lawZ.lawId]);
+  });
+
   it("backfills the stored size of a record saved before sizes were recorded", async () => {
     const repository = createStorageRepository({
       databaseName: createDatabaseName(),

@@ -192,12 +192,19 @@ export const createMemoryStorageRepository = (
               updatedAt: entry.updatedAt,
               ...(entry.byteSize === undefined ? {} : { byteSize: entry.byteSize }),
             }))
-            // 実リポジトリと同じく updatedAt 昇順。同値のときは revisionId で決める。
-            .sort((left, right) =>
-              left.updatedAt === right.updatedAt
+            // 実リポジトリと同じく updatedAt 昇順。同値のときは savedLaws の複合主キー
+            // [lawId, revisionId] と同じ順序（lawId を先に比較し、次に revisionId）で決める。
+            // IndexedDB は索引キーが同値のレコードを主キー順で返すため、ここを revisionId
+            // だけで決めると実装間で順序が食い違う（この後始末は削除順に直結する）。
+            .sort((left, right) => {
+              if (left.updatedAt !== right.updatedAt) {
+                return left.updatedAt.localeCompare(right.updatedAt);
+              }
+
+              return left.lawId === right.lawId
                 ? left.revisionId.localeCompare(right.revisionId)
-                : left.updatedAt.localeCompare(right.updatedAt),
-            ),
+                : left.lawId.localeCompare(right.lawId);
+            }),
         );
       },
       setSavedLawByteSize(lawId, revisionId, byteSize) {

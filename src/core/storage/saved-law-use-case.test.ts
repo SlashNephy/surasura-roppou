@@ -168,6 +168,33 @@ describe("createSavedLawUseCase", () => {
     await expect(useCase.isPinned(law.lawId)).resolves.toBe(false);
     await expect(useCase.listPinned()).resolves.toEqual([]);
   });
+
+  it("breaks listSavedLawRecords ties on updatedAt the same way the real repository does", async () => {
+    // 実リポジトリは savedLaws の複合主キー [lawId, revisionId] の順で updatedAt の同値を
+    // 解決する（repository.test.ts で固定）。メモリ実装が revisionId だけでタイブレークすると、
+    // ここに依存する自動削除の順序が UI テストでは検出できないまま食い違う。
+    const lawZ = { ...law, lawId: "zLaw" } satisfies Law;
+    const revisionForZ = {
+      ...revision,
+      lawId: lawZ.lawId,
+      revisionId: "1-revision",
+    } satisfies LawRevision;
+    const lawA = { ...law, lawId: "aLaw" } satisfies Law;
+    const revisionForA = {
+      ...revision,
+      lawId: lawA.lawId,
+      revisionId: "2-revision",
+    } satisfies LawRevision;
+    const { repository } = createMemoryStorageRepository();
+
+    // createMemoryStorageRepository の既定時計は固定なので、updatedAt は同値になる。
+    await repository.saveLawDocument({ law: lawZ, revision: revisionForZ, nodes });
+    await repository.saveLawDocument({ law: lawA, revision: revisionForA, nodes });
+
+    const records = await repository.listSavedLawRecords();
+
+    expect(records.map((record) => record.lawId)).toEqual([lawA.lawId, lawZ.lawId]);
+  });
 });
 
 const createDatabaseName = (): string => {
