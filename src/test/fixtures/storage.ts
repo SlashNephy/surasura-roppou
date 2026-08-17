@@ -12,11 +12,13 @@ import type {
 } from "@/core/domain";
 import { fixedIntervalScheduler } from "@/core/study";
 import {
+  comparePinnedLaws,
   countSavedData,
   type SavedDataExport,
   type SavedDataImportResult,
   DueStudyCard,
   LawDocumentInput,
+  PinnedLawRecord,
   SavedLawDocument,
   SavedLawSummary,
   StorageRepository,
@@ -54,6 +56,7 @@ export const createMemoryStorageRepository = (
   // IndexedDB 実装と同じく [lawId, revisionId] を複合キーにして版を共存させる。
   // 現行版スロット（1 法令につき isCurrent な版は高々 1 件）もここで再現する。
   const savedRevisions = new Map<string, MemorySavedRevision>();
+  const pinnedLaws = new Map<string, PinnedLawRecord>();
 
   if (initialDocument !== undefined) {
     savedRevisions.set(
@@ -119,8 +122,12 @@ export const createMemoryStorageRepository = (
         const revisionId = document.revision.revisionId;
         const key = toRevisionKey(lawId, revisionId);
         const existing = savedRevisions.get(key);
+        // その法令に現行版が 1 件も無いなら、基準日指定の保存でも空きスロットを埋める。
+        // 実リポジトリと同じ契約（既存の現行版は奪わない）を再現する。
+        const hasAnyCurrentRevision = findCurrentRevision(lawId) !== undefined;
         // 既に現行版として保存済みの版は、基準日指定の取得で降格させない。
-        const isCurrent = (options?.isCurrent ?? true) || (existing?.isCurrent ?? false);
+        const isCurrent =
+          (options?.isCurrent ?? true) || (existing?.isCurrent ?? false) || !hasAnyCurrentRevision;
         // savedAt はその版を初めて保存した時刻。再保存では updatedAt だけが進む。
         const writtenAt = now().toISOString();
         const nextSavedAt = existing?.savedAt ?? writtenAt;
@@ -135,7 +142,7 @@ export const createMemoryStorageRepository = (
           savedAt: nextSavedAt,
           updatedAt: writtenAt,
         });
-        return Promise.resolve();
+        return Promise.resolve({ isCurrent });
       },
       getLawDocument(lawId) {
         return Promise.resolve(findCurrentRevision(lawId)?.document);
@@ -177,11 +184,41 @@ export const createMemoryStorageRepository = (
             savedRevisions.delete(key);
           }
         }
+        // 実リポジトリと同じく、本文と同一トランザクション相当でピン留めも消す
+        // （本文だけ消えてピンが幽霊レコードとして残る契約違反を避ける）。
+        pinnedLaws.delete(lawId);
         return Promise.resolve();
       },
       deleteLawRevision(lawId, revisionId) {
         savedRevisions.delete(toRevisionKey(lawId, revisionId));
+
+        // 版が 1 件も残らなければピンも消す（実リポジトリと同じ契約）。
+        const hasRemaining = [...savedRevisions.values()].some(
+          (entry) => entry.document.law.lawId === lawId,
+        );
+
+        if (!hasRemaining) {
+          pinnedLaws.delete(lawId);
+        }
         return Promise.resolve();
+      },
+      pinLaw(lawId) {
+        // 既にピン留めされているなら pinnedAt を据え置く（実リポジトリと同じ契約）。
+        if (!pinnedLaws.has(lawId)) {
+          pinnedLaws.set(lawId, { lawId, pinnedAt: now().toISOString() });
+        }
+        return Promise.resolve();
+      },
+      unpinLaw(lawId) {
+        pinnedLaws.delete(lawId);
+        return Promise.resolve();
+      },
+      isLawPinned(lawId) {
+        return Promise.resolve(pinnedLaws.has(lawId));
+      },
+      listPinnedLaws() {
+        // 並びは実リポジトリと共有の比較関数に委ねる。ここで書き下すと契約が二重定義になる。
+        return Promise.resolve([...pinnedLaws.values()].sort(comparePinnedLaws));
       },
       putBookmark(bookmark) {
         bookmarks = [

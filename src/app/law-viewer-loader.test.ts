@@ -4,9 +4,18 @@ import { createEgovLawRepository } from "@/core/egov";
 import type { LawDocument, LawListResult, LawMetadata, LawRepository } from "@/core/egov";
 import type { StorageRepository } from "@/core/storage";
 import { createJsonFetchStub, fixedTestNow as now, lawDataFixture } from "@/test/fixtures/egov";
+import { createMemoryStorageRepository } from "@/test/fixtures/storage";
 
 import { loadLawViewerDocument } from "./law-viewer-loader";
 import { offlineDemoLawId, sampleLawViewerDocument } from "./law-viewer-sample";
+
+const { law, revision, nodes } = sampleLawViewerDocument;
+// ピン留めのテスト用の最小限のリポジトリ。getLaw だけを使う。
+const lawRepository = {
+  listLaws: (): Promise<LawListResult> => Promise.reject(new Error("Not used in this test")),
+  getLaw: (): Promise<LawDocument> => Promise.resolve({ law, revision, nodes, raw: undefined }),
+  getLawMetadata: (): Promise<LawMetadata> => Promise.reject(new Error("Not used in this test")),
+} satisfies LawRepository;
 
 describe("loadLawViewerDocument", () => {
   it("loads an e-Gov law through the repository for the viewer", async () => {
@@ -37,7 +46,7 @@ describe("loadLawViewerDocument", () => {
         lawId: "129AC0000000089",
         revisionId: "129AC0000000089_20260624_508AC0000000045",
       },
-      isSaved: false,
+      isPinned: false,
     });
 
     if (state.status !== "ready") {
@@ -55,7 +64,7 @@ describe("loadLawViewerDocument", () => {
     );
   });
 
-  it("marks an online law as saved when it already exists in IndexedDB", async () => {
+  it("marks an online law as pinned when it is pinned in IndexedDB", async () => {
     const { fetcher } = createJsonFetchStub(lawDataFixture);
     const repository = createEgovLawRepository({ fetcher, now });
     const storageRepository = createStorageRepositoryStub({
@@ -63,13 +72,14 @@ describe("loadLawViewerDocument", () => {
         ...sampleLawViewerDocument,
         savedAt: "2026-07-06T00:00:00.000Z",
       }),
+      isLawPinned: vi.fn().mockResolvedValue(true),
     });
 
     const state = await loadLawViewerDocument("129AC0000000089", repository, storageRepository);
 
     expect(state).toMatchObject({
       status: "ready",
-      isSaved: true,
+      isPinned: true,
       loadedFromStorage: false,
       savedAt: "2026-07-06T00:00:00.000Z",
     });
@@ -87,7 +97,7 @@ describe("loadLawViewerDocument", () => {
     ).resolves.toMatchObject({
       status: "ready",
       law: { title: "民法" },
-      isSaved: false,
+      isPinned: false,
       loadedFromStorage: false,
     });
   });
@@ -104,13 +114,14 @@ describe("loadLawViewerDocument", () => {
         ...sampleLawViewerDocument,
         savedAt: "2026-07-06T00:00:00.000Z",
       }),
+      isLawPinned: vi.fn().mockResolvedValue(true),
     });
 
     await expect(
       loadLawViewerDocument("129AC0000000089", repository, storageRepository),
     ).resolves.toMatchObject({
       status: "ready",
-      isSaved: true,
+      isPinned: true,
       loadedFromStorage: true,
       savedAt: "2026-07-06T00:00:00.000Z",
       law: { title: "民法" },
@@ -253,12 +264,35 @@ describe("loadLawViewerDocument", () => {
       requestedAsOf: "2020-06-01",
     });
   });
+
+  it("reports the law as pinned when the pin record exists", async () => {
+    const { repository } = createMemoryStorageRepository();
+
+    await repository.pinLaw(law.lawId);
+
+    const state = await loadLawViewerDocument(law.lawId, lawRepository, repository);
+
+    expect(state).toMatchObject({ status: "ready", isPinned: true });
+  });
+
+  it("reports the law as not pinned when only auto saved", async () => {
+    const { repository } = createMemoryStorageRepository();
+
+    await repository.saveLawDocument({ law, revision, nodes });
+
+    const state = await loadLawViewerDocument(law.lawId, lawRepository, repository);
+
+    // 自動保存されているだけではピン留めではない。
+    expect(state).toMatchObject({ status: "ready", isPinned: false });
+  });
 });
 
 const createStorageRepositoryStub = ({
   getLawDocument = vi.fn().mockResolvedValue(undefined),
+  isLawPinned = vi.fn().mockResolvedValue(false),
 }: {
   getLawDocument?: StorageRepository["getLawDocument"];
+  isLawPinned?: StorageRepository["isLawPinned"];
 } = {}): StorageRepository => ({
   getLawDocument,
   getLawDocumentRevision: vi.fn(),
@@ -267,6 +301,10 @@ const createStorageRepositoryStub = ({
   listSavedRevisions: vi.fn(),
   deleteLawDocument: vi.fn(),
   deleteLawRevision: vi.fn(),
+  pinLaw: vi.fn(),
+  unpinLaw: vi.fn(),
+  isLawPinned,
+  listPinnedLaws: vi.fn(),
   putBookmark: vi.fn(),
   listBookmarks: vi.fn(),
   putCollection: vi.fn(),

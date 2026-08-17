@@ -3,7 +3,8 @@ import type { IDBPDatabase, IDBPTransaction, StoreNames } from "idb";
 
 import { fixedIntervalScheduler } from "@/core/study";
 import { deleteRevisionNodes, demoteOtherCurrentRevisions } from "./current-revision-slot";
-import { migrateRecordsToVersion3, migrateRecordsToVersion4 } from "./migrations";
+import { migrateRecordsToVersion3, migrateSavedLawStores } from "./migrations";
+import { comparePinnedLaws } from "./pinned-law-order";
 import type {
   Annotation,
   Bookmark,
@@ -25,6 +26,7 @@ import type { SavedDataImportResult } from "./import-data";
 import {
   surasuraDatabaseName,
   surasuraDatabaseVersion,
+  type PinnedLawRecord,
   type SavedLawRecord,
   type StoredLawNode,
   type SurasuraDatabase,
@@ -72,6 +74,13 @@ export interface SaveLawDocumentOptions {
   isCurrent?: boolean;
 }
 
+// saveLawDocument の結果。要求した isCurrent と実際に現行版スロットへ入ったかは一致しない
+// ことがある（例: 現行版が 1 件も無い法令への isCurrent: false 保存は、空きスロットを
+// 埋めるため現行版になる）。呼び出し側はこの結果を見て索引更新の要否を判断する。
+export interface SaveLawDocumentResult {
+  isCurrent: boolean;
+}
+
 export interface LawScopedQuery {
   lawId?: string;
 }
@@ -83,13 +92,20 @@ export interface DueStudyCard {
 }
 
 export interface StorageRepository {
-  saveLawDocument(document: LawDocumentInput, options?: SaveLawDocumentOptions): Promise<void>;
+  saveLawDocument(
+    document: LawDocumentInput,
+    options?: SaveLawDocumentOptions,
+  ): Promise<SaveLawDocumentResult>;
   getLawDocument(lawId: string): Promise<SavedLawDocument | undefined>;
   getLawDocumentRevision(lawId: string, revisionId: string): Promise<SavedLawDocument | undefined>;
   listSavedLaws(): Promise<SavedLawSummary[]>;
   listSavedRevisions(lawId: string): Promise<SavedLawRevisionSummary[]>;
   deleteLawDocument(lawId: string): Promise<void>;
   deleteLawRevision(lawId: string, revisionId: string): Promise<void>;
+  pinLaw(lawId: string): Promise<void>;
+  unpinLaw(lawId: string): Promise<void>;
+  isLawPinned(lawId: string): Promise<boolean>;
+  listPinnedLaws(): Promise<PinnedLawRecord[]>;
   putBookmark(bookmark: Bookmark): Promise<void>;
   listBookmarks(query?: LawScopedQuery): Promise<Bookmark[]>;
   putCollection(collection: Collection): Promise<void>;
@@ -132,7 +148,7 @@ export const createStorageRepository = (
 
   return {
     async saveLawDocument(document, options = {}) {
-      await withDatabase(async (db) => {
+      return withDatabase(async (db) => {
         const updatedAt = now().toISOString();
         const tx = db.transaction(["laws", "lawRevisions", "lawNodes", "savedLaws"], "readwrite");
         const nodes = tx.objectStore("lawNodes");
@@ -140,8 +156,15 @@ export const createStorageRepository = (
         const lawId = document.law.lawId;
         const revisionId = document.revision.revisionId;
         const existing = await savedLaws.get([lawId, revisionId]);
+        // その法令に現行版が 1 件も無いなら、基準日指定の保存でも空きスロットを埋める。
+        // 基準日を設定したまま使うユーザーは常に isCurrent: false で保存するため、これが無いと
+        // by-law-current 索引が永久に空のままになり、getLawDocument によるオフライン
+        // フォールバックが 1 件も引けなくなる（既存の現行版を奪うことはない）。
+        const hasAnyCurrentRevision =
+          (await savedLaws.index("by-law-current").count([lawId, 1])) > 0;
         // 既に現行版として保存済みの版は、基準日指定の取得で降格させない。
-        const shouldBeCurrent = (options.isCurrent ?? true) || existing?.isCurrent === 1;
+        const shouldBeCurrent =
+          (options.isCurrent ?? true) || existing?.isCurrent === 1 || !hasAnyCurrentRevision;
         const isCurrent: 0 | 1 = shouldBeCurrent ? 1 : 0;
 
         // 同じ版を書き直すときだけ、その版のノードを消して入れ直す。
@@ -174,6 +197,9 @@ export const createStorageRepository = (
           updatedAt,
         });
         await tx.done;
+
+        // tx.done の後で返す。トランザクションが失敗した場合はここに到達せず reject される。
+        return { isCurrent: shouldBeCurrent };
       });
     },
 
@@ -289,9 +315,15 @@ export const createStorageRepository = (
 
     async deleteLawDocument(lawId) {
       await withDatabase(async (db) => {
-        const tx = db.transaction(["laws", "lawRevisions", "lawNodes", "savedLaws"], "readwrite");
+        const tx = db.transaction(
+          ["laws", "lawRevisions", "lawNodes", "savedLaws", "pinnedLaws"],
+          "readwrite",
+        );
         const savedLaws = tx.objectStore("savedLaws");
         const records = await savedLaws.index("by-law-id").getAll(lawId);
+
+        // 本文が 1 件も無くても、ピン留めだけが残っている可能性があるため常に削除を試みる。
+        void tx.objectStore("pinnedLaws").delete(lawId);
 
         if (records.length === 0) {
           await tx.done;
@@ -321,7 +353,10 @@ export const createStorageRepository = (
 
     async deleteLawRevision(lawId, revisionId) {
       await withDatabase(async (db) => {
-        const tx = db.transaction(["laws", "lawRevisions", "lawNodes", "savedLaws"], "readwrite");
+        const tx = db.transaction(
+          ["laws", "lawRevisions", "lawNodes", "savedLaws", "pinnedLaws"],
+          "readwrite",
+        );
         const savedLaws = tx.objectStore("savedLaws");
         const record = await savedLaws.get([lawId, revisionId]);
 
@@ -340,13 +375,49 @@ export const createStorageRepository = (
         void tx.objectStore("lawRevisions").delete(revisionId);
         await savedLaws.delete([lawId, revisionId]);
 
-        // 版がすべて消えたら法令メタも残さない。
+        // 版がすべて消えたら法令メタも残さない。ピンも同時に消す。本文の無いピンが残ると
+        // isLawPinned が真を返し続け、保存リストに実体の無い法令が並ぶ。
         const remaining = await savedLaws.index("by-law-id").getAllKeys(lawId);
 
         if (remaining.length === 0) {
           void tx.objectStore("laws").delete(lawId);
+          void tx.objectStore("pinnedLaws").delete(lawId);
         }
         await tx.done;
+      });
+    },
+
+    async pinLaw(lawId) {
+      await withDatabase(async (db) => {
+        const tx = db.transaction("pinnedLaws", "readwrite");
+        const store = tx.objectStore("pinnedLaws");
+        const existing = await store.get(lawId);
+
+        // 既にピン留めされているなら pinnedAt を据え置く。一覧の並びが操作のたびに動かないようにする。
+        if (existing === undefined) {
+          void store.put({ lawId, pinnedAt: now().toISOString() });
+        }
+        await tx.done;
+      });
+    },
+
+    async unpinLaw(lawId) {
+      await withDatabase(async (db) => {
+        await db.delete("pinnedLaws", lawId);
+      });
+    },
+
+    async isLawPinned(lawId) {
+      return withDatabase(async (db) => (await db.get("pinnedLaws", lawId)) !== undefined);
+    },
+
+    async listPinnedLaws() {
+      return withDatabase(async (db) => {
+        const records = await db.getAllFromIndex("pinnedLaws", "by-pinned-at");
+
+        // 新しくピン留めしたものから並べる。pinnedAt が同値でも順序が決定的になるよう
+        // lawId を第 2 キーにする。索引の返却順に任せるとメモリ実装と並びが食い違う。
+        return records.sort(comparePinnedLaws);
       });
     },
 
@@ -575,10 +646,11 @@ export const openSurasuraDatabase = async (
         }
       }
 
-      if (oldVersion < 4) {
-        // savedLaws は keyPath を変えるためストアごと作り直す。新規作成の DB でも
+      if (oldVersion < 5) {
+        // savedLaws は v4 で keyPath を変えるためストアごと作り直す。新規作成の DB でも
         // createVersion1Stores が旧 keyPath で作るため、バージョンに関わらず実行する。
-        void migrateRecordsToVersion4(database, transaction).catch((error: unknown) => {
+        // v5 の pinnedLaws は v4 の結果を読むので、同じ chain で直列に走らせる。
+        void migrateSavedLawStores(database, transaction, oldVersion).catch((error: unknown) => {
           console.error("saved law migration failed", error);
           try {
             transaction.abort();

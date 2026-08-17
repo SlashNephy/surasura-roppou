@@ -17,7 +17,7 @@ import { createEgovLawRepository } from "@/core/egov";
 import type { LawDocument, LawListResult, LawMetadata, LawRepository } from "@/core/egov";
 import { DISPLAY_PREFERENCES_STORAGE_KEYS, setBaseDate } from "@/core/settings";
 import { createJsonFetchStub, fixedTestNow as now, lawDataFixture } from "@/test/fixtures/egov";
-import type { StorageRepository } from "@/core/storage";
+import type { SavedLawDocument, StorageRepository } from "@/core/storage";
 import { createMemoryStorageRepository, createSavedLawDocument } from "@/test/fixtures/storage";
 import { setupScrollMocks } from "@/test/scrollMocks";
 
@@ -208,6 +208,58 @@ const renderLawViewerContentRoute = (
   };
 };
 
+// 表示中の版とは別の revisionId を pinned アンカーとして固定するシナリオの共通セットアップ。
+// 差分は「現行版が既に保存済みか」だけなので、初期保存状態を引数に取り、
+// 呼び出し側は自分のテストが検証したい最後の表明だけを書けばよい。
+const setupPinnedRevisionScenario = (
+  initialOptions: { savedLawDocument?: SavedLawDocument } = {},
+): { pinnedRevisionId: string; storageRepository: StorageRepository } => {
+  const pinnedRevisionId = "129AC0000000089_20200401_501AC0000000034";
+  const pinnedDocument = {
+    law: sampleLawViewerDocument.law,
+    revision: {
+      ...sampleLawViewerDocument.revision,
+      revisionId: pinnedRevisionId,
+      effectiveDate: "2020-04-01",
+    },
+    nodes: sampleLawViewerDocument.nodes,
+    raw: {},
+  } satisfies LawDocument;
+  const pinnedBookmark: Bookmark = {
+    id: "bookmark-pinned",
+    target: {
+      lawId: sampleLawViewerDocument.law.lawId,
+      article: "1",
+      revisionId: pinnedRevisionId,
+      pinned: true,
+      fingerprint: "deadbeefdeadbeef",
+    },
+    title: "第一条",
+    tags: [],
+    createdAt: "2026-07-06T00:00:00.000Z",
+    updatedAt: "2026-07-06T00:00:00.000Z",
+  };
+  const { repository: storageRepository } = createMemoryStorageRepository({
+    ...initialOptions,
+    bookmarks: [pinnedBookmark],
+  });
+  // pinned 解決先の版取得を実 e-Gov ではなくスタブへ向ける。
+  const pinnedRepository = {
+    listLaws: (): Promise<LawListResult> => Promise.reject(new Error("Not used in this test")),
+    getLaw: (): Promise<LawDocument> => Promise.resolve(pinnedDocument),
+    getLawMetadata: (): Promise<LawMetadata> => Promise.reject(new Error("Not used in this test")),
+  } satisfies LawRepository;
+
+  renderLawViewerContentRoute(
+    "/laws/129AC0000000089/articles/1",
+    { status: "ready", ...sampleLawViewerDocument },
+    storageRepository,
+    pinnedRepository,
+  );
+
+  return { pinnedRevisionId, storageRepository };
+};
+
 const nonNumericArticleState = {
   status: "ready",
   law: {
@@ -235,7 +287,7 @@ const nonNumericArticleState = {
       children: [],
     },
   ],
-  isSaved: false,
+  isPinned: false,
   loadedFromStorage: false,
 } satisfies LawViewerState;
 
@@ -274,9 +326,9 @@ describe("LawViewerPageContent", () => {
     renderLawViewerRoute("/laws/129AC0000000089", repository);
 
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
-    // 未保存は左レールの保存ボタンが「オフライン保存」であることで判別する。
-    expect(screen.getByRole("button", { name: "オフライン保存" })).toBeInTheDocument();
-    expect(screen.queryByText("オフライン保存済み")).not.toBeInTheDocument();
+    // 未ピン留めは左レールの操作ボタンが「ピン留め」であることで判別する。
+    expect(screen.getByRole("button", { name: "ピン留め" })).toBeInTheDocument();
+    expect(screen.queryByText("ピン留め中")).not.toBeInTheDocument();
     expect(calls).toEqual([
       {
         input:
@@ -286,7 +338,7 @@ describe("LawViewerPageContent", () => {
     ]);
   });
 
-  it("saves the loaded law document for offline viewing", async () => {
+  it("pins and unpins the law from the viewer", async () => {
     const storage = createMemoryStorageRepository();
     const { user } = renderLawViewerRoute(
       "/laws/129AC0000000089",
@@ -296,14 +348,70 @@ describe("LawViewerPageContent", () => {
 
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "オフライン保存" }));
+    await user.click(screen.getByRole("button", { name: "ピン留め" }));
 
-    expect(screen.getByText("オフライン保存済み")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "保存解除" })).toBeInTheDocument();
+    // pin は保存に成功してからピンを立てる契約のため、本文も保存されていること。
+    // pin は save と pinLaw の 2 段の await を含むため、表示の反映は findBy で待つ。
+    expect(await screen.findByText("ピン留め中")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ピン留めを解除" })).toBeInTheDocument();
     expect(storage.getSavedDocument()?.law.title).toBe("民法");
+    await expect(storage.repository.isLawPinned("129AC0000000089")).resolves.toBe(true);
+
+    await user.click(screen.getByRole("button", { name: "ピン留めを解除" }));
+
+    expect(await screen.findByRole("button", { name: "ピン留め" })).toBeInTheDocument();
+    expect(screen.queryByText("ピン留め中")).not.toBeInTheDocument();
+    await expect(storage.repository.isLawPinned("129AC0000000089")).resolves.toBe(false);
+    // ピン留めの解除は本文を消さない（LRU 対象からは外れるだけ）。
+    expect(storage.getSavedDocument()).toBeDefined();
   });
 
-  it("shows a recoverable error when offline save fails", async () => {
+  it("pins a law opened with a base date without stealing the current revision slot", async () => {
+    // pin は保存と同じ isCurrent 判断を通す契約（このバグの回帰テスト）。忘れると pin が
+    // 常に isCurrent: true で保存し、基準日で開いた過去版が現行版スロットを奪ってしまう。
+    const olderRevision = {
+      ...sampleLawViewerDocument.revision,
+      revisionId: "129AC0000000089_20200401_501AC0000000034",
+      effectiveDate: "2020-04-01",
+    };
+    const repository = {
+      listLaws: (): Promise<LawListResult> => Promise.reject(new Error("Not used in this test")),
+      getLaw: (_lawId: string, query?: { asOf?: string }): Promise<LawDocument> =>
+        Promise.resolve({
+          law: sampleLawViewerDocument.law,
+          revision: query?.asOf === "2020-04-01" ? olderRevision : sampleLawViewerDocument.revision,
+          nodes: sampleLawViewerDocument.nodes,
+          raw: {},
+        }),
+      getLawMetadata: (): Promise<LawMetadata> =>
+        Promise.reject(new Error("Not used in this test")),
+    } satisfies LawRepository;
+    const { repository: storageRepository } = createMemoryStorageRepository();
+    // 現行版を先に確立しておく。奪われていないことを最後に確認できるようにするため。
+    await storageRepository.saveLawDocument({
+      law: sampleLawViewerDocument.law,
+      revision: sampleLawViewerDocument.revision,
+      nodes: sampleLawViewerDocument.nodes,
+    });
+
+    act(() => {
+      setBaseDate("2020-04-01");
+    });
+
+    const { user } = renderLawViewerRoute("/laws/129AC0000000089", repository, storageRepository);
+
+    expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "ピン留め" }));
+
+    expect(await screen.findByText("ピン留め中")).toBeInTheDocument();
+    // 基準日指定で開いた過去版をピン留めしても、既存の現行版スロットは奪われない。
+    await expect(
+      storageRepository.getLawDocument(sampleLawViewerDocument.law.lawId),
+    ).resolves.toMatchObject({ revision: sampleLawViewerDocument.revision });
+  });
+
+  it("shows an error and keeps the law unpinned when pinning fails", async () => {
     const storageRepository = {
       ...createMemoryStorageRepository().repository,
       saveLawDocument: () => Promise.reject(new Error("Quota exceeded")),
@@ -316,16 +424,17 @@ describe("LawViewerPageContent", () => {
 
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "オフライン保存" }));
+    await user.click(screen.getByRole("button", { name: "ピン留め" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "オフライン保存を更新できませんでした。",
+      "ピン留めできませんでした。端末の保存領域を確認してください。",
     );
-    expect(screen.getByRole("button", { name: "オフライン保存" })).toBeEnabled();
-    expect(screen.queryByText("オフライン保存済み")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ピン留め" })).toBeEnabled();
+    expect(screen.queryByText("ピン留め中")).not.toBeInTheDocument();
+    await expect(storageRepository.isLawPinned("129AC0000000089")).resolves.toBe(false);
   });
 
-  it("removes a saved law document without leaving the viewer", async () => {
+  it("unpins a law without deleting its saved document", async () => {
     const storage = createMemoryStorageRepository(
       createSavedLawDocument({
         law: sampleLawViewerDocument.law,
@@ -333,19 +442,23 @@ describe("LawViewerPageContent", () => {
         nodes: sampleLawViewerDocument.nodes,
       }),
     );
+    // ローダーの初期表示はピン留め状態から決まる。保存済みでもピン留めしていなければ
+    // 「ピン留めを解除」ボタンは表示されないため、事前にピン留めしておく。
+    await storage.repository.pinLaw(sampleLawViewerDocument.law.lawId);
     const { user } = renderLawViewerRoute(
       "/laws/129AC0000000089",
       createFixtureRepository().repository,
       storage.repository,
     );
 
-    expect(await screen.findByRole("button", { name: "保存解除" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "ピン留めを解除" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "保存解除" }));
+    await user.click(screen.getByRole("button", { name: "ピン留めを解除" }));
 
-    expect(screen.getByRole("button", { name: "オフライン保存" })).toBeInTheDocument();
-    expect(screen.queryByText("オフライン保存済み")).not.toBeInTheDocument();
-    expect(storage.getSavedDocument()).toBeUndefined();
+    expect(screen.getByRole("button", { name: "ピン留め" })).toBeInTheDocument();
+    expect(screen.queryByText("ピン留め中")).not.toBeInTheDocument();
+    // LRU（PR 3）対象から外れるだけで、本文は消えない。
+    expect(storage.getSavedDocument()).toBeDefined();
   });
 
   it("shows the saved law body when the network is unavailable", async () => {
@@ -368,6 +481,113 @@ describe("LawViewerPageContent", () => {
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
     expect(screen.getByText("保存済み本文を表示中")).toBeInTheDocument();
     expect(screen.getByText("取得: 2026/07/05")).toBeInTheDocument();
+  });
+
+  it("auto saves the opened law as the current revision", async () => {
+    const { repository: lawRepository } = createFixtureRepository();
+    const storage = createMemoryStorageRepository();
+
+    renderLawViewerRoute("/laws/129AC0000000089", lawRepository, storage.repository);
+
+    await screen.findByRole("article", { name: "民法" });
+    // 取得元は createFixtureRepository（実 e-Gov レスポンス相当）のため、法令オブジェクトの
+    // 全項目は sampleLawViewerDocument と一致しない。ID と版で同一本文が書き戻されたことを確認する。
+    await waitFor(() => {
+      expect(storage.getSavedDocument()).toMatchObject({
+        law: { lawId: sampleLawViewerDocument.law.lawId },
+        revision: { revisionId: sampleLawViewerDocument.revision.revisionId },
+      });
+    });
+    await expect(
+      storage.repository.listSavedRevisions(sampleLawViewerDocument.law.lawId),
+    ).resolves.toEqual([expect.objectContaining({ isCurrent: true })]);
+  });
+
+  it("auto saves a law opened with a base date as a history revision", async () => {
+    // 基準日指定で取得した版は現行版とは別の revisionId を持つ想定で、履歴として積み上がる。
+    const olderRevision = {
+      ...sampleLawViewerDocument.revision,
+      revisionId: "129AC0000000089_20200401_501AC0000000034",
+      effectiveDate: "2020-04-01",
+    };
+    const repository = {
+      listLaws: (): Promise<LawListResult> => Promise.reject(new Error("Not used in this test")),
+      getLaw: (_lawId: string, query?: { asOf?: string }): Promise<LawDocument> =>
+        Promise.resolve({
+          law: sampleLawViewerDocument.law,
+          revision: query?.asOf === "2020-04-01" ? olderRevision : sampleLawViewerDocument.revision,
+          nodes: sampleLawViewerDocument.nodes,
+          raw: {},
+        }),
+      getLawMetadata: (): Promise<LawMetadata> =>
+        Promise.reject(new Error("Not used in this test")),
+    } satisfies LawRepository;
+    const { repository: storageRepository } = createMemoryStorageRepository();
+    await storageRepository.saveLawDocument({
+      law: sampleLawViewerDocument.law,
+      revision: sampleLawViewerDocument.revision,
+      nodes: sampleLawViewerDocument.nodes,
+    });
+
+    act(() => {
+      setBaseDate("2020-04-01");
+    });
+
+    renderLawViewerRoute("/laws/129AC0000000089", repository, storageRepository);
+
+    await screen.findByRole("article", { name: "民法" });
+    await waitFor(async () => {
+      await expect(
+        storageRepository.listSavedRevisions(sampleLawViewerDocument.law.lawId),
+      ).resolves.toHaveLength(2);
+    });
+
+    // 現行版スロットは基準日指定の取得で入れ替わらない。
+    await expect(
+      storageRepository.getLawDocument(sampleLawViewerDocument.law.lawId),
+    ).resolves.toMatchObject({ revision: sampleLawViewerDocument.revision });
+  });
+
+  it("does not save again when the document came from storage", async () => {
+    const failingLawRepository = {
+      listLaws: (): Promise<LawListResult> => Promise.reject(new Error("Not used in this test")),
+      getLaw: (): Promise<LawDocument> => Promise.reject(new Error("network down")),
+      getLawMetadata: (): Promise<LawMetadata> =>
+        Promise.reject(new Error("Not used in this test")),
+    } satisfies LawRepository;
+    const storage = createMemoryStorageRepository(
+      createSavedLawDocument({
+        law: sampleLawViewerDocument.law,
+        revision: sampleLawViewerDocument.revision,
+        nodes: sampleLawViewerDocument.nodes,
+      }),
+    );
+    const saveLawDocument = vi.fn(storage.repository.saveLawDocument.bind(storage.repository));
+
+    renderLawViewerRoute("/laws/129AC0000000089", failingLawRepository, {
+      ...storage.repository,
+      saveLawDocument,
+    });
+
+    // e-Gov 取得が失敗し、保存済みの本文でフォールバック表示する。
+    expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+    expect(screen.getByText("保存済み本文を表示中")).toBeInTheDocument();
+    expect(saveLawDocument).not.toHaveBeenCalled();
+  });
+
+  it("keeps rendering the document when auto save fails", async () => {
+    const { repository: lawRepository } = createFixtureRepository();
+    const storageRepository = {
+      ...createMemoryStorageRepository().repository,
+      saveLawDocument: () => Promise.reject(new Error("quota exceeded")),
+    };
+
+    renderLawViewerRoute("/laws/129AC0000000089", lawRepository, storageRepository);
+
+    expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+
+    // 自動保存はユーザーが要求した操作ではないため、失敗をバナーで知らせない。
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("既定は読みやすい表示で本文を描画する", async () => {
@@ -929,16 +1149,67 @@ describe("LawViewerPageContent", () => {
     });
   });
 
+  it("pinned アンカーで固定解決した過去版を保存しても既存の現行版スロットを奪わない", async () => {
+    // 現行版が既に保存されている状態を作る。現行版が無い法令では固定解決した過去版が
+    // 空いた現行版スロットを埋めるため（次のテストで検証）、ここでは「既存の現行版を
+    // 奪わない」という本来の回帰対象を検証できるよう現行版を用意しておく。
+    const { pinnedRevisionId, storageRepository } = setupPinnedRevisionScenario({
+      savedLawDocument: createSavedLawDocument(sampleLawViewerDocument),
+    });
+
+    // pinned 解決後の版が表示されるまで待つ（施行日ラベルが固定版のものに切り替わる。
+    // pinned 表示では「施行日 」と「2020/04/01 版」が別テキストノードになるため、
+    // 日付部分のみで照合する）。findAllByText 自体がリトライするため二重に待つ必要はない。
+    await screen.findAllByText(/2020\/04\/01/);
+
+    // 固定解決した過去版が保存されていること。
+    await waitFor(async () => {
+      await expect(
+        storageRepository.getLawDocumentRevision(
+          sampleLawViewerDocument.law.lawId,
+          pinnedRevisionId,
+        ),
+      ).resolves.toBeDefined();
+    });
+
+    // 現行版スロットは奪われず、固定解決した版は isCurrent: false のままであること。
+    const revisions = await storageRepository.listSavedRevisions(sampleLawViewerDocument.law.lawId);
+    const pinnedSummary = revisions.find(
+      (summary) => summary.revision.revisionId === pinnedRevisionId,
+    );
+    expect(pinnedSummary).toMatchObject({ isCurrent: false });
+  });
+
+  it("pinned アンカーで固定解決した過去版しか保存が無い法令ではその版が現行版になる", async () => {
+    // この法令はまだ何も保存されていない。基準日を設定したまま使うユーザーが
+    // 初めてこの法令を開いた場合を再現する。
+    const { pinnedRevisionId, storageRepository } = setupPinnedRevisionScenario();
+
+    // findAllByText 自体がリトライするため二重に待つ必要はない。
+    await screen.findAllByText(/2020\/04\/01/);
+
+    // 現行版スロットが 1 件も無い法令では、isCurrent: false で保存要求された版でも
+    // 空いたスロットを埋める。これが無いとオフラインフォールバック（getLawDocument）が
+    // この法令を 1 件も読めない。
+    await waitFor(async () => {
+      const currentDocument = await storageRepository.getLawDocument(
+        sampleLawViewerDocument.law.lawId,
+      );
+
+      expect(currentDocument?.revision.revisionId).toBe(pinnedRevisionId);
+    });
+  });
+
   it("文書レベル操作を左レールに、選択条操作を右レールに配置する", async () => {
     renderLawViewerRoute("/laws/129AC0000000089/articles/1");
 
     await screen.findByRole("article", { name: "民法" });
 
     const leftRail = screen.getByRole("complementary", { name: "法令の目次" });
-    // 条番号ジャンプ・オフライン保存は文書レベル操作として左レールに入る
+    // 条番号ジャンプ・ピン留めは文書レベル操作として左レールに入る
     expect(within(leftRail).getByRole("button", { name: "移動" })).toBeInTheDocument();
     expect(
-      within(leftRail).getByRole("button", { name: /オフライン保存|保存解除/ }),
+      within(leftRail).getByRole("button", { name: /^ピン留め(を解除)?$/ }),
     ).toBeInTheDocument();
 
     const rightRail = screen.getByRole("complementary", { name: "学習コンテキスト" });
@@ -968,9 +1239,7 @@ describe("LawViewerPageContent", () => {
 
     const sheet = await screen.findByRole("dialog");
     expect(within(sheet).getByRole("button", { name: "移動" })).toBeInTheDocument();
-    expect(
-      within(sheet).getByRole("button", { name: /オフライン保存|保存解除/ }),
-    ).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: /^ピン留め(を解除)?$/ })).toBeInTheDocument();
     expect(within(sheet).getByRole("navigation", { name: "法令目次" })).toBeInTheDocument();
   });
 

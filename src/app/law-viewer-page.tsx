@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
-import { Clipboard, Download, LinkIcon, ListTree, Trash2 } from "lucide-react";
+import { Clipboard, LinkIcon, ListTree, Pin, PinOff } from "lucide-react";
 
 import type { LawNode, LawRevision } from "@/core/domain";
 import { buildLawArticleUrl, computeArticleFingerprint } from "@/core/domain";
@@ -107,20 +107,41 @@ const LawViewerPageLoader = ({
   storageRepository: StorageRepository;
 }) => {
   const [state, setState] = useState<LawViewerState>({ status: "loading" });
+  const savedLawUseCase = useMemo(
+    () => createSavedLawUseCase(storageRepository),
+    [storageRepository],
+  );
 
   useEffect(() => {
     let isCurrent = true;
 
     void loadLawViewerDocument(lawId, repository, storageRepository, asOf).then((nextState) => {
-      if (isCurrent) {
-        setState(nextState);
+      if (!isCurrent) {
+        return;
       }
+
+      setState(nextState);
+
+      // 表示できた本文だけを保存する。保存済みの本文をそのまま出しただけのフォールバックは書き戻さない。
+      // オフラインデモ法令は status が "offline-unavailable" になるため、この分岐で同時に除外される。
+      if (nextState.status !== "ready" || nextState.loadedFromStorage) {
+        return;
+      }
+
+      // 自動保存は表示をブロックしない。失敗しても閲覧を妨げないので握りつぶす。
+      void savedLawUseCase
+        .save(
+          { law: nextState.law, revision: nextState.revision, nodes: nextState.nodes },
+          // 基準日を指定して開いた版は現行版スロットを奪わない。
+          { isCurrent: asOf === undefined },
+        )
+        .catch(() => undefined);
     });
 
     return () => {
       isCurrent = false;
     };
-  }, [asOf, lawId, repository, storageRepository]);
+  }, [asOf, lawId, repository, savedLawUseCase, storageRepository]);
 
   return (
     <LawViewerPageContent
@@ -246,9 +267,17 @@ const LawViewerReadyState = ({
             law: document.law,
             revision: document.revision,
             nodes: document.nodes,
-            isSaved: baseState.isSaved,
+            isPinned: baseState.isPinned,
             loadedFromStorage: false,
           });
+
+          // 固定解決した過去版も開いた版として保存する。現行版スロットは奪わない。
+          void savedLawUseCase
+            .save(
+              { law: document.law, revision: document.revision, nodes: document.nodes },
+              { isCurrent: false },
+            )
+            .catch(() => undefined);
         }
       } catch {
         // 固定解決に失敗した場合は基準日解決版のまま表示する。
@@ -260,7 +289,13 @@ const LawViewerReadyState = ({
     return () => {
       isCurrent = false;
     };
-  }, [pinnedRevisionId, resolvedRepository, baseState.revision.revisionId, baseState.isSaved]);
+  }, [
+    pinnedRevisionId,
+    resolvedRepository,
+    baseState.revision.revisionId,
+    baseState.isPinned,
+    savedLawUseCase,
+  ]);
 
   // 実際に表示する状態。固定解決の結果が現在の目的版と一致するときだけ採用し、
   // それ以外（未解決・pinned 解除・別条移動）は基準日解決版を表示する。
@@ -433,32 +468,41 @@ const LawViewerReadyState = ({
     }
   };
 
-  const handleSaveToggle = async () => {
+  // 法令を開くと自動保存が走るため、「保存済み」は常に真になり情報量を失った。
+  // 代わりにユーザーの明示的な意図であるピン留め（PR 3 の自動削除対象外の印）を扱う。
+  const handleLawPinToggle = async () => {
     setIsSaving(true);
     setSaveError(undefined);
 
     try {
-      if (savedState.isSaved) {
-        await savedLawUseCase.remove(state.law.lawId);
-        setSavedState({ isSaved: false, loadedFromStorage: false });
+      if (savedState.isPinned) {
+        await savedLawUseCase.unpin(state.law.lawId);
+        // await をまたぐため、閉じ込めた savedState ではなく最新値から更新する。
+        setSavedState((previous) => ({ ...previous, isPinned: false }));
         return;
       }
 
-      await savedLawUseCase.save({
-        law: state.law,
-        revision: state.revision,
-        nodes: state.nodes,
-      });
-
-      const savedDocument = await savedLawUseCase.get(state.law.lawId);
-
-      setSavedState({
-        isSaved: true,
-        loadedFromStorage: false,
-        ...(savedDocument?.savedAt === undefined ? {} : { savedAt: savedDocument.savedAt }),
-      });
+      // 本文の無いピンを作らないよう、保存に成功してからピンを立てる（pin の契約）。
+      // 自動保存と同じ判断で isCurrent を渡す。表示中が pinnedState（版固定で解決した過去版）
+      // なら false、baseState でも基準日を指定していれば false にする。pinnedState は
+      // requestedAsOf を持たないため、state === baseState の判定を先に見る必要がある。
+      await savedLawUseCase.pin(
+        {
+          law: state.law,
+          revision: state.revision,
+          nodes: state.nodes,
+        },
+        { isCurrent: state === baseState && baseState.requestedAsOf === undefined },
+      );
+      setSavedState((previous) => ({ ...previous, isPinned: true }));
     } catch {
-      setSaveError("オフライン保存を更新できませんでした。端末の保存領域を確認してください。");
+      // 解除の失敗は保存領域の空きと無関係（pinnedLaws からの削除は本文を書かない）なので、
+      // ピン留めと解除でメッセージを分け、ユーザーを誤誘導しないようにする。
+      setSaveError(
+        savedState.isPinned
+          ? "ピン留めを解除できませんでした。時間をおいて再試行してください。"
+          : "ピン留めできませんでした。端末の保存領域を確認してください。",
+      );
     } finally {
       setIsSaving(false);
     }
@@ -564,30 +608,30 @@ const LawViewerReadyState = ({
                 施行日 {formatEffectiveDateLabel(state.revision)}
               </div>
             </div>
-            {savedState.isSaved ? (
+            {savedState.isPinned ? (
               <Badge variant="secondary" className="w-fit">
-                オフライン保存済み
+                ピン留め中
               </Badge>
             ) : null}
 
-            {/* 文書レベル操作: オフライン保存（基準日は法令番号の直下、条番号ジャンプは目次直下に置く） */}
+            {/* 文書レベル操作: ピン留め（基準日は法令番号の直下、条番号ジャンプは目次直下に置く） */}
             <div className="grid gap-3 border-b pb-3">
               <Button
                 aria-describedby={saveError === undefined ? undefined : saveErrorId}
                 className="w-fit gap-2"
                 disabled={isSaving}
                 onClick={() => {
-                  void handleSaveToggle();
+                  void handleLawPinToggle();
                 }}
                 type="button"
-                variant={savedState.isSaved ? "outline" : "default"}
+                variant={savedState.isPinned ? "outline" : "default"}
               >
-                {savedState.isSaved ? (
-                  <Trash2 className="size-4" aria-hidden="true" />
+                {savedState.isPinned ? (
+                  <PinOff className="size-4" aria-hidden="true" />
                 ) : (
-                  <Download className="size-4" aria-hidden="true" />
+                  <Pin className="size-4" aria-hidden="true" />
                 )}
-                {savedState.isSaved ? "保存解除" : "オフライン保存"}
+                {savedState.isPinned ? "ピン留めを解除" : "ピン留め"}
               </Button>
             </div>
 
@@ -858,18 +902,18 @@ const LawViewerReadyState = ({
                 指定された条文が見つかりません。
               </p>
             ) : null}
-            {/* オフライン保存 */}
+            {/* ピン留め */}
             <Button
               aria-describedby={saveError === undefined ? undefined : `${saveErrorId}-mobile`}
               className="w-fit gap-2"
               disabled={isSaving}
               onClick={() => {
-                void handleSaveToggle();
+                void handleLawPinToggle();
               }}
               type="button"
-              variant={savedState.isSaved ? "outline" : "default"}
+              variant={savedState.isPinned ? "outline" : "default"}
             >
-              {savedState.isSaved ? "保存解除" : "オフライン保存"}
+              {savedState.isPinned ? "ピン留めを解除" : "ピン留め"}
             </Button>
             {/* 保存失敗はシート表示中だと本文側の alert が隠れるため、シート内にも通知する。 */}
             {saveError !== undefined ? (

@@ -19,9 +19,146 @@ describe("SavedPage", () => {
     renderSavedRoute("/saved");
 
     expect(await screen.findByRole("heading", { name: "保存リスト" })).toBeInTheDocument();
-    expect(screen.getByText("保存済み法令はまだありません。")).toBeInTheDocument();
+    expect(screen.getByText("ピン留めした法令はまだありません。")).toBeInTheDocument();
+    expect(screen.getByText("最近開いた法令はまだありません。")).toBeInTheDocument();
     expect(screen.getByText("保存項目はまだありません。")).toBeInTheDocument();
     expect(screen.getByText("コレクションはまだありません。")).toBeInTheDocument();
+  });
+
+  it("splits saved laws into a pinned section and a recently opened section", async () => {
+    const otherLaw = { ...sampleLawViewerDocument.law, lawId: "322AC0000000049", title: "刑法" };
+    const otherRevision = {
+      ...sampleLawViewerDocument.revision,
+      lawId: otherLaw.lawId,
+      revisionId: "322AC0000000049_rev",
+    };
+    const storage = createMemoryStorageRepository();
+
+    await storage.repository.saveLawDocument({
+      law: sampleLawViewerDocument.law,
+      nodes: sampleLawViewerDocument.nodes,
+      revision: sampleLawViewerDocument.revision,
+    });
+    await storage.repository.saveLawDocument({
+      law: otherLaw,
+      nodes: sampleLawViewerDocument.nodes,
+      revision: otherRevision,
+    });
+    await storage.repository.pinLaw(sampleLawViewerDocument.law.lawId);
+
+    renderSavedRoute("/saved", storage.repository);
+
+    const pinnedSection = await screen.findByRole("region", { name: "ピン留めした法令" });
+    const recentSection = screen.getByRole("region", { name: "最近開いた法令" });
+
+    expect(within(pinnedSection).getByText("民法")).toBeInTheDocument();
+    expect(within(pinnedSection).queryByText("刑法")).not.toBeInTheDocument();
+    expect(within(recentSection).getByText("刑法")).toBeInTheDocument();
+    expect(within(recentSection).queryByText("民法")).not.toBeInTheDocument();
+  });
+
+  it("orders each section by its own recency: pinnedAt for pinned laws, updatedAt for recent laws", async () => {
+    // pinLaw / saveLawDocument はどちらも呼び出し時刻をそのまま使うため、
+    // now を進めながら呼び出す順序がそのまま並び順の期待値になる。
+    let clock = new Date("2026-08-01T00:00:00.000Z").getTime();
+    const now = () => {
+      const current = new Date(clock);
+      clock += 1000;
+      return current;
+    };
+    const lawA = { ...sampleLawViewerDocument.law, lawId: "law-a", title: "法令A" };
+    const lawB = { ...sampleLawViewerDocument.law, lawId: "law-b", title: "法令B" };
+    const lawC = { ...sampleLawViewerDocument.law, lawId: "law-c", title: "法令C" };
+    const lawD = { ...sampleLawViewerDocument.law, lawId: "law-d", title: "法令D" };
+    const revisionFor = (law: { lawId: string }) => ({
+      ...sampleLawViewerDocument.revision,
+      lawId: law.lawId,
+      revisionId: `${law.lawId}_rev`,
+    });
+    const storage = createMemoryStorageRepository({ now });
+
+    // 保存順: A, B（未ピン留め）, C, D（ピン留め、C を先にピン留め）。
+    // 最近開いたは updatedAt 降順で B, A の順。ピン留めは pinnedAt 降順で D, C の順になるはず。
+    await storage.repository.saveLawDocument({
+      law: lawA,
+      nodes: sampleLawViewerDocument.nodes,
+      revision: revisionFor(lawA),
+    });
+    await storage.repository.saveLawDocument({
+      law: lawB,
+      nodes: sampleLawViewerDocument.nodes,
+      revision: revisionFor(lawB),
+    });
+    await storage.repository.saveLawDocument({
+      law: lawC,
+      nodes: sampleLawViewerDocument.nodes,
+      revision: revisionFor(lawC),
+    });
+    await storage.repository.saveLawDocument({
+      law: lawD,
+      nodes: sampleLawViewerDocument.nodes,
+      revision: revisionFor(lawD),
+    });
+    await storage.repository.pinLaw(lawC.lawId);
+    await storage.repository.pinLaw(lawD.lawId);
+
+    renderSavedRoute("/saved", storage.repository);
+
+    const pinnedSection = await screen.findByRole("region", { name: "ピン留めした法令" });
+    const recentSection = screen.getByRole("region", { name: "最近開いた法令" });
+
+    expect(
+      within(pinnedSection)
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual(["法令D", "法令C"]);
+    expect(
+      within(recentSection)
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual(["法令B", "法令A"]);
+  });
+
+  it("breaks pinnedAt ties by law id so the pinned order does not depend on the saved law order", async () => {
+    // v4 -> v5 の移行は同じ savedAt を持つ法令に同じ pinnedAt を与えるため、同値は実際に起きる。
+    // 同値のとき comparePinnedLaws は lawId 降順に倒す。この規則を UI が持たないと、並びが
+    // 保存一覧の順（updatedAt 由来）に引きずられ、リポジトリの契約と食い違う。
+    let current = new Date("2026-08-01T00:00:00.000Z");
+    const lawA = { ...sampleLawViewerDocument.law, lawId: "law-a", title: "法令A" };
+    const lawB = { ...sampleLawViewerDocument.law, lawId: "law-b", title: "法令B" };
+    const revisionFor = (law: { lawId: string }) => ({
+      ...sampleLawViewerDocument.revision,
+      lawId: law.lawId,
+      revisionId: `${law.lawId}_rev`,
+    });
+    const storage = createMemoryStorageRepository({ now: () => current });
+
+    // 保存は B が先、A が後。保存一覧の順に従うと A が先に来て、期待と逆になる。
+    await storage.repository.saveLawDocument({
+      law: lawB,
+      nodes: sampleLawViewerDocument.nodes,
+      revision: revisionFor(lawB),
+    });
+    current = new Date("2026-08-02T00:00:00.000Z");
+    await storage.repository.saveLawDocument({
+      law: lawA,
+      nodes: sampleLawViewerDocument.nodes,
+      revision: revisionFor(lawA),
+    });
+
+    // 時計を止めたままピン留めするので pinnedAt は同値になる。
+    await storage.repository.pinLaw(lawA.lawId);
+    await storage.repository.pinLaw(lawB.lawId);
+
+    renderSavedRoute("/saved", storage.repository);
+
+    const pinnedSection = await screen.findByRole("region", { name: "ピン留めした法令" });
+
+    expect(
+      within(pinnedSection)
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual(["法令B", "法令A"]);
   });
 
   it("renders preloaded saved laws, bookmarks, and collections on initial load", async () => {

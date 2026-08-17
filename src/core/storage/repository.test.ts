@@ -448,6 +448,33 @@ describe("StorageRepository", () => {
     }
   });
 
+  it("removes the pin when the last revision of a law is deleted revision by revision", async () => {
+    // deleteLawDocument と違い、deleteLawRevision は版を 1 件ずつ消す。最後の 1 件が消えると
+    // 法令メタも消えるため、ピンだけが残ると本文の無い幽霊ピンになる。PR 3 のエビクションは
+    // この経路で版を消すので、いま契約として固定しておく。
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+    await repository.saveLawDocument(
+      { law, revision: olderRevision, nodes: [olderArticleNode] },
+      { isCurrent: false },
+    );
+    await repository.pinLaw(law.lawId);
+
+    await repository.deleteLawRevision(law.lawId, olderRevision.revisionId);
+
+    // 版がまだ残っているうちはピンを外さない。
+    await expect(repository.isLawPinned(law.lawId)).resolves.toBe(true);
+
+    await repository.deleteLawRevision(law.lawId, revision.revisionId);
+
+    await expect(repository.isLawPinned(law.lawId)).resolves.toBe(false);
+    await expect(repository.listPinnedLaws()).resolves.toEqual([]);
+  });
+
   it("saves a revision without promoting it to the current slot", async () => {
     const repository = createStorageRepository({
       databaseName: createDatabaseName(),
@@ -489,6 +516,56 @@ describe("StorageRepository", () => {
       { isCurrent: false },
     );
 
+    await expect(repository.getLawDocument(law.lawId)).resolves.toEqual({
+      law,
+      revision,
+      nodes: [articleNode, paragraphNode],
+      savedAt: "2026-07-06T00:00:00.000Z",
+    });
+  });
+
+  it("promotes the first saved revision of a law to the current slot even when saved as non-current", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    // 基準日を指定して開いた場合、常に isCurrent: false で保存が呼ばれる。
+    // その法令にまだ現行版が無いなら、この保存が空きスロットを埋めないと
+    // オフライン時の getLawDocument によるフォールバックが永久に 1 件も引けなくなる。
+    // 戻り値は「要求」ではなく「実際に現行版スロットへ入ったか」を表すため、
+    // 呼び出し側（索引判断）はこの戻り値だけを見て良いことを永続化状態と対で固定する。
+    await expect(
+      repository.saveLawDocument(
+        { law, revision, nodes: [articleNode, paragraphNode] },
+        { isCurrent: false },
+      ),
+    ).resolves.toEqual({ isCurrent: true });
+
+    await expect(repository.getLawDocument(law.lawId)).resolves.toEqual({
+      law,
+      revision,
+      nodes: [articleNode, paragraphNode],
+      savedAt: "2026-07-06T00:00:00.000Z",
+    });
+  });
+
+  it("does not steal the current slot from an existing current revision when saving another revision as non-current", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+    // 戻り値も永続化状態と対で固定する。既存の現行版があるため isCurrent: false のまま返る。
+    await expect(
+      repository.saveLawDocument(
+        { law, revision: olderRevision, nodes: [olderArticleNode] },
+        { isCurrent: false },
+      ),
+    ).resolves.toEqual({ isCurrent: false });
+
+    // 現行版スロットは既存の現行版のまま。空きスロットを埋める規則は既存の現行版を奪わない。
     await expect(repository.getLawDocument(law.lawId)).resolves.toEqual({
       law,
       revision,
@@ -1215,6 +1292,107 @@ describe("StorageRepository", () => {
     } finally {
       database.close();
     }
+  });
+
+  it("pins and unpins a law without touching its saved documents", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+
+    await expect(repository.isLawPinned(law.lawId)).resolves.toBe(false);
+
+    await repository.pinLaw(law.lawId);
+
+    await expect(repository.isLawPinned(law.lawId)).resolves.toBe(true);
+    await expect(repository.listPinnedLaws()).resolves.toEqual([
+      { lawId: law.lawId, pinnedAt: "2026-07-06T00:00:00.000Z" },
+    ]);
+
+    await repository.unpinLaw(law.lawId);
+
+    await expect(repository.isLawPinned(law.lawId)).resolves.toBe(false);
+    await expect(repository.listPinnedLaws()).resolves.toEqual([]);
+
+    // ピン留めの解除は本文を消さない。
+    await expect(repository.getLawDocument(law.lawId)).resolves.toEqual({
+      law,
+      revision,
+      nodes: [articleNode, paragraphNode],
+      savedAt: "2026-07-06T00:00:00.000Z",
+    });
+  });
+
+  it("removes the pin when the pinned law's document is deleted", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+    await repository.pinLaw(law.lawId);
+
+    await expect(repository.isLawPinned(law.lawId)).resolves.toBe(true);
+
+    await repository.deleteLawDocument(law.lawId);
+
+    // 本文が消えたあとにピンだけが幽霊レコードとして残ってはいけない。
+    await expect(repository.isLawPinned(law.lawId)).resolves.toBe(false);
+    await expect(repository.listPinnedLaws()).resolves.toEqual([]);
+  });
+
+  it("removes a pin that has no saved document", async () => {
+    // 自動保存が失敗したままピン留めだけが成立する不整合（保存領域が満杯など）を想定する。
+    // savedLaws に該当法令の行が 1 件も無い（records.length === 0）ため、実装は早期 return する
+    // 前にピンを消しておく必要がある。この分岐は本文を事前に保存する既存テストでは検証できない。
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.pinLaw(law.lawId);
+    await expect(repository.isLawPinned(law.lawId)).resolves.toBe(true);
+
+    await repository.deleteLawDocument(law.lawId);
+
+    await expect(repository.isLawPinned(law.lawId)).resolves.toBe(false);
+    await expect(repository.listPinnedLaws()).resolves.toEqual([]);
+  });
+
+  it("keeps the first pinned time when the same law is pinned again", async () => {
+    let currentTime = new Date("2026-07-06T00:00:00.000Z");
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: () => currentTime,
+    });
+
+    await repository.pinLaw(law.lawId);
+    currentTime = new Date("2026-07-09T00:00:00.000Z");
+    await repository.pinLaw(law.lawId);
+
+    await expect(repository.listPinnedLaws()).resolves.toEqual([
+      { lawId: law.lawId, pinnedAt: "2026-07-06T00:00:00.000Z" },
+    ]);
+  });
+
+  it("orders pinned laws deterministically when they share the same pinned time", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    // 同一ミリ秒でのピン留めは pinnedAt が同値になる。索引の返却順に任せず lawId 降順で決める。
+    await repository.pinLaw("129AC0000000089");
+    await repository.pinLaw("132AC0000000048");
+    await repository.pinLaw("140AC0000000045");
+
+    await expect(repository.listPinnedLaws()).resolves.toEqual([
+      { lawId: "140AC0000000045", pinnedAt: "2026-07-06T00:00:00.000Z" },
+      { lawId: "132AC0000000048", pinnedAt: "2026-07-06T00:00:00.000Z" },
+      { lawId: "129AC0000000089", pinnedAt: "2026-07-06T00:00:00.000Z" },
+    ]);
   });
 
   it("closes the cached connection and can reopen on later operations", async () => {

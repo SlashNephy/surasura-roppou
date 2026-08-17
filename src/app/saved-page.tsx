@@ -1,10 +1,11 @@
 import { type SyntheticEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
-import { Archive, Download, FolderPlus, StickyNote, type LucideIcon } from "lucide-react";
+import { Archive, Download, FolderPlus, Pin, StickyNote, type LucideIcon } from "lucide-react";
 
 import type { Bookmark, Collection } from "@/core/domain";
 import { createSavedDataFile } from "@/core/native-integration";
 import {
+  comparePinnedLaws,
   createSavedLawUseCase,
   createStorageRepository,
   generateStorageId,
@@ -46,11 +47,16 @@ type CollectionPageState =
 interface SavedPageData {
   bookmarks: Bookmark[];
   collections: Collection[];
+  // 法令単位のピン留め。pinnedAt はセクション内の並び順に使うため Set ではなく Map で持つ。
+  pinnedAtByLawId: Map<string, string>;
   savedLaws: SavedLawSummary[];
 }
 
 export const SavedPage = ({ storageRepository = defaultStorageRepository }: SavedPageProps) => {
   const [savedLaws, setSavedLaws] = useState<SavedLawSummary[]>([]);
+  const [pinnedAtByLawId, setPinnedAtByLawId] = useState<Map<string, string>>(
+    new Map<string, string>(),
+  );
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
   const [error, setError] = useState<string | undefined>();
@@ -67,8 +73,9 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
   );
 
   const loadSavedPageData = useCallback(async (): Promise<SavedPageData> => {
-    const [nextSavedLaws, nextBookmarks, nextCollections] = await Promise.all([
+    const [nextSavedLaws, nextPinnedLaws, nextBookmarks, nextCollections] = await Promise.all([
       savedLawUseCase.list(),
+      savedLawUseCase.listPinned(),
       storageRepository.listBookmarks(),
       storageRepository.listCollections(),
     ]);
@@ -76,12 +83,16 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
     return {
       bookmarks: nextBookmarks,
       collections: nextCollections,
+      pinnedAtByLawId: new Map(
+        nextPinnedLaws.map((pinnedLaw) => [pinnedLaw.lawId, pinnedLaw.pinnedAt]),
+      ),
       savedLaws: nextSavedLaws,
     };
   }, [savedLawUseCase, storageRepository]);
 
   const applySavedPageData = useCallback((data: SavedPageData) => {
     setSavedLaws(data.savedLaws);
+    setPinnedAtByLawId(data.pinnedAtByLawId);
     setBookmarks(data.bookmarks);
     setCollections(data.collections);
     setError(undefined);
@@ -184,7 +195,23 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem] xl:items-start">
         <div className="grid gap-6">
-          <SavedLawList savedLaws={savedLaws} />
+          <SavedLawList
+            emptyMessage="ピン留めした法令はまだありません。"
+            headingId="pinned-laws-heading"
+            icon={Pin}
+            savedLaws={toPinnedSavedLaws(savedLaws, pinnedAtByLawId)}
+            title="ピン留めした法令"
+          />
+          <SavedLawList
+            emptyMessage="最近開いた法令はまだありません。"
+            headingId="recent-laws-heading"
+            icon={Archive}
+            // updatedAt 降順。PR 3 の LRU が消す順の逆順にあたる。
+            savedLaws={savedLaws
+              .filter((savedLaw) => !pinnedAtByLawId.has(savedLaw.law.lawId))
+              .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))}
+            title="最近開いた法令"
+          />
           <BookmarkList bookmarks={bookmarks} lawTitlesById={savedLawTitlesById} />
           <CollectionList collections={collections} />
         </div>
@@ -317,11 +344,43 @@ export const SavedCollectionPage = ({
   );
 };
 
-const SavedLawList = ({ savedLaws }: { savedLaws: SavedLawSummary[] }) => (
-  <section aria-labelledby="saved-laws-heading" className="grid gap-3">
-    <SectionHeading icon={Archive} id="saved-laws-heading" title="保存済み法令" />
+/**
+ * ピン留めされた保存法令を、リポジトリの `listPinnedLaws` と同じ規則で並べる。
+ *
+ * 抽出と比較を `flatMap` にまとめ、`pinnedAt` が必ず存在することを型で示す。
+ * 先に `has` で絞ってから `get` を引き直すと、到達しないフォールバック値
+ * （`?? ""`）を書く羽目になり、配線の誤りを覆い隠す。
+ */
+const toPinnedSavedLaws = (
+  savedLaws: SavedLawSummary[],
+  pinnedAtByLawId: Map<string, string>,
+): SavedLawSummary[] =>
+  savedLaws
+    .flatMap((savedLaw) => {
+      const pinnedAt = pinnedAtByLawId.get(savedLaw.law.lawId);
+
+      return pinnedAt === undefined ? [] : [{ lawId: savedLaw.law.lawId, pinnedAt, savedLaw }];
+    })
+    .sort(comparePinnedLaws)
+    .map((entry) => entry.savedLaw);
+
+const SavedLawList = ({
+  emptyMessage,
+  headingId,
+  icon,
+  savedLaws,
+  title,
+}: {
+  emptyMessage: string;
+  headingId: string;
+  icon: LucideIcon;
+  savedLaws: SavedLawSummary[];
+  title: string;
+}) => (
+  <section aria-labelledby={headingId} className="grid gap-3">
+    <SectionHeading icon={icon} id={headingId} title={title} />
     {savedLaws.length === 0 ? (
-      <EmptyState>保存済み法令はまだありません。</EmptyState>
+      <EmptyState>{emptyMessage}</EmptyState>
     ) : (
       <ul className="grid gap-2">
         {savedLaws.map((savedLaw) => (
@@ -340,7 +399,6 @@ const SavedLawList = ({ savedLaws }: { savedLaws: SavedLawSummary[] }) => (
                   <span>{savedLaw.nodeCount.toLocaleString("ja-JP")} ノード</span>
                 </div>
               </div>
-              <Badge variant="secondary">オフライン保存済み</Badge>
             </div>
           </li>
         ))}

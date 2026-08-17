@@ -16,7 +16,7 @@ import type {
 } from "@/core/domain";
 
 export const surasuraDatabaseName = "surasura-roppou";
-export const surasuraDatabaseVersion = 4;
+export const surasuraDatabaseVersion = 5;
 
 export interface SavedLawRecord {
   lawId: string;
@@ -56,6 +56,13 @@ export interface SearchPosting {
   lawId: string;
   bigram: string;
   nodeIds: string[];
+}
+
+// version 5: 法令単位のピン留め。レコードの存在がピン留めそのものを表す。
+// 版単位の savedLaws と直交させ、PR 3 のエビクションは「ここにある lawId は対象外」で済ませる。
+export interface PinnedLawRecord {
+  lawId: string;
+  pinnedAt: ISODateString;
 }
 
 export interface SurasuraDatabase extends DBSchema {
@@ -170,6 +177,13 @@ export interface SurasuraDatabase extends DBSchema {
     indexes: {
       "by-bigram": string;
       "by-law-id": string;
+    };
+  };
+  pinnedLaws: {
+    key: string;
+    value: PinnedLawRecord;
+    indexes: {
+      "by-pinned-at": string;
     };
   };
 }

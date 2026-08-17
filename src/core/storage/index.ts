@@ -15,6 +15,7 @@ export type {
   LawDocumentInput,
   LawScopedQuery,
   SaveLawDocumentOptions,
+  SaveLawDocumentResult,
   SavedLawDocument,
   SavedLawRevisionSummary,
   SavedLawSummary,
@@ -29,5 +30,12 @@ export type {
   SavedDataImportPreview,
   SavedDataImportResult,
 } from "./import-data";
+export { comparePinnedLaws } from "./pinned-law-order";
 export type { LawIndexHook, SavedLawUseCase, SavedLawUseCaseOptions } from "./saved-law-use-case";
-export type { LawCatalogEntry, SavedLawRecord, SearchPosting, SurasuraDatabase } from "./schema";
+export type {
+  LawCatalogEntry,
+  PinnedLawRecord,
+  SavedLawRecord,
+  SearchPosting,
+  SurasuraDatabase,
+} from "./schema";
