@@ -6,7 +6,7 @@ import type { Law, LawNode, LawRevision } from "@/core/domain";
 import { createMemoryStorageRepository } from "@/test/fixtures/storage";
 
 import { createStorageRepository, deleteSurasuraDatabase } from "./repository";
-import type { LawDocumentInput } from "./repository";
+import type { LawDocumentInput, SaveLawDocumentOptions } from "./repository";
 import { createSavedLawUseCase } from "./saved-law-use-case";
 
 const openedDatabaseNames: string[] = [];
@@ -195,6 +195,110 @@ describe("createSavedLawUseCase", () => {
 
     expect(records.map((record) => record.lawId)).toEqual([lawA.lawId, lawZ.lawId]);
   });
+
+  it("evicts history revisions after saving when the limit is exceeded", async () => {
+    const { repository } = createMemoryStorageRepository();
+    // 現行版 1 件（約 424 バイト）は上限内に収まるが、履歴版と合わせる（約 848 バイト）と
+    // 超える値を選ぶ。上限を 1 バイトのように極端に小さくすると、現行版 1 件だけでも
+    // 上限を超えてしまい、非現行版が無い第 1 段の対象切れの状態で第 2 段が動いて
+    // 現行版ごと法令が消えてしまう（この場合は望ましくない）。
+    const useCase = createSavedLawUseCase(repository, { getStorageLimitBytes: () => 500 });
+
+    await useCase.save({ law, revision, nodes });
+    await useCase.save({ law, revision: pastRevision, nodes: pastNodes }, { isCurrent: false });
+
+    // 上限を履歴込みの合計が超えるので履歴版は残らない。現行版はダウンロード指定が無くても
+    // 第 1 段では消えず、第 1 段だけで上限を下回るため第 2 段（法令単位の削除）も動かない。
+    await expect(
+      repository.getLawDocumentRevision(law.lawId, pastRevision.revisionId),
+    ).resolves.toBeUndefined();
+    await expect(useCase.get(law.lawId)).resolves.toMatchObject({ revision });
+  });
+
+  it("keeps a pinned law and removes an unpinned one when history is not enough", async () => {
+    const { repository } = createMemoryStorageRepository();
+    const removeLaw = vi.fn<(lawId: string) => Promise<void>>(() => Promise.resolve());
+    const useCase = createSavedLawUseCase(repository, {
+      indexer: { indexLaw: () => Promise.resolve(), removeLaw },
+      getStorageLimitBytes: () => 1,
+    });
+
+    await useCase.pin({ law, revision, nodes });
+    await useCase.save({ law: otherLaw, revision: otherRevision, nodes });
+
+    await expect(useCase.get(law.lawId)).resolves.toBeDefined();
+    await expect(useCase.get(otherLaw.lawId)).resolves.toBeUndefined();
+    // 法令単位の削除では検索索引も落とす。
+    expect(removeLaw).toHaveBeenCalledWith(otherLaw.lawId);
+  });
+
+  it("retries the save once after evicting when the quota is exceeded", async () => {
+    const { repository } = createMemoryStorageRepository();
+    let shouldFail = true;
+    const saveLawDocument = vi.fn(
+      (document: LawDocumentInput, options?: SaveLawDocumentOptions) => {
+        if (shouldFail) {
+          shouldFail = false;
+          const error = new Error("quota exceeded");
+
+          error.name = "QuotaExceededError";
+          return Promise.reject(error);
+        }
+        return repository.saveLawDocument(document, options);
+      },
+    );
+    const useCase = createSavedLawUseCase(
+      { ...repository, saveLawDocument },
+      { getStorageLimitBytes: () => 1_000_000 },
+    );
+
+    await useCase.save({ law, revision, nodes });
+
+    // 上限に余裕があってもディスク逼迫で quota は飛ぶ。1 度だけ再試行して救う。
+    expect(saveLawDocument).toHaveBeenCalledTimes(2);
+    await expect(useCase.get(law.lawId)).resolves.toBeDefined();
+  });
+
+  it("gives up when the retried save fails again", async () => {
+    const { repository } = createMemoryStorageRepository();
+    const quotaError = new Error("quota exceeded");
+
+    quotaError.name = "QuotaExceededError";
+    const saveLawDocument = vi.fn(() => Promise.reject(quotaError));
+    const useCase = createSavedLawUseCase(
+      { ...repository, saveLawDocument },
+      { getStorageLimitBytes: () => 1_000_000 },
+    );
+
+    await expect(useCase.save({ law, revision, nodes })).rejects.toThrow("quota exceeded");
+    expect(saveLawDocument).toHaveBeenCalledTimes(2);
+  });
+
+  it("backfills a missing byte size instead of treating the record as weightless", async () => {
+    const { repository } = createMemoryStorageRepository();
+
+    await repository.saveLawDocument({ law, revision, nodes });
+    await repository.setSavedLawByteSize(law.lawId, revision.revisionId, 0);
+
+    const useCase = createSavedLawUseCase({
+      ...repository,
+      listSavedLawRecords: async () => {
+        // PR 3 より前に保存されたレコードを模す（byteSize を持たない）。
+        const records = await repository.listSavedLawRecords();
+
+        return records.map(({ byteSize, ...rest }) => {
+          void byteSize;
+          return rest;
+        });
+      },
+    });
+
+    await useCase.evict(1_000_000);
+
+    const records = await repository.listSavedLawRecords();
+
+    expect(records[0]?.byteSize).toBeGreaterThan(0);
+  });
 });
 
 const createDatabaseName = (): string => {
@@ -233,6 +337,22 @@ const articleNode = {
 } satisfies LawNode;
 
 const nodes = [articleNode];
+
+// エビクション対象として使う別法令。
+const otherLaw = {
+  ...law,
+  lawId: "132AC0000000048",
+  title: "商法",
+  lawNumber: "明治三十二年法律第四十八号",
+  aliases: ["商法"],
+} satisfies Law;
+
+const otherRevision = {
+  lawId: otherLaw.lawId,
+  revisionId: "132AC0000000048_20260624_508AC0000000045",
+  effectiveDate: "2026-06-24",
+  fetchedAt: "2026-07-06T00:00:00.000Z",
+} satisfies LawRevision;
 
 // 基準日指定で取得した過去版。revisionId を変え、現行版レコードと別キーで共存させる。
 const pastRevision = {
