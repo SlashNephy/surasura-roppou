@@ -31,6 +31,7 @@ export type {
   SavedDataImportResult,
 } from "./import-data";
 export { comparePinnedLaws } from "./pinned-law-order";
+export { planEviction, type EvictionCandidate, type EvictionPlan } from "./eviction-plan";
 export type { LawIndexHook, SavedLawUseCase, SavedLawUseCaseOptions } from "./saved-law-use-case";
 export type {
   LawCatalogEntry,
