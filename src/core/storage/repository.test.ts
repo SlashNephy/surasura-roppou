@@ -448,6 +448,33 @@ describe("StorageRepository", () => {
     }
   });
 
+  it("removes the pin when the last revision of a law is deleted revision by revision", async () => {
+    // deleteLawDocument と違い、deleteLawRevision は版を 1 件ずつ消す。最後の 1 件が消えると
+    // 法令メタも消えるため、ピンだけが残ると本文の無い幽霊ピンになる。PR 3 のエビクションは
+    // この経路で版を消すので、いま契約として固定しておく。
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+    await repository.saveLawDocument(
+      { law, revision: olderRevision, nodes: [olderArticleNode] },
+      { isCurrent: false },
+    );
+    await repository.pinLaw(law.lawId);
+
+    await repository.deleteLawRevision(law.lawId, olderRevision.revisionId);
+
+    // 版がまだ残っているうちはピンを外さない。
+    await expect(repository.isLawPinned(law.lawId)).resolves.toBe(true);
+
+    await repository.deleteLawRevision(law.lawId, revision.revisionId);
+
+    await expect(repository.isLawPinned(law.lawId)).resolves.toBe(false);
+    await expect(repository.listPinnedLaws()).resolves.toEqual([]);
+  });
+
   it("saves a revision without promoting it to the current slot", async () => {
     const repository = createStorageRepository({
       databaseName: createDatabaseName(),

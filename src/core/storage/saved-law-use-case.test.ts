@@ -153,6 +153,20 @@ describe("createSavedLawUseCase", () => {
     // 本文の無いピンを作らない。
     await expect(useCase.isPinned(law.lawId)).resolves.toBe(false);
   });
+
+  it("removes the pin from the memory repository when the last revision is deleted", async () => {
+    // メモリ実装が実リポジトリと同じ後始末をしないと、これを使う UI テストが幽霊ピンのバグを
+    // 隠してしまう。実リポジトリ側の契約は repository.test.ts で固定している。
+    const { repository } = createMemoryStorageRepository();
+    const useCase = createSavedLawUseCase(repository);
+
+    await useCase.pin({ law, revision, nodes });
+
+    await repository.deleteLawRevision(law.lawId, revision.revisionId);
+
+    await expect(useCase.isPinned(law.lawId)).resolves.toBe(false);
+    await expect(useCase.listPinned()).resolves.toEqual([]);
+  });
 });
 
 const createDatabaseName = (): string => {

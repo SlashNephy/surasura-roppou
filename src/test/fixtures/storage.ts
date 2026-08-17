@@ -191,6 +191,15 @@ export const createMemoryStorageRepository = (
       },
       deleteLawRevision(lawId, revisionId) {
         savedRevisions.delete(toRevisionKey(lawId, revisionId));
+
+        // 版が 1 件も残らなければピンも消す（実リポジトリと同じ契約）。
+        const hasRemaining = [...savedRevisions.values()].some(
+          (entry) => entry.document.law.lawId === lawId,
+        );
+
+        if (!hasRemaining) {
+          pinnedLaws.delete(lawId);
+        }
         return Promise.resolve();
       },
       pinLaw(lawId) {

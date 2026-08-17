@@ -353,7 +353,10 @@ export const createStorageRepository = (
 
     async deleteLawRevision(lawId, revisionId) {
       await withDatabase(async (db) => {
-        const tx = db.transaction(["laws", "lawRevisions", "lawNodes", "savedLaws"], "readwrite");
+        const tx = db.transaction(
+          ["laws", "lawRevisions", "lawNodes", "savedLaws", "pinnedLaws"],
+          "readwrite",
+        );
         const savedLaws = tx.objectStore("savedLaws");
         const record = await savedLaws.get([lawId, revisionId]);
 
@@ -372,11 +375,13 @@ export const createStorageRepository = (
         void tx.objectStore("lawRevisions").delete(revisionId);
         await savedLaws.delete([lawId, revisionId]);
 
-        // 版がすべて消えたら法令メタも残さない。
+        // 版がすべて消えたら法令メタも残さない。ピンも同時に消す。本文の無いピンが残ると
+        // isLawPinned が真を返し続け、保存リストに実体の無い法令が並ぶ。
         const remaining = await savedLaws.index("by-law-id").getAllKeys(lawId);
 
         if (remaining.length === 0) {
           void tx.objectStore("laws").delete(lawId);
+          void tx.objectStore("pinnedLaws").delete(lawId);
         }
         await tx.done;
       });
