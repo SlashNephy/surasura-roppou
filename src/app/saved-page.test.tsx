@@ -19,7 +19,7 @@ describe("SavedPage", () => {
     renderSavedRoute("/saved");
 
     expect(await screen.findByRole("heading", { name: "保存リスト" })).toBeInTheDocument();
-    expect(screen.getByText("ピン留めした法令はまだありません。")).toBeInTheDocument();
+    expect(screen.getByText("ダウンロードした法令はまだありません。")).toBeInTheDocument();
     expect(screen.getByText("最近開いた法令はまだありません。")).toBeInTheDocument();
     expect(screen.getByText("保存項目はまだありません。")).toBeInTheDocument();
     expect(screen.getByText("コレクションはまだありません。")).toBeInTheDocument();
@@ -48,13 +48,34 @@ describe("SavedPage", () => {
 
     renderSavedRoute("/saved", storage.repository);
 
-    const pinnedSection = await screen.findByRole("region", { name: "ピン留めした法令" });
+    const pinnedSection = await screen.findByRole("region", { name: "ダウンロード済み" });
     const recentSection = screen.getByRole("region", { name: "最近開いた法令" });
 
     expect(within(pinnedSection).getByText("民法")).toBeInTheDocument();
     expect(within(pinnedSection).queryByText("刑法")).not.toBeInTheDocument();
     expect(within(recentSection).getByText("刑法")).toBeInTheDocument();
     expect(within(recentSection).queryByText("民法")).not.toBeInTheDocument();
+  });
+
+  it("shows the stored size of each law and the total against the limit", async () => {
+    const storage = createMemoryStorageRepository();
+
+    await storage.repository.saveLawDocument({
+      law: sampleLawViewerDocument.law,
+      nodes: sampleLawViewerDocument.nodes,
+      revision: sampleLawViewerDocument.revision,
+    });
+
+    renderSavedRoute("/saved", storage.repository);
+
+    const recentSection = await screen.findByRole("region", { name: "最近開いた法令" });
+
+    // ノード数ではなく容量を出す。ノード数は判断材料にならない。
+    expect(within(recentSection).getByText(/KB|MB/)).toBeInTheDocument();
+    expect(within(recentSection).queryByText(/ノード/)).not.toBeInTheDocument();
+
+    // 合計と上限を出す。上限だけあって使用量が見えないと「いつか勝手に消える」としか読めない。
+    expect(screen.getByText(/\/ 50 MB/)).toBeInTheDocument();
   });
 
   it("orders each section by its own recency: pinnedAt for pinned laws, updatedAt for recent laws", async () => {
@@ -104,7 +125,7 @@ describe("SavedPage", () => {
 
     renderSavedRoute("/saved", storage.repository);
 
-    const pinnedSection = await screen.findByRole("region", { name: "ピン留めした法令" });
+    const pinnedSection = await screen.findByRole("region", { name: "ダウンロード済み" });
     const recentSection = screen.getByRole("region", { name: "最近開いた法令" });
 
     expect(
@@ -152,7 +173,7 @@ describe("SavedPage", () => {
 
     renderSavedRoute("/saved", storage.repository);
 
-    const pinnedSection = await screen.findByRole("region", { name: "ピン留めした法令" });
+    const pinnedSection = await screen.findByRole("region", { name: "ダウンロード済み" });
 
     expect(
       within(pinnedSection)
