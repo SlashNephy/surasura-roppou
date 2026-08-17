@@ -10,6 +10,8 @@ import {
 } from "./storage-limit";
 
 afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
   window.localStorage.clear();
 });
 
@@ -43,5 +45,58 @@ describe("storage limit", () => {
 
   it("converts megabytes to binary bytes", () => {
     expect(megabytesToBytes(50)).toBe(52_428_800);
+  });
+
+  it("falls back to the default without throwing when localStorage access itself throws", () => {
+    const originalDescriptor = Object.getOwnPropertyDescriptor(window, "localStorage");
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      get() {
+        throw new DOMException("blocked", "SecurityError");
+      },
+    });
+
+    try {
+      expect(getStorageLimitMegabytes()).toBe(DEFAULT_STORAGE_LIMIT_MEGABYTES);
+      expect(() => {
+        setStorageLimitMegabytes(100);
+        subscribeStorageLimit(() => undefined)();
+      }).not.toThrow();
+    } finally {
+      if (originalDescriptor === undefined) {
+        Reflect.deleteProperty(window, "localStorage");
+      } else {
+        Object.defineProperty(window, "localStorage", originalDescriptor);
+      }
+    }
+  });
+
+  it("does not notify subscribers when the write fails", () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeStorageLimit(listener);
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("blocked", "SecurityError");
+    });
+
+    expect(() => {
+      setStorageLimitMegabytes(100);
+    }).not.toThrow();
+    expect(getStorageLimitMegabytes()).toBe(DEFAULT_STORAGE_LIMIT_MEGABYTES);
+    expect(listener).not.toHaveBeenCalled();
+
+    unsubscribe();
+  });
+
+  it("keeps one subscription notified after unsubscribing the other, even with the same callback reference", () => {
+    const listener = vi.fn();
+    const unsubscribeFirst = subscribeStorageLimit(listener);
+    const unsubscribeSecond = subscribeStorageLimit(listener);
+
+    unsubscribeFirst();
+    setStorageLimitMegabytes(100);
+
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    unsubscribeSecond();
   });
 });
