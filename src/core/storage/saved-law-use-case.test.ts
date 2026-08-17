@@ -259,17 +259,31 @@ describe("createSavedLawUseCase", () => {
     await expect(useCase.get(law.lawId)).resolves.toBeDefined();
   });
 
-  it("evicts an old unpinned law before retrying the save when the quota is exceeded", async () => {
+  it("evicts an old unpinned law before retrying the save when the quota is exceeded (limit already exceeded)", async () => {
     const { repository } = createMemoryStorageRepository();
-    // 古い未ピン法令を大きめの本文であらかじめ保存しておく。単独でも上限を超えるが、
-    // これから保存する法令 1 件だけなら上限内に収まるよう、サイズの間を上限にする。
+    // 古い未ピン法令を大きめの本文で 2 件あらかじめ保存しておく（上限は最初から超過済み）。
+    // どちらが消えても振る舞いとしては等価なので、片方の lawId を名指しで検証すると
+    // fixture の並び順（updatedAt が同値のときの lawId 比較）に検出力が依存してしまう。
+    // 「2 件のうちちょうど 1 件が消えている」という順序非依存な形で表明する。
     const bulkyNodes = [articleNode, articleNode, articleNode, articleNode];
+    const otherLaw2 = { ...otherLaw, lawId: "999AC0000000099", title: "その他の法令2" };
+    const otherRevision2 = {
+      ...otherRevision,
+      lawId: otherLaw2.lawId,
+      revisionId: "999AC0000000099_20260624_508AC0000000045",
+    };
 
     await repository.saveLawDocument({ law: otherLaw, revision: otherRevision, nodes: bulkyNodes });
+    await repository.saveLawDocument({
+      law: otherLaw2,
+      revision: otherRevision2,
+      nodes: bulkyNodes,
+    });
 
     const lawByteSize = new Blob([JSON.stringify(nodes)]).size;
     const otherLawByteSize = new Blob([JSON.stringify(bulkyNodes)]).size;
-    const limitBytes = Math.floor((lawByteSize + otherLawByteSize) / 2);
+    // 2 件のうち 1 件だけ消せば、これから保存する法令を加えても収まる値を選ぶ。
+    const limitBytes = otherLawByteSize + lawByteSize;
 
     let shouldFail = true;
     const saveLawDocument = vi.fn(
@@ -292,7 +306,55 @@ describe("createSavedLawUseCase", () => {
     await useCase.save({ law, revision, nodes });
 
     expect(saveLawDocument).toHaveBeenCalledTimes(2);
-    // quota 再試行がエビクションを挟んだ証拠として、古い法令が消えている。
+    await expect(useCase.get(law.lawId)).resolves.toBeDefined();
+
+    // quota 再試行がエビクションを挟んだ証拠として、2 件のうちちょうど 1 件が消えている。
+    const remainingOtherLaws = await Promise.all(
+      [otherLaw.lawId, otherLaw2.lawId].map((lawId) => useCase.get(lawId)),
+    );
+
+    expect(remainingOtherLaws.filter((document) => document !== undefined)).toHaveLength(1);
+  });
+
+  it("evicts an old unpinned law before retrying the save when the quota is exceeded despite headroom under the limit", async () => {
+    const { repository } = createMemoryStorageRepository();
+    // 設計書が想定した当のケース: 上限には余裕があるが、ディスク逼迫で QuotaExceededError が
+    // 飛ぶ。この場合、通常の上限をそのまま削減目標に渡すと planEviction は「合計が上限以下」
+    // と判断して何も削除しない（この PR の不具合そのもの）。目標を「現在の合計 − 保存しようと
+    // している本文のバイト数」に下げて初めて、この場面で実際に空きを作れる。
+    const bulkyNodes = [articleNode, articleNode, articleNode, articleNode];
+
+    await repository.saveLawDocument({ law: otherLaw, revision: otherRevision, nodes: bulkyNodes });
+
+    const lawByteSize = new Blob([JSON.stringify(nodes)]).size;
+    const otherLawByteSize = new Blob([JSON.stringify(bulkyNodes)]).size;
+    // 既存の合計（otherLawByteSize）どころか、新しい法令を加えた後の合計を足しても
+    // まだ上限を大きく下回るようにする。つまり quota エラーの時点で上限には十分な余裕がある。
+    const limitBytes = (otherLawByteSize + lawByteSize) * 10;
+
+    let shouldFail = true;
+    const saveLawDocument = vi.fn(
+      (document: LawDocumentInput, options?: SaveLawDocumentOptions) => {
+        if (shouldFail) {
+          shouldFail = false;
+          const error = new Error("quota exceeded");
+
+          error.name = "QuotaExceededError";
+          return Promise.reject(error);
+        }
+        return repository.saveLawDocument(document, options);
+      },
+    );
+    const useCase = createSavedLawUseCase(
+      { ...repository, saveLawDocument },
+      { getStorageLimitBytes: () => limitBytes },
+    );
+
+    await useCase.save({ law, revision, nodes });
+
+    expect(saveLawDocument).toHaveBeenCalledTimes(2);
+    // 上限に余裕があるにもかかわらず、quota 再試行のエビクションが古い法令を実際に消している。
+    // 通常の上限をそのまま目標に渡す実装（バグ入り実装）に戻すと、この行が FAIL する。
     await expect(useCase.get(otherLaw.lawId)).resolves.toBeUndefined();
     await expect(useCase.get(law.lawId)).resolves.toBeDefined();
   });

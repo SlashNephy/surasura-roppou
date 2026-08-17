@@ -4,7 +4,7 @@ import { BookOpenCheck } from "lucide-react";
 import { createStorageRepository } from "@/core/storage";
 import type { SavedLawSummary, StorageRepository } from "@/core/storage";
 import { gyoseishoshiSubjects, isLawInSubject } from "@/core/study";
-import { Badge } from "@/shared/ui/badge";
+import { formatByteSize } from "@/shared/utils/bytes";
 import { formatIsoDateLabel } from "@/shared/utils/dates";
 
 import { useSavedLaws } from "./use-saved-laws";
@@ -60,21 +60,20 @@ export const LawsPage = ({
           <ul className="grid gap-2">
             {savedLaws.map((savedLaw) => (
               <li key={savedLaw.law.lawId} className="rounded-md border bg-card p-4">
-                <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
-                  <div className="grid min-w-0 gap-2">
-                    <Link
-                      className="font-serif text-base leading-display font-semibold text-foreground underline-offset-4 hover:underline"
-                      params={{ lawId: savedLaw.law.lawId }}
-                      to="/laws/$lawId"
-                    >
-                      {savedLaw.law.title}
-                    </Link>
-                    <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
-                      <span>最終取得: {formatSavedLawFetchedDate(savedLaw)}</span>
-                      <span>{savedLaw.nodeCount.toLocaleString("ja-JP")} ノード</span>
-                    </div>
+                <div className="grid min-w-0 gap-2">
+                  <Link
+                    className="font-serif text-base leading-display font-semibold text-foreground underline-offset-4 hover:underline"
+                    params={{ lawId: savedLaw.law.lawId }}
+                    to="/laws/$lawId"
+                  >
+                    {savedLaw.law.title}
+                  </Link>
+                  <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
+                    <span>最終取得: {formatSavedLawFetchedDate(savedLaw)}</span>
+                    {savedLaw.byteSize === undefined ? null : (
+                      <span>{formatByteSize(savedLaw.byteSize)}</span>
+                    )}
                   </div>
-                  <Badge variant="secondary">オフライン保存済み</Badge>
                 </div>
               </li>
             ))}

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { createEgovLawRepository } from "@/core/egov";
 import { createJsonFetchStub, fixedTestNow as now, lawDataFixture } from "@/test/fixtures/egov";
-import { createMemoryStorageRepository, createSavedLawDocument } from "@/test/fixtures/storage";
+import { createMemoryStorageRepository } from "@/test/fixtures/storage";
 import { setupScrollMocks } from "@/test/scrollMocks";
 
 import { sampleLawViewerDocument } from "./law-viewer-sample";
@@ -59,13 +59,15 @@ describe("app router", () => {
 
   it("renders saved laws from storage on the laws route", async () => {
     const history = createMemoryHistory({ initialEntries: ["/laws"] });
-    const storage = createMemoryStorageRepository(
-      createSavedLawDocument({
-        law: sampleLawViewerDocument.law,
-        revision: sampleLawViewerDocument.revision,
-        nodes: sampleLawViewerDocument.nodes,
-      }),
-    );
+    const storage = createMemoryStorageRepository();
+
+    // createSavedLawDocument 初期化（直接投入）は byteSize を持たない。実際の保存経路
+    // （saveLawDocument）を通して、一覧に出す容量表示を実測させる。
+    await storage.repository.saveLawDocument({
+      law: sampleLawViewerDocument.law,
+      revision: sampleLawViewerDocument.revision,
+      nodes: sampleLawViewerDocument.nodes,
+    });
 
     render(
       <RouterProvider
@@ -82,7 +84,8 @@ describe("app router", () => {
       "/saved",
     );
     expect(screen.getByText("最終取得: 2026/07/05")).toBeInTheDocument();
-    expect(screen.getByText("6 ノード")).toBeInTheDocument();
+    // ノード数ではなく容量を出す（自動保存だけの法令に「保存済み」を過剰表示しないための変更）。
+    expect(screen.getByText(/KB|MB/)).toBeInTheDocument();
   });
 
   it("keeps saved laws list rendering when fetchedAt is missing at runtime", async () => {

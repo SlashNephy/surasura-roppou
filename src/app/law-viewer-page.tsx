@@ -16,10 +16,11 @@ import { createEgovLawRepository } from "@/core/egov";
 import type { LawRepository } from "@/core/egov";
 import { resolveAsOf } from "@/core/settings";
 import {
-  PERSISTENCE_REQUESTED_STORAGE_KEY,
   createSavedLawUseCase,
   createStorageRepository,
   generateStorageId,
+  hasRequestedPersistence,
+  markPersistenceRequested,
   requestStoragePersistence,
 } from "@/core/storage";
 import type { SavedLawUseCase, StorageRepository } from "@/core/storage";
@@ -515,8 +516,8 @@ const LawViewerReadyState = ({
 
       // ダウンロードは「これを残しておきたい」という最も明確な意思表示であり、
       // Firefox のプロンプトが出ても文脈が通る唯一の瞬間。以後は設定画面に委ねる。
-      if (window.localStorage.getItem(PERSISTENCE_REQUESTED_STORAGE_KEY) === null) {
-        window.localStorage.setItem(PERSISTENCE_REQUESTED_STORAGE_KEY, "1");
+      if (!hasRequestedPersistence()) {
+        markPersistenceRequested();
         void requestStoragePersistence();
       }
     } catch {

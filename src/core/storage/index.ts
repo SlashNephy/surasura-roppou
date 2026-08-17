@@ -33,7 +33,9 @@ export type {
 export { comparePinnedLaws } from "./pinned-law-order";
 export {
   estimateStorageUsage,
+  hasRequestedPersistence,
   isStoragePersisted,
+  markPersistenceRequested,
   PERSISTENCE_REQUESTED_STORAGE_KEY,
   requestStoragePersistence,
 } from "./persistence";

@@ -431,6 +431,42 @@ describe("LawViewerPageContent", () => {
     expect(persist).toHaveBeenCalledTimes(1);
   });
 
+  it("succeeds without a failure banner when localStorage access throws during download", async () => {
+    // Cookie を無効化した環境や Safari のプライベートブラウジングを模す。pin 自体は成功する
+    // (setSavedState も走る) のに、localStorage への素のアクセスが未保護だと後続の例外が
+    // catch に落ち、古い isPinned: false を見て失敗バナーを出す不整合になる回帰テスト。
+    const storage = createMemoryStorageRepository();
+    const { user } = renderLawViewerRoute(
+      "/laws/129AC0000000089",
+      createFixtureRepository().repository,
+      storage.repository,
+    );
+
+    expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+
+    const originalDescriptor = Object.getOwnPropertyDescriptor(window, "localStorage");
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      get() {
+        throw new DOMException("blocked", "SecurityError");
+      },
+    });
+
+    try {
+      await user.click(screen.getByRole("button", { name: "ダウンロード" }));
+
+      expect(await screen.findByRole("button", { name: "ダウンロード済み" })).toBeInTheDocument();
+      await expect(storage.repository.isLawPinned("129AC0000000089")).resolves.toBe(true);
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    } finally {
+      if (originalDescriptor === undefined) {
+        Reflect.deleteProperty(window, "localStorage");
+      } else {
+        Object.defineProperty(window, "localStorage", originalDescriptor);
+      }
+    }
+  });
+
   it("pins a law opened with a base date without stealing the current revision slot", async () => {
     // pin は保存と同じ isCurrent 判断を通す契約（このバグの回帰テスト）。忘れると pin が
     // 常に isCurrent: true で保存し、基準日で開いた過去版が現行版スロットを奪ってしまう。
@@ -654,7 +690,7 @@ describe("LawViewerPageContent", () => {
   });
 
   it("evicts an older law when opening a new one exceeds the limit", async () => {
-    // 上限は選択肢の最小値でも 25 MB あり、fixture の本文では届かない。
+    // 上限は選択肢の最小値でも 100 MB あり、fixture の本文では届かない。
     // 上限そのものではなく「上限を超えたら古い方が落ちる」振る舞いを見たいので、
     // getCurrentStorageLimitBytes をモックして小さい上限を注入し、既存の保存を実測で超える大きさに膨らませる。
     const bulkyNodes = Array.from({ length: 200 }, (_node, index) => ({

@@ -53,6 +53,25 @@ export const createSavedLawUseCase = (
     return byteSize;
   };
 
+  // quota 再試行のためのエビクション目標を計算する。定常状態では保存後の evictAfterSave
+  // が毎回働くため、合計は既に上限以下に収まっている。通常の上限をそのまま目標に渡すと
+  // planEviction は空プランを返す（eviction-plan.ts 冒頭の早期 return）。つまり、これから
+  // 書こうとしている本文ぶんの空きを作ることを目標にしないと、上限に余裕があるのに
+  // ディスク逼迫で quota が飛ぶ場面（このリトライが本来救うべき場面）で何も解放できない。
+  // 目標は「現在の合計（既存レコードぶん。document 自身は未保存）から、これから書こうと
+  // している本文のバイト数を引いた値」。上限が既に超過している異常系では上限側を優先し、
+  // 0 以下・非有限値にはならないよう最低 1 バイトへ切り上げる。
+  const computeQuotaRetryEvictionTarget = async (
+    document: LawDocumentInput,
+    limitBytes: number,
+  ): Promise<number> => {
+    const records = await repository.listSavedLawRecords();
+    const currentTotalBytes = records.reduce((sum, record) => sum + (record.byteSize ?? 0), 0);
+    const documentByteSize = new Blob([JSON.stringify(document.nodes)]).size;
+
+    return Math.max(1, Math.min(limitBytes, currentTotalBytes) - documentByteSize);
+  };
+
   // 上限（我々の都合）とブラウザの quota（環境の都合）は別物で、上限に余裕があっても
   // ディスク逼迫で QuotaExceededError は飛ぶ。放置すると保存が失敗し続けるため、
   // エビクションを 1 回挟んで 1 度だけ再試行する。
@@ -70,11 +89,12 @@ export const createSavedLawUseCase = (
       }
 
       try {
-        await useCase.evict(limitBytes);
+        const target = await computeQuotaRetryEvictionTarget(document, limitBytes);
+
+        await useCase.evict(target);
       } catch {
-        // エビクションの失敗で元の quota エラーを見失わない。呼び出し側は
-        // isQuotaExceededError で quota を判定するため、ここで別の例外に
-        // 化けさせず、まずは再送を試みる。
+        // エビクションの失敗で元の quota エラーを見失わない。ここで別の例外に
+        // 化けさせず、まずは 1 度きりの再送を試みる。
       }
 
       return repository.saveLawDocument(document, options);
