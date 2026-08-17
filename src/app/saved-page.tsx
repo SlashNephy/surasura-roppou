@@ -199,16 +199,7 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
             emptyMessage="ピン留めした法令はまだありません。"
             headingId="pinned-laws-heading"
             icon={Pin}
-            // 並びはリポジトリと同じ comparePinnedLaws に委ねる。pinnedAt は移行で同値になりうる
-            // ため、ここで独自に比較すると同値のときだけ一覧の契約と食い違う。
-            savedLaws={savedLaws
-              .filter((savedLaw) => pinnedAtByLawId.has(savedLaw.law.lawId))
-              .sort((left, right) =>
-                comparePinnedLaws(
-                  { lawId: left.law.lawId, pinnedAt: pinnedAtByLawId.get(left.law.lawId) ?? "" },
-                  { lawId: right.law.lawId, pinnedAt: pinnedAtByLawId.get(right.law.lawId) ?? "" },
-                ),
-              )}
+            savedLaws={toPinnedSavedLaws(savedLaws, pinnedAtByLawId)}
             title="ピン留めした法令"
           />
           <SavedLawList
@@ -352,6 +343,26 @@ export const SavedCollectionPage = ({
     </section>
   );
 };
+
+/**
+ * ピン留めされた保存法令を、リポジトリの `listPinnedLaws` と同じ規則で並べる。
+ *
+ * 抽出と比較を `flatMap` にまとめ、`pinnedAt` が必ず存在することを型で示す。
+ * 先に `has` で絞ってから `get` を引き直すと、到達しないフォールバック値
+ * （`?? ""`）を書く羽目になり、配線の誤りを覆い隠す。
+ */
+const toPinnedSavedLaws = (
+  savedLaws: SavedLawSummary[],
+  pinnedAtByLawId: Map<string, string>,
+): SavedLawSummary[] =>
+  savedLaws
+    .flatMap((savedLaw) => {
+      const pinnedAt = pinnedAtByLawId.get(savedLaw.law.lawId);
+
+      return pinnedAt === undefined ? [] : [{ lawId: savedLaw.law.lawId, pinnedAt, savedLaw }];
+    })
+    .sort(comparePinnedLaws)
+    .map((entry) => entry.savedLaw);
 
 const SavedLawList = ({
   emptyMessage,

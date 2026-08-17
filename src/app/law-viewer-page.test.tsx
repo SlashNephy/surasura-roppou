@@ -351,14 +351,15 @@ describe("LawViewerPageContent", () => {
     await user.click(screen.getByRole("button", { name: "ピン留め" }));
 
     // pin は保存に成功してからピンを立てる契約のため、本文も保存されていること。
-    expect(screen.getByText("ピン留め中")).toBeInTheDocument();
+    // pin は save と pinLaw の 2 段の await を含むため、表示の反映は findBy で待つ。
+    expect(await screen.findByText("ピン留め中")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "ピン留めを解除" })).toBeInTheDocument();
     expect(storage.getSavedDocument()?.law.title).toBe("民法");
     await expect(storage.repository.isLawPinned("129AC0000000089")).resolves.toBe(true);
 
     await user.click(screen.getByRole("button", { name: "ピン留めを解除" }));
 
-    expect(screen.getByRole("button", { name: "ピン留め" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "ピン留め" })).toBeInTheDocument();
     expect(screen.queryByText("ピン留め中")).not.toBeInTheDocument();
     await expect(storage.repository.isLawPinned("129AC0000000089")).resolves.toBe(false);
     // ピン留めの解除は本文を消さない（LRU 対象からは外れるだけ）。
