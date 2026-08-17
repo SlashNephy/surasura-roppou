@@ -25,6 +25,47 @@ describe("SavedPage", () => {
     expect(screen.getByText("コレクションはまだありません。")).toBeInTheDocument();
   });
 
+  it("deletes a saved law after confirming", async () => {
+    const storage = createMemoryStorageRepository();
+
+    await storage.repository.saveLawDocument({
+      law: sampleLawViewerDocument.law,
+      nodes: sampleLawViewerDocument.nodes,
+      revision: sampleLawViewerDocument.revision,
+    });
+
+    const { user } = renderSavedRoute("/saved", storage.repository);
+
+    expect(await screen.findByRole("link", { name: "民法" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "民法を削除" }));
+    await user.click(await screen.findByRole("button", { name: "削除する" }));
+
+    await waitFor(async () => {
+      await expect(storage.repository.getLawDocument("129AC0000000089")).resolves.toBeUndefined();
+    });
+    expect(screen.queryByRole("link", { name: "民法" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the law when the confirmation is dismissed", async () => {
+    const storage = createMemoryStorageRepository();
+
+    await storage.repository.saveLawDocument({
+      law: sampleLawViewerDocument.law,
+      nodes: sampleLawViewerDocument.nodes,
+      revision: sampleLawViewerDocument.revision,
+    });
+
+    const { user } = renderSavedRoute("/saved", storage.repository);
+
+    expect(await screen.findByRole("link", { name: "民法" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "民法を削除" }));
+    await user.click(await screen.findByRole("button", { name: "キャンセル" }));
+
+    await expect(storage.repository.getLawDocument("129AC0000000089")).resolves.toBeDefined();
+  });
+
   it("splits saved laws into a pinned section and a recently opened section", async () => {
     const otherLaw = { ...sampleLawViewerDocument.law, lawId: "322AC0000000049", title: "刑法" };
     const otherRevision = {
@@ -674,8 +715,11 @@ const renderSavedRoute = (
   storageRepository = createMemoryStorageRepository().repository,
 ) => {
   const history = createMemoryHistory({ initialEntries: [path] });
+  const user = userEvent.setup();
 
   render(<RouterProvider router={createAppRouter({ history, storageRepository })} />);
+
+  return { user };
 };
 
 const createBookmark = (): Bookmark => ({

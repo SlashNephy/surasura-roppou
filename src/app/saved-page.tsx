@@ -6,6 +6,7 @@ import {
   Download,
   FolderPlus,
   StickyNote,
+  Trash2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -21,6 +22,14 @@ import {
 } from "@/core/storage";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/shared/ui/dialog";
 import { Input } from "@/shared/ui/input";
 import { formatByteSize } from "@/shared/utils/bytes";
 import { formatIsoDateLabel } from "@/shared/utils/dates";
@@ -72,6 +81,7 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
   const [exportMessage, setExportMessage] = useState<string | undefined>();
   const [exportError, setExportError] = useState<string | undefined>();
   const [isExporting, setIsExporting] = useState(false);
+  const [lawPendingDeletion, setLawPendingDeletion] = useState<SavedLawSummary | undefined>();
   const { limitBytes } = useStorageLimit();
   const savedLawUseCase = useMemo(
     () =>
@@ -118,6 +128,21 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
       setError("保存リストを読み込めませんでした。");
     }
   }, [applySavedPageData, loadSavedPageData]);
+
+  const handleConfirmDelete = async () => {
+    if (lawPendingDeletion === undefined) {
+      return;
+    }
+
+    try {
+      await savedLawUseCase.remove(lawPendingDeletion.law.lawId);
+      setLawPendingDeletion(undefined);
+      await reload();
+    } catch {
+      // 明示操作なので、自動保存やエビクションの失敗とは異なりバナーで知らせる。
+      setError("法令を削除できませんでした。時間をおいて再試行してください。");
+    }
+  };
 
   useEffect(() => {
     let isCurrent = true;
@@ -225,6 +250,7 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
             emptyMessage="ダウンロードした法令はまだありません。"
             headingId="pinned-laws-heading"
             icon={CircleCheck}
+            onRequestDelete={setLawPendingDeletion}
             savedLaws={toPinnedSavedLaws(savedLaws, pinnedAtByLawId)}
             title="ダウンロード済み"
           />
@@ -233,6 +259,7 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
             emptyMessage="最近開いた法令はまだありません。"
             headingId="recent-laws-heading"
             icon={Archive}
+            onRequestDelete={setLawPendingDeletion}
             // updatedAt 降順。PR 3 の LRU が消す順の逆順にあたる。
             savedLaws={savedLaws
               .filter((savedLaw) => !pinnedAtByLawId.has(savedLaw.law.lawId))
@@ -252,6 +279,46 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
           />
         </div>
       </div>
+
+      {lawPendingDeletion === undefined ? null : (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) {
+              setLawPendingDeletion(undefined);
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{lawPendingDeletion.law.title}を削除</DialogTitle>
+              <DialogDescription>
+                この法令の保存データを削除します。もう一度開けば再取得されます。
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                onClick={() => {
+                  void handleConfirmDelete();
+                }}
+                type="button"
+                variant="destructive"
+              >
+                削除する
+              </Button>
+              <Button
+                onClick={() => {
+                  setLawPendingDeletion(undefined);
+                }}
+                type="button"
+                variant="outline"
+              >
+                キャンセル
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </section>
   );
 };
@@ -399,6 +466,7 @@ const SavedLawList = ({
   emptyMessage,
   headingId,
   icon,
+  onRequestDelete,
   savedLaws,
   title,
 }: {
@@ -406,6 +474,7 @@ const SavedLawList = ({
   emptyMessage: string;
   headingId: string;
   icon: LucideIcon;
+  onRequestDelete: (savedLaw: SavedLawSummary) => void;
   savedLaws: SavedLawSummary[];
   title: string;
 }) => (
@@ -436,6 +505,18 @@ const SavedLawList = ({
                   )}
                 </div>
               </div>
+              <Button
+                aria-label={`${savedLaw.law.title}を削除`}
+                className="shrink-0"
+                onClick={() => {
+                  onRequestDelete(savedLaw);
+                }}
+                size="icon"
+                type="button"
+                variant="ghost"
+              >
+                <Trash2 className="size-4" aria-hidden="true" />
+              </Button>
             </div>
           </li>
         ))}
