@@ -16,7 +16,7 @@ import { createEgovLawRepository } from "@/core/egov";
 import type { LawRepository } from "@/core/egov";
 import { resolveAsOf } from "@/core/settings";
 import { createSavedLawUseCase, createStorageRepository, generateStorageId } from "@/core/storage";
-import type { StorageRepository } from "@/core/storage";
+import type { SavedLawUseCase, StorageRepository } from "@/core/storage";
 import {
   LawDocumentView,
   LawTableOfContents,
@@ -45,6 +45,7 @@ import type { LawViewerDocument } from "./law-viewer-sample";
 import { useAnchorVerification } from "./use-anchor-verification";
 import { useBaseDate } from "./use-base-date";
 import { useDisplayPreferences } from "./use-display-preferences";
+import { useStorageLimit } from "./use-storage-limit";
 
 const defaultStorageRepository = createStorageRepository();
 const defaultLawRepository = createEgovLawRepository();
@@ -107,9 +108,10 @@ const LawViewerPageLoader = ({
   storageRepository: StorageRepository;
 }) => {
   const [state, setState] = useState<LawViewerState>({ status: "loading" });
+  const { limitBytes } = useStorageLimit();
   const savedLawUseCase = useMemo(
-    () => createSavedLawUseCase(storageRepository),
-    [storageRepository],
+    () => createSavedLawUseCase(storageRepository, { getStorageLimitBytes: () => limitBytes }),
+    [limitBytes, storageRepository],
   );
 
   useEffect(() => {
@@ -148,6 +150,7 @@ const LawViewerPageLoader = ({
       activeArticleNumber={activeArticleNumber}
       lawId={lawId}
       repository={repository}
+      savedLawUseCase={savedLawUseCase}
       state={state}
       storageRepository={storageRepository}
     />
@@ -158,12 +161,14 @@ export const LawViewerPageContent = ({
   activeArticleNumber,
   lawId = "",
   repository,
+  savedLawUseCase,
   state,
   storageRepository = defaultStorageRepository,
 }: {
   activeArticleNumber?: string;
   lawId?: string;
   repository?: LawRepository;
+  savedLawUseCase?: SavedLawUseCase;
   state: LawViewerState;
   storageRepository?: StorageRepository;
 }) => {
@@ -184,6 +189,7 @@ export const LawViewerPageContent = ({
           activeArticleNumber={activeArticleNumber}
           lawId={lawId}
           repository={repository}
+          savedLawUseCase={savedLawUseCase}
           state={state}
           storageRepository={storageRepository}
         />
@@ -195,20 +201,26 @@ const LawViewerReadyState = ({
   activeArticleNumber: routeArticleNumber,
   lawId,
   repository,
+  savedLawUseCase: injectedSavedLawUseCase,
   state: baseState,
   storageRepository,
 }: {
   activeArticleNumber?: string;
   lawId: string;
   repository?: LawRepository;
+  savedLawUseCase?: SavedLawUseCase;
   state: Extract<LawViewerState, { status: "ready" }>;
   storageRepository: StorageRepository;
 }) => {
   const navigate = useNavigate();
-  const savedLawUseCase = useMemo(
+  // 通常経路（LawViewerPageLoader 経由）では容量上限付きのユースケースが渡る。
+  // LawViewerPageContent を直接呼ぶテストなど、渡されなかった場合だけ
+  // storageRepository からその場限りのユースケース（上限なし）を作る。
+  const fallbackSavedLawUseCase = useMemo(
     () => createSavedLawUseCase(storageRepository),
     [storageRepository],
   );
+  const savedLawUseCase = injectedSavedLawUseCase ?? fallbackSavedLawUseCase;
   // 表示モードは設定（DisplayPreferences）で永続管理し、ビューワーは読むだけにする。
   const { textDisplayMode: displayMode } = useDisplayPreferences();
   const [savedState, setSavedState] = useSavedViewerState(baseState);

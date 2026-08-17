@@ -26,6 +26,26 @@ import { LawViewerPage, LawViewerPageContent } from "./law-viewer-page";
 import { sampleLawViewerDocument } from "./law-viewer-sample";
 import { createAppRouter } from "./router";
 import type { LawViewerState } from "./law-viewer-page";
+import type { useStorageLimit } from "./use-storage-limit";
+
+// 上限を超えさせるテスト（本ファイル末尾の "evicts an older law..." のみ）用に、
+// useStorageLimit をこの箱経由で差し替え可能にする。他のテストは override が
+// 未設定のまま実フックへ委譲されるため、通常の（実 localStorage 由来の）上限で動く。
+const storageLimitMockState = vi.hoisted(() => ({
+  actual: undefined as unknown as typeof useStorageLimit,
+  override: undefined as typeof useStorageLimit | undefined,
+}));
+
+vi.mock("./use-storage-limit", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./use-storage-limit")>();
+  storageLimitMockState.actual = actual.useStorageLimit;
+
+  return {
+    ...actual,
+    useStorageLimit: (...args: Parameters<typeof actual.useStorageLimit>) =>
+      (storageLimitMockState.override ?? storageLimitMockState.actual)(...args),
+  };
+});
 
 const scrollMocks = setupScrollMocks();
 
@@ -588,6 +608,52 @@ describe("LawViewerPageContent", () => {
 
     // 自動保存はユーザーが要求した操作ではないため、失敗をバナーで知らせない。
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("evicts an older law when opening a new one exceeds the limit", async () => {
+    // 上限は選択肢の最小値でも 25 MB あり、fixture の本文では届かない。
+    // 上限そのものではなく「上限を超えたら古い方が落ちる」振る舞いを見たいので、
+    // useStorageLimit をモックして小さい上限を注入し、既存の保存を実測で超える大きさに膨らませる。
+    const bulkyNodes = Array.from({ length: 200 }, (_node, index) => ({
+      ...sampleLawViewerDocument.nodes[0],
+      id: `bulky-${index.toString()}`,
+      plainText: "あ".repeat(1_000),
+    }));
+
+    storageLimitMockState.override = () => ({
+      limitMegabytes: 25,
+      limitBytes: 1_000,
+      setLimitMegabytes: vi.fn(),
+    });
+
+    try {
+      const storage = createMemoryStorageRepository();
+
+      await storage.repository.saveLawDocument({
+        law: { ...sampleLawViewerDocument.law, lawId: "000AC0000000001", title: "古い法令" },
+        revision: {
+          ...sampleLawViewerDocument.revision,
+          lawId: "000AC0000000001",
+          revisionId: "000AC0000000001_rev",
+        },
+        nodes: bulkyNodes,
+      });
+
+      renderLawViewerRoute(
+        "/laws/129AC0000000089",
+        createFixtureRepository().repository,
+        storage.repository,
+      );
+
+      expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+
+      // 上限を超えたので、より古い法令が落ちる。
+      await waitFor(async () => {
+        await expect(storage.repository.getLawDocument("000AC0000000001")).resolves.toBeUndefined();
+      });
+    } finally {
+      storageLimitMockState.override = undefined;
+    }
   });
 
   it("既定は読みやすい表示で本文を描画する", async () => {
