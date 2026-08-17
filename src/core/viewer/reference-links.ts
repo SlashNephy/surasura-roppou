@@ -141,6 +141,12 @@ const hasPrecedingGuardChar = (text: string, matchStart: number): boolean =>
 const isRelativeParagraphShift = (paragraph: string): boolean =>
   paragraph === "previous" || paragraph === "next";
 
+// 条を名指しする参照と、そのあとの裸の項参照とをつなぐ列挙の接続。
+// 「第30条第2項及び第3項」のように接続詞・読点だけで並ぶ場合、後半の項は
+// 直前に名指しされた条の項を指す。一方「第17条第1項の審判を受けた……に対しては、
+// 第1項の期間内に」のように地の文を挟むと、裸の項は現在の条の項へ戻る（issue #204）。
+const coordinationGapPattern = /^(?:及び|並びに|又は|若しくは|から|まで|[、・\s])*$/;
+
 export const segmentReferenceLinks = (
   text: string,
   context: ArticleLinkContext,
@@ -149,10 +155,10 @@ export const segmentReferenceLinks = (
   const pattern = new RegExp(bodyReferencePositionPatternSource, "g");
   let lastIndex = 0;
   let match: RegExpExecArray | null;
-  // 同じ文の中で、条を名指しする参照が既に現れたか。
-  // 「第三十条第二項及び第三項」の後半のような裸の項参照を、現在の条の項として
-  // 誤解決しないための抑止に使う。
-  let sawArticleScopedReference = false;
+  // 同じ文の中で直前に現れた、条を名指しする参照の終端位置。
+  // 「第三十条第二項及び第三項」の後半のような、列挙で続く裸の項参照を
+  // 現在の条の項として誤解決しないための抑止に使う。
+  let articleScopeEndIndex: number | undefined;
   // 文の境界判定のために見終えたテキストの終端。マッチしなかった箇所も含めて走査する。
   let scannedIndex = 0;
 
@@ -166,7 +172,7 @@ export const segmentReferenceLinks = (
     // 文が変われば条のスコープは切れる。リンク化を見送ったマッチも走査済みに含めるため、
     // 以降の continue より前で状態を更新する。
     if (text.slice(scannedIndex, match.index).includes("。")) {
-      sawArticleScopedReference = false;
+      articleScopeEndIndex = undefined;
     }
 
     scannedIndex = match.index + match[0].length;
@@ -177,19 +183,20 @@ export const segmentReferenceLinks = (
       continue;
     }
 
-    // 条を名指ししない裸の数字の項参照（第2項）は、同じ文で既に別の条が示されていれば
-    // その条の項を指している可能性が高い。確信が持てないためリンク化しない。
-    // ただし前項・次項は起草慣行として常に同じ条の直前・直後の項を指すため対象外とする
-    // （同じ文で別の条が名指しされていても意味は変わらない）。
+    // 条を名指ししない裸の数字の項参照（第2項）は、直前の条名指しから列挙の接続だけで
+    // つながっていれば、その条の項を指している可能性が高い。確信が持てないためリンク化しない。
+    // 地の文を挟んだ裸の項参照は現在の条の項を指す起草慣行のため、抑止しない。
+    // また前項・次項は常に同じ条の直前・直後の項を指すため、いずれの場合も対象外とする。
     const isSuppressedByArticleScope =
-      sawArticleScopedReference &&
+      articleScopeEndIndex !== undefined &&
+      coordinationGapPattern.test(text.slice(articleScopeEndIndex, match.index)) &&
       parsed.article === undefined &&
       parsed.paragraph !== undefined &&
       !isRelativeParagraphShift(parsed.paragraph);
 
     // 条を名指ししていれば、リンクになったかどうかに関わらずスコープを立てる。
     if (parsed.article !== undefined) {
-      sawArticleScopedReference = true;
+      articleScopeEndIndex = scannedIndex;
     }
 
     // 法令名を伴う参照（例: 商法第15条）やガード文字（例: 同条）で弾いた参照も、
@@ -197,11 +204,15 @@ export const segmentReferenceLinks = (
     // ここでリンク化を見送っても、以降の裸の項参照が現在の条へ誤解決しないよう
     // スコープを立てておく。
     if (hasPrecedingLawName(text, match.index) || hasPrecedingGuardChar(text, match.index)) {
-      sawArticleScopedReference = true;
+      articleScopeEndIndex = scannedIndex;
       continue;
     }
 
     if (isSuppressedByArticleScope) {
+      // 抑止した項も列挙の一部なので、基準を進めておく。
+      // そうしないと「第2条第1項、第2項及び第3項」の3つ目が、間に挟まった
+      // 「第2項」のせいで列挙と判定されず、現在の条へ誤ってリンクしてしまう。
+      articleScopeEndIndex = scannedIndex;
       continue;
     }
 

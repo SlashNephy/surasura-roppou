@@ -530,10 +530,40 @@ describe("segmentReferenceLinks with a multi paragraph article", () => {
       expected: ["第2条", "前項"],
     },
     {
-      name: "still suppresses a bare numbered paragraph after an article scoped reference earlier in the sentence",
+      name: "links a bare numbered paragraph separated from an article scoped reference by prose",
       text: "第2条の規定は、第1項の場合には適用しない。",
       context: { currentArticleNumber: "4", currentParagraphNumber: "2" },
-      expected: ["第2条"],
+      expected: ["第2条", "第1項"],
+    },
+    {
+      name: "links a bare paragraph after the prose following an article and paragraph reference",
+      text: "第2条第2項の審判を受けた者に対しては、第1項の期間内に催告する。",
+      context: { currentArticleNumber: "4", currentParagraphNumber: "3" },
+      expected: ["第2条第2項", "第1項"],
+    },
+    {
+      name: "does not link a bare paragraph listed with 、 after an article scoped reference",
+      text: "第2条第1項、第2項の規定による。",
+      context: { currentArticleNumber: "4", currentParagraphNumber: "3" },
+      expected: ["第2条第1項"],
+    },
+    {
+      name: "does not link any bare paragraph of a three item list after an article scoped reference",
+      text: "第2条第1項、第2項及び第3項の規定による。",
+      context: { currentArticleNumber: "4", currentParagraphNumber: "1" },
+      expected: ["第2条第1項"],
+    },
+    {
+      name: "does not link any bare paragraph of a three item list following 同条",
+      text: "同条第1項、第2項及び第3項の規定による。",
+      context: { currentArticleNumber: "4", currentParagraphNumber: "1" },
+      expected: [],
+    },
+    {
+      name: "does not link a bare paragraph joined by から・まで after an article scoped reference",
+      text: "第2条第1項から第3項までの規定による。",
+      context: { currentArticleNumber: "4", currentParagraphNumber: "1" },
+      expected: ["第2条第1項"],
     },
     {
       name: "does not link a bare paragraph following a paragraph suppressed by 同条",

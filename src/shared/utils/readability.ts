@@ -28,6 +28,20 @@ const structuralHeadingPrefixRegex = new RegExp(
   `^第(${kanjiNumberPattern})(編|章|節|款|目)(?:の(${branchNumberPattern}))?(?=$|[\\s\\p{P}\\p{S}])`,
   "u",
 );
+// 本文中の「第四編（親族）の規定」のような構造参照。見出しと違って文中に現れるため
+// 位置を限定できない。構造語の直後が漢字だと「第一目的」「第一編成」のように語の一部で
+// あることが多いので、参照の続きとして自然な漢字（第・中・別と、法令用語の接続詞
+// 及び・並びに・又は・若しくは）だけを許可して、それ以外の漢字が続く場合は変換しない。
+const structuralNumberContinuationPattern = "(?=$|[^\\p{Script=Han}]|[第中別及並又若])";
+// 枝番の「の二」は「二つ」「二か所」「二次的」「一部」のように数量や別の語にも読める。
+// 枝番として確実に読める後続（句読点・括弧・空白・の・で・を・以下・以上・から・まで・
+// より・及び・並びに・又は・若しくは・第）が続く場合だけ変換する。
+const structuralBranchContinuationPattern =
+  "(?=$|[、。（）\\s]|の|で|を|以下|以上|から|まで|より|及び|並びに|又は|若しくは|第)";
+const structuralNumberRegex = new RegExp(
+  `第(${kanjiNumberPattern})(編|章|節|款|目)${structuralNumberContinuationPattern}((?:の${kanjiNumberPattern}${structuralBranchContinuationPattern})*)`,
+  "gu",
+);
 const branchNumberRegex = new RegExp(
   `(第\\d+(?:条|項|号)|別表\\d+|別記様式\\d+)の(${branchNumberPattern})`,
   "g",
@@ -155,8 +169,10 @@ const replaceKanjiNumber = (kanjiNumber: string): string => {
   return arabicNumber === undefined ? kanjiNumber : String(arabicNumber);
 };
 
+// 見やすい表示では丸括弧を全角に揃える。法令本文は全角が既定で、半角が混じるのは
+// 出典側の揺れであるため、半角を全角へ寄せて表示を統一する。
 const transformParentheses = (text: string): string =>
-  text.replaceAll("（", "(").replaceAll("）", ")");
+  text.replaceAll("(", "（").replaceAll(")", "）");
 
 // 全角のアラビア数字（０-９）を半角に揃える。民法の項番号「２」と憲法の「2」など、
 // 出典で全角/半角が混在する数字を見やすい表示で統一する。
@@ -170,13 +186,31 @@ const replaceLegalNumber = (_match: string, kanjiNumber: string, suffix: string)
 const replaceBranchNumbers = (_match: string, prefix: string, branchNumbers: string): string =>
   `${prefix}の${branchNumbers.split("の").map(replaceKanjiNumber).join("の")}`;
 
+const replaceStructuralNumber = (
+  match: string,
+  kanjiNumber: string,
+  suffix: string,
+  branchNumbers: string,
+): string => {
+  const arabicNumber = toArabicNumber(kanjiNumber);
+
+  // 構造番号が読めないときは枝番も変換しない。「第十十章の二」のように番号が
+  // 壊れている参照は、原文のまま残したほうが誤読を招かない。
+  if (arabicNumber === undefined) {
+    return match;
+  }
+
+  return `第${String(arabicNumber)}${suffix}${branchNumbers.split("の").map(replaceKanjiNumber).join("の")}`;
+};
+
 const transformArticleNumbers = (text: string): string =>
   text
     .replace(articleNumberRegex, replaceLegalNumber)
     .replace(appendixTableNumberRegex, (_match, prefix: string, tableNumber: string) => {
       return `${prefix}${replaceKanjiNumber(tableNumber)}`;
     })
-    .replace(branchNumberRegex, replaceBranchNumbers);
+    .replace(branchNumberRegex, replaceBranchNumbers)
+    .replace(structuralNumberRegex, replaceStructuralNumber);
 
 const transformStructuralHeadingNumber = (text: string): string =>
   text.replace(

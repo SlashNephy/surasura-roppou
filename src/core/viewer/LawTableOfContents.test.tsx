@@ -134,11 +134,11 @@ describe("LawTableOfContents", () => {
 
     const navigation = screen.getByRole("navigation", { name: "法令目次" });
 
-    // 読みやすい表示（既定）では全角括弧が半角化される（（親告罪）→ (親告罪)）。
-    expect(within(navigation).getByText("(親告罪)")).toBeInTheDocument();
+    // 見やすい表示（既定）でも丸括弧は全角のまま示す。
+    expect(within(navigation).getByText("（親告罪）")).toBeInTheDocument();
     // 見出しは条番号ボタンのアクセシブル名にも含まれる（読みやすい表示で第264条）。
     expect(
-      within(navigation).getByRole("button", { name: /第264条.*\(親告罪\)/u }),
+      within(navigation).getByRole("button", { name: /第264条.*（親告罪）/u }),
     ).toBeInTheDocument();
   });
 

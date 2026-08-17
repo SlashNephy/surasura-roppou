@@ -101,7 +101,7 @@ describe("LawNodeList", () => {
     const article = screen.getByRole("article", { name: "第十二条の二" });
 
     expect(within(article).getByRole("heading", { name: "第12条の2" })).toBeInTheDocument();
-    expect(within(article).getByText("第12条の2 原文の本文(括弧)。")).toBeInTheDocument();
+    expect(within(article).getByText("第12条の2 原文の本文（括弧）。")).toBeInTheDocument();
   });
 
   it("renders the article caption in a lighter ink inside the heading", () => {
@@ -122,10 +122,10 @@ describe("LawNodeList", () => {
       />,
     );
 
-    // 読みやすい表示では全角かっこが半角化される（本文と同じ表示レイヤー規則）
-    const heading = screen.getByRole("heading", { name: "第1条(基本原則)" });
+    // 見やすい表示でも丸括弧は全角のまま示す（本文と同じ表示レイヤー規則）
+    const heading = screen.getByRole("heading", { name: "第1条（基本原則）" });
 
-    expect(within(heading).getByText("(基本原則)")).toHaveClass(
+    expect(within(heading).getByText("（基本原則）")).toHaveClass(
       "ml-2",
       "text-base",
       "font-normal",

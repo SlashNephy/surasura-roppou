@@ -115,10 +115,22 @@ export const readabilityTransformFixtures = [
     expected: "平成5年法律第88号",
   },
   {
-    name: "full-width parentheses",
+    name: "half-width parentheses",
     mode: "parentheses",
-    input: "損害（精神的損害を含む。）",
-    expected: "損害(精神的損害を含む。)",
+    input: "損害(精神的損害を含む。)",
+    expected: "損害（精神的損害を含む。）",
+  },
+  {
+    name: "structural number in body text",
+    mode: "article-number",
+    input: "第四編（親族）の規定に従い",
+    expected: "第4編（親族）の規定に従い",
+  },
+  {
+    name: "structural branch number in body text",
+    mode: "article-number",
+    input: "第六章の二の規定",
+    expected: "第6章の2の規定",
   },
   {
     name: "duration in years with span suffix",
