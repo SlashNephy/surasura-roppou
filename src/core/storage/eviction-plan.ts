@@ -26,6 +26,10 @@ export interface EvictionPlan {
  * 消せるものが尽きても上限を下回らないことがある（全法令がダウンロード指定済みの場合）。
  * そのときは超過を許す。上限はユーザーの意図に優先しない。
  *
+ * 第 2 段の二重差し引き防止（`deletedRevisionIds`）は `revisionId` が全体で一意であることに依存する。
+ * この一意性は `repository.ts` の `lawRevisions` オブジェクトストアが `keyPath: "revisionId"` で
+ * 作られていることに由来する（IndexedDB レベルで既に全体一意が前提になっている）。
+ *
  * @param candidates `updatedAt` 昇順であること。呼び出し側が索引の順序で渡す。
  */
 export const planEviction = (

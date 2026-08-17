@@ -51,17 +51,24 @@ describe("planEviction", () => {
   it("subtracts every remaining revision of a law when the law is removed", () => {
     const plan = planEviction(
       [
-        candidate({ lawId: "b", revisionId: "b-old", isCurrent: false, updatedAt: "2026-08-02" }),
-        candidate({ lawId: "b", revisionId: "b1", updatedAt: "2026-08-03" }),
-        candidate({ lawId: "c", revisionId: "c1", updatedAt: "2026-08-04" }),
+        candidate({ lawId: "b", revisionId: "b-old", isCurrent: false, updatedAt: "2026-08-01" }),
+        candidate({ lawId: "b", revisionId: "b1", updatedAt: "2026-08-02" }),
+        candidate({ lawId: "c", revisionId: "c1", updatedAt: "2026-08-03" }),
+        candidate({ lawId: "d", revisionId: "d1", updatedAt: "2026-08-04" }),
       ],
       new Set(),
       150,
     );
 
-    // 第 1 段で b-old を消して 200。まだ超えるので b を丸ごと消し、残りは c1 の 100。
-    // 法令を消すときは第 1 段で消していない版だけを差し引く（二重に引かない）。
-    expect(plan).toEqual({ revisions: [{ lawId: "b", revisionId: "b-old" }], lawIds: ["b"] });
+    // 第 1 段で b-old を消して 300。まだ超えるので法令 b を消すとき、既に消した b-old を
+    // 除いて b1 の 100 だけ差し引き 200。まだ超えるので c も消して 100 で停止する。
+    // ここで b-old の分まで重ねて差し引くバグが入ると、b を消した時点で 100 まで落ちて
+    // c の前で止まり lawIds が ["b"] になってしまう。d1 まで消さず ["b", "c"] で
+    // 止まることが、二重差し引きをしていない証拠になる。
+    expect(plan).toEqual({
+      revisions: [{ lawId: "b", revisionId: "b-old" }],
+      lawIds: ["b", "c"],
+    });
   });
 
   it("stops without reaching the limit when every law is downloaded", () => {
