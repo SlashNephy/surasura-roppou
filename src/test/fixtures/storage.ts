@@ -196,14 +196,27 @@ export const createMemoryStorageRepository = (
             // [lawId, revisionId] と同じ順序（lawId を先に比較し、次に revisionId）で決める。
             // IndexedDB は索引キーが同値のレコードを主キー順で返すため、ここを revisionId
             // だけで決めると実装間で順序が食い違う（この後始末は削除順に直結する）。
+            //
+            // ここでの比較は実 IndexedDB の getAllFromIndex 返却順を模倣する役割であり、
+            // IndexedDB のキー比較は UTF-16 コード単位による素の比較でロケール非依存。
+            // localeCompare は約物（アンダースコアなど）を主強度で無視する等コード単位比較
+            // とは異なる規則で並べ替えるため、素の比較演算子で揃える。updatedAt は ISO 8601
+            // の日時文字列で ASCII の数字と区切り文字のみからなり、コード単位比較でも
+            // localeCompare でも結果は変わらないが、模倣対象のアルゴリズムに合わせて統一する。
             .sort((left, right) => {
               if (left.updatedAt !== right.updatedAt) {
-                return left.updatedAt.localeCompare(right.updatedAt);
+                return left.updatedAt < right.updatedAt ? -1 : 1;
               }
 
-              return left.lawId === right.lawId
-                ? left.revisionId.localeCompare(right.revisionId)
-                : left.lawId.localeCompare(right.lawId);
+              if (left.lawId !== right.lawId) {
+                return left.lawId < right.lawId ? -1 : 1;
+              }
+
+              return left.revisionId === right.revisionId
+                ? 0
+                : left.revisionId < right.revisionId
+                  ? -1
+                  : 1;
             }),
         );
       },
