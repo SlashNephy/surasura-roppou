@@ -26,6 +26,9 @@ export interface SavedLawRecord {
   nodeCount: number;
   savedAt: ISODateString;
   updatedAt: ISODateString;
+  // 保存した本文の概算バイト数。エビクションの合計計算に使う。
+  // PR 3 より前に保存されたレコードは持たないため任意。
+  byteSize?: number;
 }
 
 export interface StoredLawNode {

@@ -32,6 +32,7 @@ describe("createSavedLawUseCase", () => {
         nodeCount: 1,
         savedAt: "2026-07-06T00:00:00.000Z",
         updatedAt: "2026-07-06T00:00:00.000Z",
+        byteSize: expect.any(Number) as number,
       },
     ]);
     await expect(useCase.get(law.lawId)).resolves.toEqual({

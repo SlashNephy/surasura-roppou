@@ -54,6 +54,7 @@ describe("StorageRepository", () => {
         nodeCount: 2,
         savedAt: "2026-07-06T00:00:00.000Z",
         updatedAt: "2026-07-06T00:00:00.000Z",
+        byteSize: expect.any(Number) as number,
       },
     ]);
   });
@@ -77,6 +78,7 @@ describe("StorageRepository", () => {
         nodeCount: 2,
         savedAt: "2026-07-06T00:00:00.000Z",
         updatedAt: "2026-07-07T00:00:00.000Z",
+        byteSize: expect.any(Number) as number,
       },
     ]);
   });
@@ -245,6 +247,7 @@ describe("StorageRepository", () => {
         nodeCount: 2,
         savedAt: "2026-07-06T00:00:00.000Z",
         updatedAt: "2026-07-06T00:00:00.000Z",
+        byteSize: expect.any(Number) as number,
       },
     ]);
   });
@@ -314,6 +317,7 @@ describe("StorageRepository", () => {
         nodeCount: 1,
         savedAt: "2026-07-07T00:00:00.000Z",
         updatedAt: "2026-07-07T00:00:00.000Z",
+        byteSize: expect.any(Number) as number,
       },
       {
         law: olderLaw,
@@ -321,6 +325,7 @@ describe("StorageRepository", () => {
         nodeCount: 1,
         savedAt: "2026-07-06T00:00:00.000Z",
         updatedAt: "2026-07-06T00:00:00.000Z",
+        byteSize: expect.any(Number) as number,
       },
     ]);
   });
@@ -1410,6 +1415,70 @@ describe("StorageRepository", () => {
       collection,
       { ...collection, id: "collection-2", title: "再オープン" },
     ]);
+  });
+
+  it("sums the stored size across every revision of a law", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+
+    const [currentOnly] = await repository.listSavedLaws();
+    const currentOnlySize = currentOnly.byteSize ?? 0;
+
+    expect(currentOnlySize).toBeGreaterThan(0);
+
+    await repository.saveLawDocument(
+      { law, revision: olderRevision, nodes: [olderArticleNode] },
+      { isCurrent: false },
+    );
+
+    const [withHistory] = await repository.listSavedLaws();
+
+    // 一覧は現行版だけを返すが、容量は履歴版も含めた実際の占有量でなければ
+    // 「消したのに減らない」という見え方になる。
+    expect(withHistory.byteSize ?? 0).toBeGreaterThan(currentOnlySize);
+  });
+
+  it("lists saved law records oldest first for eviction", async () => {
+    let currentTime = new Date("2026-07-06T00:00:00.000Z");
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: () => currentTime,
+    });
+
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode] });
+    currentTime = new Date("2026-07-09T00:00:00.000Z");
+    await repository.saveLawDocument(
+      { law, revision: olderRevision, nodes: [olderArticleNode] },
+      { isCurrent: false },
+    );
+
+    const records = await repository.listSavedLawRecords();
+
+    // 先に消す候補が先頭に来る。
+    expect(records.map((record) => record.revisionId)).toEqual([
+      revision.revisionId,
+      olderRevision.revisionId,
+    ]);
+  });
+
+  it("backfills the stored size of a record saved before sizes were recorded", async () => {
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode] });
+    await repository.setSavedLawByteSize(law.lawId, revision.revisionId, 12_345);
+
+    const records = await repository.listSavedLawRecords();
+
+    expect(records[0]?.byteSize).toBe(12_345);
+    // 書き戻しは容量だけを触り、保存時刻を動かさない（LRU の順序が変わるため）。
+    expect(records[0]?.updatedAt).toBe("2026-07-06T00:00:00.000Z");
   });
 });
 

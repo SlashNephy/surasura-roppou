@@ -141,6 +141,7 @@ export const createMemoryStorageRepository = (
           isCurrent,
           savedAt: nextSavedAt,
           updatedAt: writtenAt,
+          byteSize: new Blob([JSON.stringify(document.nodes)]).size,
         });
         return Promise.resolve({ isCurrent });
       },
@@ -151,18 +152,61 @@ export const createMemoryStorageRepository = (
         return Promise.resolve(savedRevisions.get(toRevisionKey(lawId, revisionId))?.document);
       },
       listSavedLaws() {
+        const byteSizeByLawId = new Map<string, number>();
+
+        for (const entry of savedRevisions.values()) {
+          if (entry.byteSize !== undefined) {
+            const lawId = entry.document.law.lawId;
+
+            byteSizeByLawId.set(lawId, (byteSizeByLawId.get(lawId) ?? 0) + entry.byteSize);
+          }
+        }
+
         return Promise.resolve(
           [...savedRevisions.values()]
             .filter((entry) => entry.isCurrent)
             .sort(byNewestFirst)
+            .map((entry) => {
+              const byteSize = byteSizeByLawId.get(entry.document.law.lawId);
+
+              return {
+                law: entry.document.law,
+                revision: entry.document.revision,
+                nodeCount: entry.document.nodes.length,
+                savedAt: entry.savedAt,
+                updatedAt: entry.updatedAt,
+                ...(byteSize === undefined ? {} : { byteSize }),
+              };
+            }),
+        );
+      },
+      listSavedLawRecords() {
+        return Promise.resolve(
+          [...savedRevisions.values()]
             .map((entry) => ({
-              law: entry.document.law,
-              revision: entry.document.revision,
+              lawId: entry.document.law.lawId,
+              revisionId: entry.document.revision.revisionId,
+              isCurrent: entry.isCurrent ? (1 as const) : (0 as const),
               nodeCount: entry.document.nodes.length,
               savedAt: entry.savedAt,
               updatedAt: entry.updatedAt,
-            })),
+              ...(entry.byteSize === undefined ? {} : { byteSize: entry.byteSize }),
+            }))
+            // 実リポジトリと同じく updatedAt 昇順。同値のときは revisionId で決める。
+            .sort((left, right) =>
+              left.updatedAt === right.updatedAt
+                ? left.revisionId.localeCompare(right.revisionId)
+                : left.updatedAt.localeCompare(right.updatedAt),
+            ),
         );
+      },
+      setSavedLawByteSize(lawId, revisionId, byteSize) {
+        const entry = savedRevisions.get(toRevisionKey(lawId, revisionId));
+
+        if (entry !== undefined) {
+          entry.byteSize = byteSize;
+        }
+        return Promise.resolve();
       },
       listSavedRevisions(lawId) {
         return Promise.resolve(
@@ -409,6 +453,7 @@ interface MemorySavedRevision {
   isCurrent: boolean;
   savedAt: string;
   updatedAt: string;
+  byteSize?: number;
 }
 
 // Map のキーで [lawId, revisionId] の複合キーを表現する。区切りは ID に現れない文字を使う。
