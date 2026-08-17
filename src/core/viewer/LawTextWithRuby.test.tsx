@@ -61,16 +61,16 @@ describe("LawTextWithRuby", () => {
   });
 
   it("matches annotations against readable-mode transformed text", () => {
-    // readable では本文が「（…）」→「(…)」に変換されるため、注記側も同じ変換を通す。
+    // readable では本文が「(…)」→「（…）」に変換されるため、注記側も同じ変換を通す。
     const { rubies } = renderText(
       <LawTextWithRuby
-        annotations={[{ base: "（瑕疵）", text: "かし" }]}
+        annotations={[{ base: "(瑕疵)", text: "かし" }]}
         displayMode="readable"
-        text="(瑕疵)によって"
+        text="（瑕疵）によって"
       />,
     );
 
-    expect(rubies).toEqual([{ base: "(瑕疵)", ruby: "かし" }]);
+    expect(rubies).toEqual([{ base: "（瑕疵）", ruby: "かし" }]);
   });
 
   it("keeps the text intact for empty or missing annotations", () => {
