@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { Bookmark, Collection } from "@/core/domain";
 import type { SavedDataExport, StorageRepository } from "@/core/storage";
+import { formatByteSize } from "@/shared/utils/bytes";
 import { createMemoryStorageRepository, createSavedLawDocument } from "@/test/fixtures/storage";
 import { setupScrollMocks } from "@/test/scrollMocks";
 
@@ -177,8 +178,14 @@ describe("SavedPage", () => {
     expect(within(recentSection).getByText(/KB|MB/)).toBeInTheDocument();
     expect(within(recentSection).queryByText(/ノード/)).not.toBeInTheDocument();
 
-    // 合計と上限を出す。上限だけあって使用量が見えないと「いつか勝手に消える」としか読めない。
-    expect(screen.getByText(/\/ 250 MB/)).toBeInTheDocument();
+    // 合計と上限を出す。分母（上限）だけでなく分子（実際の使用量）も、保存した本文の
+    // 実測バイト数と一致していることを確認する。分子が 0 のまま出るバグは分母だけの
+    // 表明では検出できない。
+    const expectedUsedBytes = new Blob([JSON.stringify(sampleLawViewerDocument.nodes)]).size;
+
+    expect(
+      screen.getByText(`オフライン保存: ${formatByteSize(expectedUsedBytes)} / 250 MB`),
+    ).toBeInTheDocument();
   });
 
   it("orders each section by its own recency: pinnedAt for pinned laws, updatedAt for recent laws", async () => {

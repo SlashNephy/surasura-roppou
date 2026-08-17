@@ -11,6 +11,10 @@ describe("formatByteSize", () => {
     expect(formatByteSize(1_677_722)).toBe("1.6 MB");
   });
 
+  it("omits the decimal point when megabytes round to a whole number", () => {
+    expect(formatByteSize(52_428_800)).toBe("50 MB");
+  });
+
   it("shows zero without a fractional part", () => {
     expect(formatByteSize(0)).toBe("0 KB");
   });
