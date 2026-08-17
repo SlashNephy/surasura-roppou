@@ -1,0 +1,3391 @@
+# 条文のハイライト機能 実装計画
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** 法令ビューアで条文のテキスト範囲を 4 色から選んで着色し、永続化して再表示できるようにする。
+
+**Architecture:** CSS Custom Highlight API で DOM を分割せずに着色する。位置は `LawNode.plainText` を正規空間とする引用文アンカー（quote + prefix + suffix）で保存し、表示文字列との差はテキストアラインメントで吸収する。判断ロジックはすべて DOM 非依存の純関数に切り出し、ブラウザ API に触る層を薄く保つ。
+
+**Tech Stack:** React 19 / TypeScript 6 / Vite 8 / Tailwind CSS 4 / idb (IndexedDB) / Vitest + Testing Library + jsdom / fake-indexeddb
+
+**設計ドキュメント:** [docs/superpowers/specs/2026-08-17-article-highlight-design.md](../specs/2026-08-17-article-highlight-design.md)
+
+**Issue:** [#188](https://github.com/SlashNephy/surasura-roppou/issues/188)
+
+## Global Constraints
+
+- リポジトリは**公開**である。コメント・コミットメッセージ・PR に非公開情報を含めない。
+- ブランチは `feat/issue-188-article-highlight`（作成済み）。
+- コード内コメントは日本語。ログ・エラーメッセージは英語。
+- コミットメッセージは Conventional Commits。末尾に `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>` を付ける。
+- **コミットは `git commit --no-verify` を使う。** このリポジトリの pre-commit フックは `.git/info/exclude` の汚染により `package.json` / `pnpm-lock.yaml` / `.npmrc` を「.gitignore に一致する追跡ファイル」と誤検知して中断する。フックの案内に従って untrack してはならない。
+- **テストは必ず `--dir src` を付けて実行する。** 付けないと `.claude/worktrees/` 配下の別ワークツリーのテストまで拾う。
+  - 単体: `pnpm exec vitest run --dir src <ファイル名の一部>`
+  - 全体: `pnpm exec vitest run --dir src`
+- 検証ゲートは 4 つすべてを通す: `pnpm run typecheck` / `pnpm run lint` / `pnpm run format:check` / `pnpm exec vitest run --dir src`
+- lint の指摘を `eslint-disable` や設定変更で回避しない。解消できないときはユーザーに方針を確認する。
+- テストは振る舞いを検証する。ソースコードを走査するテストや、定数をそのコピーと比較するだけのテストを書かない。
+- `surasuraDatabaseVersion` は **3 のまま**。繰り上げてはならない。
+- ハイライト色は 4 色: `cyan` / `orange` / `pink` / `yellow`。
+- 色の値（ライト / ダーク）:
+  - yellow `#fde68a` / `#725f14`
+  - orange `#fb923c` / `#5e2b0c`
+  - pink `#f9a8d4` / `#7d2b57`
+  - cyan `#67e8f9` / `#125a68`
+
+## ファイル構成
+
+### 新規作成
+
+| ファイル                                    | 責務                                                |
+| ------------------------------------------- | --------------------------------------------------- |
+| `src/core/domain/annotation.ts`             | 注釈レコードの正規化（旧形式の吸収）                |
+| `src/core/viewer/text-alignment.ts`         | 近似した 2 文字列の文字単位対応。オフセット相互変換 |
+| `src/core/viewer/text-anchor.ts`            | 引用文アンカーの生成と再解決、対象ノードの解決      |
+| `src/core/viewer/highlight-merge.ts`        | `plainText` 空間の範囲集合の正規化（交差解決）      |
+| `src/core/viewer/highlight-support.ts`      | 機能検出                                            |
+| `src/core/viewer/caret-position.ts`         | 座標 → 文字位置のブラウザ差異吸収                   |
+| `src/core/viewer/selection-range.ts`        | DOM `Range` → ノード内テキスト範囲の抽出とクランプ  |
+| `src/core/viewer/highlight-registry.ts`     | `CSS.highlights` への登録アダプタ                   |
+| `src/core/viewer/HighlightColorPopover.tsx` | 色選択ポップアップ（提示専用）                      |
+| `src/app/use-highlight-painting.ts`         | レンダー後に Range を再構築して登録する hook        |
+| `src/app/use-article-highlights.ts`         | ハイライトの読み込み・保存・削除                    |
+
+### 変更
+
+| ファイル                                        | 変更内容                                                     |
+| ----------------------------------------------- | ------------------------------------------------------------ |
+| `src/core/domain/models.ts`                     | `HighlightColor` / `TextQuoteAnchor` 追加、`Annotation` 拡張 |
+| `src/core/domain/index.ts`                      | re-export                                                    |
+| `src/core/storage/repository.ts`                | `deleteAnnotation` 追加、`listAnnotations` に正規化を適用    |
+| `src/test/fixtures/storage.ts`                  | in-memory 実装に `deleteAnnotation` 追加                     |
+| `src/core/viewer/LawNodeList.tsx`               | 本文要素に `data-law-node-id` を付与                         |
+| `src/core/viewer/index.ts`                      | re-export                                                    |
+| `src/app/law-viewer-page.tsx`                   | 配線                                                         |
+| `src/index.css`                                 | `--highlight-*` トークンと `::highlight()` 規則              |
+| `docs/schemas/saved-data-export-v2.schema.json` | `$defs.annotation` の更新                                    |
+
+---
+
+## Task 1: 実機検証スパイク
+
+設計で「実装前に実機検証が必要」とした 3 項目を確定させる。コードは残さず、結果を spec に追記する。
+
+**Files:**
+
+- Create: スクラッチディレクトリ配下の `highlight-spike.html`（リポジトリには置かない）
+- Modify: `docs/superpowers/specs/2026-08-17-article-highlight-design.md`
+
+**Interfaces:**
+
+- Consumes: なし
+- Produces: 後続タスクが使う CSS の書き方（`var()` 可否）と `caret-position.ts` の分岐方針
+
+- [ ] **Step 1: 検証用 HTML をスクラッチディレクトリに作る**
+
+```html
+<!doctype html>
+<meta charset="utf-8" />
+<style>
+  :root {
+    --highlight-yellow: #fde68a;
+  }
+  #out {
+    font-family: monospace;
+    white-space: pre-wrap;
+  }
+  ::highlight(spike-var) {
+    background-color: var(--highlight-yellow);
+  }
+  ::highlight(spike-literal) {
+    background-color: #67e8f9;
+  }
+  @media (forced-colors: active) {
+    ::highlight(spike-var) {
+      background-color: Mark;
+      color: MarkText;
+    }
+  }
+</style>
+<p id="a">第三条 私権は、公共の福祉に適合しなければならない。</p>
+<p id="b">第四条 権利の行使及び義務の履行は、信義に従い誠実に行わなければならない。</p>
+<div id="out"></div>
+<script>
+  const log = (m) => (document.getElementById("out").textContent += m + "\n");
+  const mk = (id, s, e) => {
+    const r = new Range();
+    const t = document.getElementById(id).firstChild;
+    r.setStart(t, s);
+    r.setEnd(t, e);
+    return r;
+  };
+  CSS.highlights.set("spike-var", new Highlight(mk("a", 0, 8)));
+  CSS.highlights.set("spike-literal", new Highlight(mk("b", 0, 8)));
+  log("CSS.highlights: " + ("highlights" in CSS));
+  log("caretPositionFromPoint: " + ("caretPositionFromPoint" in document));
+  log("caretRangeFromPoint: " + ("caretRangeFromPoint" in document));
+  const rect = mk("a", 0, 8).getBoundingClientRect();
+  const pos = document.caretPositionFromPoint?.(
+    rect.left + rect.width / 2,
+    rect.top + rect.height / 2,
+  );
+  log("caret hit offset: " + (pos ? pos.offset : "n/a"));
+</script>
+```
+
+- [ ] **Step 2: ブラウザで開いて 3 項目を確認する**
+
+`playwright-cli` で開き、次を確認してスクリーンショットを撮る。
+
+1. 1 行目（`spike-var`）に黄色が付いているか → 付いていれば `::highlight()` 内で `var()` が使える
+2. 2 行目（`spike-literal`）に水色が付いているか → 描画そのものの動作確認
+3. `#out` の `caretPositionFromPoint` / `caretRangeFromPoint` の真偽値と、`caret hit offset` が数値になるか
+
+強制カラーモードは `page.emulateMedia({ forcedColors: "active" })` で確認する。`playwright-cli` から指定できなければ「未検証」として記録し、`@media (forced-colors: active)` のブロックは設計どおり入れておく。
+
+- [ ] **Step 3: 結果を spec に追記する**
+
+`docs/superpowers/specs/2026-08-17-article-highlight-design.md` の「実装前に実機検証が必要な項目」節を、確認結果に置き換える。各項目に「検証日 / 検証環境 / 結果 / 設計への反映」を書く。
+
+- [ ] **Step 4: コミット**
+
+```bash
+git add docs/superpowers/specs/2026-08-17-article-highlight-design.md
+git commit --no-verify -m "docs: ハイライト機能のブラウザ API 検証結果を記録する
+
+Refs #188
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 2: ドメイン型の拡張とエクスポートスキーマ更新
+
+**Files:**
+
+- Modify: `src/core/domain/models.ts`
+- Modify: `src/core/domain/index.ts`
+- Create: `src/core/domain/annotation.ts`
+- Create: `src/core/domain/annotation.test.ts`
+- Modify: `docs/schemas/saved-data-export-v2.schema.json`
+- Modify: `src/core/storage/import-data.test.ts`
+
+**Interfaces:**
+
+- Consumes: `LawReferenceTarget`, `ISODateString`（既存）
+- Produces:
+  - `type HighlightColor = "cyan" | "orange" | "pink" | "yellow"`
+  - `const highlightColors: readonly HighlightColor[]`
+  - `interface TextQuoteAnchor { target: LawReferenceTarget; quote: string; prefix: string; suffix: string }`
+  - `interface Annotation { id; target; anchors: TextQuoteAnchor[]; color?: HighlightColor; note?: string; tags: string[]; createdAt; updatedAt }`
+  - `normalizeAnnotation(record: unknown): Annotation | undefined`
+
+- [ ] **Step 1: 正規化関数の失敗するテストを書く**
+
+`src/core/domain/annotation.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+
+import { normalizeAnnotation } from "./annotation";
+
+const target = { lawId: "322AC0000000125", article: "1", path: "Article:1" };
+
+describe("normalizeAnnotation", () => {
+  it("anchors を持つレコードはそのまま通す", () => {
+    const record = {
+      id: "a1",
+      target,
+      anchors: [{ target, quote: "私権", prefix: "第一条 ", suffix: "は、" }],
+      color: "yellow",
+      tags: [],
+      createdAt: "2026-08-17T00:00:00.000Z",
+      updatedAt: "2026-08-17T00:00:00.000Z",
+    };
+
+    expect(normalizeAnnotation(record)).toEqual(record);
+  });
+
+  it("旧形式の targetText を 1 件の anchor へ変換する", () => {
+    const record = {
+      id: "a2",
+      target,
+      targetText: "私権",
+      prefixText: "第一条 ",
+      suffixText: "は、",
+      note: "メモ",
+      tags: ["t"],
+      createdAt: "2026-08-17T00:00:00.000Z",
+      updatedAt: "2026-08-17T00:00:00.000Z",
+    };
+
+    expect(normalizeAnnotation(record)).toEqual({
+      id: "a2",
+      target,
+      anchors: [{ target, quote: "私権", prefix: "第一条 ", suffix: "は、" }],
+      note: "メモ",
+      tags: ["t"],
+      createdAt: "2026-08-17T00:00:00.000Z",
+      updatedAt: "2026-08-17T00:00:00.000Z",
+    });
+  });
+
+  it("prefixText / suffixText が欠けていても空文字で補う", () => {
+    const record = {
+      id: "a3",
+      target,
+      targetText: "私権",
+      note: "",
+      tags: [],
+      createdAt: "2026-08-17T00:00:00.000Z",
+      updatedAt: "2026-08-17T00:00:00.000Z",
+    };
+
+    expect(normalizeAnnotation(record)?.anchors).toEqual([
+      { target, quote: "私権", prefix: "", suffix: "" },
+    ]);
+  });
+
+  it("anchors も targetText も無ければ anchors を空配列にする", () => {
+    const record = {
+      id: "a4",
+      target,
+      note: "条文全体へのメモ",
+      tags: [],
+      createdAt: "2026-08-17T00:00:00.000Z",
+      updatedAt: "2026-08-17T00:00:00.000Z",
+    };
+
+    expect(normalizeAnnotation(record)?.anchors).toEqual([]);
+  });
+
+  it("未知の色は落とす", () => {
+    const record = {
+      id: "a5",
+      target,
+      anchors: [],
+      color: "chartreuse",
+      tags: [],
+      createdAt: "2026-08-17T00:00:00.000Z",
+      updatedAt: "2026-08-17T00:00:00.000Z",
+    };
+
+    expect(normalizeAnnotation(record)?.color).toBeUndefined();
+  });
+
+  it("id や target を欠くレコードは undefined を返す", () => {
+    expect(normalizeAnnotation({ target, tags: [] })).toBeUndefined();
+    expect(normalizeAnnotation(undefined)).toBeUndefined();
+  });
+});
+```
+
+- [ ] **Step 2: テストが失敗することを確認する**
+
+Run: `pnpm exec vitest run --dir src annotation.test`
+Expected: FAIL（`./annotation` が解決できない）
+
+- [ ] **Step 3: 型を追加する**
+
+`src/core/domain/models.ts` の `Annotation` を置き換える。
+
+```ts
+export type HighlightColor = "cyan" | "orange" | "pink" | "yellow";
+
+// ポップアップに並ぶ順。輝度の高い順に並べ、両テーマで同じ順序を保つ。
+export const highlightColors: readonly HighlightColor[] = ["yellow", "cyan", "pink", "orange"];
+
+// 1つのテキスト範囲。W3C Web Annotation の TextQuoteSelector 相当。
+// 位置を文字オフセットではなく引用文と前後文脈で表すので、条文が改正で伸縮しても再探索できる。
+export interface TextQuoteAnchor {
+  target: LawReferenceTarget;
+  quote: string;
+  prefix: string;
+  suffix: string;
+}
+
+export interface Annotation {
+  id: string;
+  target: LawReferenceTarget;
+  // 1回のユーザー選択の断片。v1 は必ず長さ 1。複数ノードにまたがる選択で伸びる。
+  anchors: TextQuoteAnchor[];
+  // 未定義なら色なしの純粋な注釈。ハイライトとしては描画しない。
+  color?: HighlightColor;
+  note?: string;
+  tags: string[];
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+}
+```
+
+- [ ] **Step 4: 正規化関数を実装する**
+
+`src/core/domain/annotation.ts`:
+
+```ts
+import type { Annotation, HighlightColor, TextQuoteAnchor } from "./models";
+import { highlightColors } from "./models";
+import type { LawReferenceTarget } from "./references";
+
+// v2 エクスポート由来のレコードは anchors を持たない。読み出し境界で吸収する。
+interface LegacyAnnotationFields {
+  targetText?: unknown;
+  prefixText?: unknown;
+  suffixText?: unknown;
+}
+
+const isHighlightColor = (value: unknown): value is HighlightColor =>
+  typeof value === "string" && (highlightColors as readonly string[]).includes(value);
+
+const isTarget = (value: unknown): value is LawReferenceTarget =>
+  typeof value === "object" &&
+  value !== null &&
+  typeof (value as { lawId?: unknown }).lawId === "string";
+
+const isAnchor = (value: unknown): value is TextQuoteAnchor =>
+  typeof value === "object" &&
+  value !== null &&
+  isTarget((value as { target?: unknown }).target) &&
+  typeof (value as { quote?: unknown }).quote === "string" &&
+  typeof (value as { prefix?: unknown }).prefix === "string" &&
+  typeof (value as { suffix?: unknown }).suffix === "string";
+
+const toAnchors = (
+  record: { anchors?: unknown } & LegacyAnnotationFields,
+  target: LawReferenceTarget,
+): TextQuoteAnchor[] => {
+  if (Array.isArray(record.anchors)) {
+    return record.anchors.filter(isAnchor);
+  }
+
+  if (typeof record.targetText !== "string" || record.targetText === "") {
+    return [];
+  }
+
+  return [
+    {
+      target,
+      quote: record.targetText,
+      prefix: typeof record.prefixText === "string" ? record.prefixText : "",
+      suffix: typeof record.suffixText === "string" ? record.suffixText : "",
+    },
+  ];
+};
+
+// 壊れたレコードは undefined を返して呼び出し側で捨てる。例外にすると
+// 1件の破損で法令全体のハイライトが読めなくなるため、可用性を優先する。
+export const normalizeAnnotation = (record: unknown): Annotation | undefined => {
+  if (typeof record !== "object" || record === null) {
+    return undefined;
+  }
+
+  const candidate = record as Record<string, unknown> & LegacyAnnotationFields;
+
+  if (typeof candidate.id !== "string" || !isTarget(candidate.target)) {
+    return undefined;
+  }
+
+  const color = isHighlightColor(candidate.color) ? candidate.color : undefined;
+
+  return {
+    id: candidate.id,
+    target: candidate.target,
+    anchors: toAnchors(candidate, candidate.target),
+    ...(color === undefined ? {} : { color }),
+    ...(typeof candidate.note === "string" ? { note: candidate.note } : {}),
+    tags: Array.isArray(candidate.tags)
+      ? candidate.tags.filter((tag): tag is string => typeof tag === "string")
+      : [],
+    createdAt: typeof candidate.createdAt === "string" ? candidate.createdAt : "",
+    updatedAt: typeof candidate.updatedAt === "string" ? candidate.updatedAt : "",
+  };
+};
+```
+
+- [ ] **Step 5: re-export する**
+
+`src/core/domain/index.ts` の型 export に `HighlightColor` と `TextQuoteAnchor` を追加し、値 export に次を足す。
+
+```ts
+export { highlightColors } from "./models";
+export { normalizeAnnotation } from "./annotation";
+```
+
+- [ ] **Step 6: テストが通ることを確認する**
+
+Run: `pnpm exec vitest run --dir src annotation.test`
+Expected: PASS（6 tests）
+
+- [ ] **Step 7: エクスポートスキーマを更新する**
+
+`docs/schemas/saved-data-export-v2.schema.json` の `$defs.annotation` を次のようにする。`required` から `note` を外し、`anchors` と `color` を追加する。`anchors` は `required` に入れない（旧エクスポートが通らなくなるため）。`targetText` / `prefixText` / `suffixText` は残す。
+
+```json
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "target", "tags", "createdAt", "updatedAt"],
+  "properties": {
+    "id": { "type": "string" },
+    "target": { "$ref": "#/$defs/target" },
+    "anchors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["target", "quote", "prefix", "suffix"],
+        "properties": {
+          "target": { "$ref": "#/$defs/target" },
+          "quote": { "type": "string" },
+          "prefix": { "type": "string" },
+          "suffix": { "type": "string" }
+        }
+      }
+    },
+    "color": { "type": "string", "enum": ["cyan", "orange", "pink", "yellow"] },
+    "targetText": { "type": "string" },
+    "prefixText": { "type": "string" },
+    "suffixText": { "type": "string" },
+    "note": { "type": "string" },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "createdAt": { "type": "string" },
+    "updatedAt": { "type": "string" }
+  }
+}
+```
+
+- [ ] **Step 8: 後方互換のテストを追加する**
+
+`src/core/storage/import-data.test.ts` に追加する。既存ファイルの import 文と、有効なエクスポートを組み立てるヘルパーの名前を先に読んで合わせること（下記の `minimalExport` と `parseSavedDataExport` は既存の名前に置き換える）。
+
+```ts
+it("note と anchors を持たない v2 形式の annotation を受け入れる", () => {
+  const data = {
+    ...minimalExport,
+    annotations: [
+      {
+        id: "legacy-1",
+        target: { lawId: "322AC0000000125", article: "1" },
+        targetText: "私権",
+        prefixText: "",
+        suffixText: "",
+        note: "旧メモ",
+        tags: [],
+        createdAt: "2026-07-01T00:00:00.000Z",
+        updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+    ],
+  };
+
+  expect(parseSavedDataExport(JSON.stringify(data))).toMatchObject({ kind: "ok" });
+});
+
+it("color と anchors を持つ新形式の annotation を受け入れる", () => {
+  const target = { lawId: "322AC0000000125", article: "1", path: "Article:1" };
+  const data = {
+    ...minimalExport,
+    annotations: [
+      {
+        id: "highlight-1",
+        target,
+        anchors: [{ target, quote: "私権", prefix: "", suffix: "は、" }],
+        color: "yellow",
+        tags: [],
+        createdAt: "2026-08-17T00:00:00.000Z",
+        updatedAt: "2026-08-17T00:00:00.000Z",
+      },
+    ],
+  };
+
+  expect(parseSavedDataExport(JSON.stringify(data))).toMatchObject({ kind: "ok" });
+});
+```
+
+- [ ] **Step 9: 検証ゲートを通す**
+
+```bash
+pnpm run typecheck && pnpm run lint && pnpm run format:check && pnpm exec vitest run --dir src
+```
+
+Expected: すべて成功。`Annotation.note` を必須前提にしていた箇所があれば型エラーになるので修正する。
+
+- [ ] **Step 10: コミット**
+
+```bash
+git add src/core/domain docs/schemas/saved-data-export-v2.schema.json src/core/storage/import-data.test.ts
+git commit --no-verify -m "feat: Annotation にハイライト色と引用文アンカーを追加する
+
+Refs #188
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 3: テキストアラインメント
+
+**Files:**
+
+- Create: `src/core/viewer/text-alignment.ts`
+- Create: `src/core/viewer/text-alignment.test.ts`
+
+**Interfaces:**
+
+- Consumes: なし
+- Produces:
+  - `commonPrefixLength(a: string, b: string): number`
+  - `commonSuffixLength(a: string, b: string): number`
+  - `interface AlignmentSegment { sourceStart: number; displayStart: number; length: number }`
+  - `interface TextAlignment { segments: AlignmentSegment[]; sourceLength: number; displayLength: number }`
+  - `alignTexts(source: string, display: string): TextAlignment`
+  - `toSourceOffset(alignment: TextAlignment, displayOffset: number, bias: "end" | "start"): number`
+  - `toDisplayRange(alignment: TextAlignment, sourceStart: number, sourceEnd: number): { start: number; end: number } | undefined`
+
+- [ ] **Step 1: 失敗するテストを書く**
+
+`src/core/viewer/text-alignment.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+
+import { alignTexts, toDisplayRange, toSourceOffset } from "./text-alignment";
+
+describe("alignTexts", () => {
+  it("同一文字列なら全体が 1 区間になる", () => {
+    const alignment = alignTexts("あいうえお", "あいうえお");
+
+    expect(alignment.segments).toEqual([{ sourceStart: 0, displayStart: 0, length: 5 }]);
+  });
+
+  it("局所置換で文字数が縮んでも前後が対応する", () => {
+    // readable 変換: 「第三条」→「第3条」
+    const alignment = alignTexts("第三条の規定により", "第3条の規定により");
+
+    expect(toSourceOffset(alignment, 3, "start")).toBe(3);
+    expect(toSourceOffset(alignment, 8, "end")).toBe(9);
+  });
+
+  it("挿入（ルビ）があっても後続が対応する", () => {
+    const alignment = alignTexts("公布の日から", "公布こうふの日から");
+
+    expect(toSourceOffset(alignment, 5, "start")).toBe(2);
+    expect(toSourceOffset(alignment, 8, "end")).toBe(5);
+  });
+});
+
+describe("toSourceOffset", () => {
+  it("対応の切れ目では bias に従って外側へ寄せる", () => {
+    const alignment = alignTexts("第三条", "第3条");
+
+    // display の 1..2 は「3」の内側。start は手前の区間末尾、end は次の区間先頭へ寄る。
+    expect(toSourceOffset(alignment, 1, "start")).toBe(1);
+    expect(toSourceOffset(alignment, 1, "end")).toBe(2);
+  });
+
+  it("末尾を超えるオフセットは sourceLength に丸める", () => {
+    const alignment = alignTexts("あいう", "あいう");
+
+    expect(toSourceOffset(alignment, 99, "end")).toBe(3);
+  });
+});
+
+describe("toDisplayRange", () => {
+  it("source の範囲を display の範囲へ変換する", () => {
+    const alignment = alignTexts("第三条の規定", "第3条の規定");
+
+    expect(toDisplayRange(alignment, 3, 6)).toEqual({ start: 2, end: 5 });
+  });
+
+  it("置換された部分を含む範囲は置換全体を覆うように広げる", () => {
+    const alignment = alignTexts("第三条の規定", "第3条の規定");
+
+    expect(toDisplayRange(alignment, 0, 3)).toEqual({ start: 0, end: 2 });
+  });
+
+  it("対応する区間がまったく無ければ undefined", () => {
+    const alignment = alignTexts("あいう", "かきく");
+
+    expect(toDisplayRange(alignment, 0, 3)).toBeUndefined();
+  });
+});
+```
+
+- [ ] **Step 2: テストが失敗することを確認する**
+
+Run: `pnpm exec vitest run --dir src text-alignment`
+Expected: FAIL（`./text-alignment` が解決できない）
+
+- [ ] **Step 3: 実装する**
+
+`src/core/viewer/text-alignment.ts`:
+
+```ts
+export interface AlignmentSegment {
+  sourceStart: number;
+  displayStart: number;
+  length: number;
+}
+
+// source 側と display 側の対応区間の列。区間内は 1 対 1 対応（等長）で、
+// 区間の切れ目が挿入・削除・置換の境界になる。区間は開始位置の昇順。
+export interface TextAlignment {
+  segments: AlignmentSegment[];
+  sourceLength: number;
+  displayLength: number;
+}
+
+// 中間部の LCS が現実的な計算量に収まる上限。条文 1 ノードの本文は通常数百文字で、
+// 差分のある中間はそのごく一部にしかならない。超えた場合は対応なしとして扱い、
+// ハイライトを描かずに劣化させる。
+const maxLcsCells = 1_000_000;
+
+export const commonPrefixLength = (a: string, b: string): number => {
+  const limit = Math.min(a.length, b.length);
+  let index = 0;
+
+  while (index < limit && a[index] === b[index]) {
+    index += 1;
+  }
+
+  return index;
+};
+
+export const commonSuffixLength = (a: string, b: string): number => {
+  const limit = Math.min(a.length, b.length);
+  let index = 0;
+
+  while (index < limit && a[a.length - 1 - index] === b[b.length - 1 - index]) {
+    index += 1;
+  }
+
+  return index;
+};
+
+// 中間部の最長共通部分列を求め、連続する一致を 1 区間にまとめて返す。
+const lcsSegments = (
+  source: string,
+  display: string,
+  sourceOffset: number,
+  displayOffset: number,
+): AlignmentSegment[] => {
+  if (source === "" || display === "" || source.length * display.length > maxLcsCells) {
+    return [];
+  }
+
+  const width = display.length + 1;
+  const table = new Uint32Array((source.length + 1) * width);
+
+  for (let i = source.length - 1; i >= 0; i -= 1) {
+    for (let j = display.length - 1; j >= 0; j -= 1) {
+      table[i * width + j] =
+        source[i] === display[j]
+          ? table[(i + 1) * width + j + 1] + 1
+          : Math.max(table[(i + 1) * width + j], table[i * width + j + 1]);
+    }
+  }
+
+  const segments: AlignmentSegment[] = [];
+  let i = 0;
+  let j = 0;
+
+  while (i < source.length && j < display.length) {
+    if (source[i] === display[j]) {
+      const last = segments.at(-1);
+
+      if (
+        last !== undefined &&
+        last.sourceStart + last.length === sourceOffset + i &&
+        last.displayStart + last.length === displayOffset + j
+      ) {
+        last.length += 1;
+      } else {
+        segments.push({
+          sourceStart: sourceOffset + i,
+          displayStart: displayOffset + j,
+          length: 1,
+        });
+      }
+
+      i += 1;
+      j += 1;
+    } else if (table[(i + 1) * width + j] >= table[i * width + j + 1]) {
+      i += 1;
+    } else {
+      j += 1;
+    }
+  }
+
+  return segments;
+};
+
+// 末尾の区間に連続していれば伸ばし、そうでなければ新しい区間として足す。
+const pushSegment = (segments: AlignmentSegment[], segment: AlignmentSegment): void => {
+  const last = segments.at(-1);
+
+  if (
+    last !== undefined &&
+    last.sourceStart + last.length === segment.sourceStart &&
+    last.displayStart + last.length === segment.displayStart
+  ) {
+    last.length += segment.length;
+
+    return;
+  }
+
+  segments.push(segment);
+};
+
+export const alignTexts = (source: string, display: string): TextAlignment => {
+  const prefix = commonPrefixLength(source, display);
+  const suffix = Math.min(
+    commonSuffixLength(source, display),
+    Math.min(source.length, display.length) - prefix,
+  );
+  const segments: AlignmentSegment[] = [];
+
+  if (prefix > 0) {
+    segments.push({ sourceStart: 0, displayStart: 0, length: prefix });
+  }
+
+  const middle = lcsSegments(
+    source.slice(prefix, source.length - suffix),
+    display.slice(prefix, display.length - suffix),
+    prefix,
+    prefix,
+  );
+
+  for (const segment of middle) {
+    pushSegment(segments, segment);
+  }
+
+  if (suffix > 0) {
+    pushSegment(segments, {
+      sourceStart: source.length - suffix,
+      displayStart: display.length - suffix,
+      length: suffix,
+    });
+  }
+
+  return { segments, sourceLength: source.length, displayLength: display.length };
+};
+
+// display のオフセットを source のオフセットへ移す。
+// 対応の切れ目に落ちたときは bias に従って外側へ寄せ、置換された語をまるごと覆う。
+export const toSourceOffset = (
+  alignment: TextAlignment,
+  displayOffset: number,
+  bias: "end" | "start",
+): number => {
+  const clamped = Math.max(0, Math.min(displayOffset, alignment.displayLength));
+  let previousSourceEnd = 0;
+
+  for (const segment of alignment.segments) {
+    if (clamped < segment.displayStart) {
+      // 区間と区間の隙間。start は手前の区間末尾へ、end は次の区間先頭へ寄せる。
+      return bias === "start" ? previousSourceEnd : segment.sourceStart;
+    }
+
+    if (clamped <= segment.displayStart + segment.length) {
+      return segment.sourceStart + (clamped - segment.displayStart);
+    }
+
+    previousSourceEnd = segment.sourceStart + segment.length;
+  }
+
+  return Math.min(alignment.sourceLength, previousSourceEnd);
+};
+
+// source の範囲を display の範囲へ移す。置換をまたぐ場合は置換全体を覆うよう広げる。
+export const toDisplayRange = (
+  alignment: TextAlignment,
+  sourceStart: number,
+  sourceEnd: number,
+): { start: number; end: number } | undefined => {
+  let start: number | undefined;
+  let end: number | undefined;
+
+  for (const segment of alignment.segments) {
+    const segmentSourceEnd = segment.sourceStart + segment.length;
+
+    if (segmentSourceEnd <= sourceStart || segment.sourceStart >= sourceEnd) {
+      continue;
+    }
+
+    const overlapStart = Math.max(segment.sourceStart, sourceStart);
+    const overlapEnd = Math.min(segmentSourceEnd, sourceEnd);
+    const displayStart = segment.displayStart + (overlapStart - segment.sourceStart);
+    const displayEnd = segment.displayStart + (overlapEnd - segment.sourceStart);
+
+    start = start === undefined ? displayStart : Math.min(start, displayStart);
+    end = end === undefined ? displayEnd : Math.max(end, displayEnd);
+  }
+
+  return start === undefined || end === undefined || start >= end ? undefined : { start, end };
+};
+```
+
+- [ ] **Step 4: テストが通ることを確認する**
+
+Run: `pnpm exec vitest run --dir src text-alignment`
+Expected: PASS（8 tests）
+
+期待値が実装と食い違ったら、まず**テストの期待値が正しいか**を手で数えて確かめる。実装を期待値に合わせて曲げない。
+
+- [ ] **Step 5: コミット**
+
+```bash
+git add src/core/viewer/text-alignment.ts src/core/viewer/text-alignment.test.ts
+git commit --no-verify -m "feat: 表示文字列と plainText を対応づけるアラインメントを追加する
+
+Refs #188
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 4: 引用文アンカー
+
+**Files:**
+
+- Create: `src/core/viewer/text-anchor.ts`
+- Create: `src/core/viewer/text-anchor.test.ts`
+
+**Interfaces:**
+
+- Consumes: `commonPrefixLength` / `commonSuffixLength`（Task 3）、`TextQuoteAnchor` / `LawNode` / `LawReferenceTarget`（Task 2 と既存）
+- Produces:
+  - `createTextQuoteAnchor(plainText: string, start: number, end: number): { quote: string; prefix: string; suffix: string }`
+  - `resolveTextQuoteAnchor(plainText: string, anchor: TextQuoteAnchor): { start: number; end: number } | undefined`
+  - `findAnchorNode(nodes: LawNode[], target: LawReferenceTarget): LawNode | undefined`
+
+- [ ] **Step 1: 失敗するテストを書く**
+
+`src/core/viewer/text-anchor.test.ts`:
+
+```ts
+import type { LawNode, TextQuoteAnchor } from "@/core/domain";
+import { describe, expect, it } from "vitest";
+
+import { createTextQuoteAnchor, findAnchorNode, resolveTextQuoteAnchor } from "./text-anchor";
+
+const target = { lawId: "322AC0000000125", article: "1", path: "Article:1" };
+const anchorOf = (quote: string, prefix: string, suffix: string): TextQuoteAnchor => ({
+  target,
+  quote,
+  prefix,
+  suffix,
+});
+
+describe("createTextQuoteAnchor", () => {
+  it("引用文と前後の文脈を切り出す", () => {
+    expect(createTextQuoteAnchor("私権は、公共の福祉に適合する。", 4, 8)).toEqual({
+      quote: "公共の福",
+      prefix: "私権は、",
+      suffix: "祉に適合する。",
+    });
+  });
+
+  it("文頭・文末では文脈が空文字になる", () => {
+    expect(createTextQuoteAnchor("あいう", 0, 3)).toEqual({
+      quote: "あいう",
+      prefix: "",
+      suffix: "",
+    });
+  });
+});
+
+describe("resolveTextQuoteAnchor", () => {
+  it("引用文が 1 箇所ならその位置を返す", () => {
+    const plainText = "私権は、公共の福祉に適合する。";
+
+    expect(resolveTextQuoteAnchor(plainText, anchorOf("公共", "私権は、", "の福"))).toEqual({
+      start: 4,
+      end: 6,
+    });
+  });
+
+  it("引用文が複数箇所にあるとき前後の文脈が最も一致する候補を選ぶ", () => {
+    const plainText = "甲は乙とする。丙は乙とする。";
+
+    expect(resolveTextQuoteAnchor(plainText, anchorOf("乙", "丙は", "とする"))).toEqual({
+      start: 9,
+      end: 10,
+    });
+  });
+
+  it("引用文が消えていれば undefined", () => {
+    expect(resolveTextQuoteAnchor("まったく別の条文", anchorOf("公共", "", ""))).toBeUndefined();
+  });
+
+  it("空の引用文は undefined", () => {
+    expect(resolveTextQuoteAnchor("あいう", anchorOf("", "", ""))).toBeUndefined();
+  });
+});
+
+describe("findAnchorNode", () => {
+  const nodes = [
+    { id: "n1", path: "Article:1", type: "Article" },
+    { id: "n2", path: "Article:1/Paragraph:1", type: "Paragraph" },
+  ] as unknown as LawNode[];
+
+  it("path で対象ノードを引く", () => {
+    expect(findAnchorNode(nodes, { lawId: "x", path: "Article:1/Paragraph:1" })?.id).toBe("n2");
+  });
+
+  it("path が無い、または一致しなければ undefined", () => {
+    expect(findAnchorNode(nodes, { lawId: "x" })).toBeUndefined();
+    expect(findAnchorNode(nodes, { lawId: "x", path: "Article:9" })).toBeUndefined();
+  });
+});
+```
+
+- [ ] **Step 2: テストが失敗することを確認する**
+
+Run: `pnpm exec vitest run --dir src text-anchor`
+Expected: FAIL
+
+- [ ] **Step 3: 実装する**
+
+`src/core/viewer/text-anchor.ts`:
+
+```ts
+import type { LawNode, LawReferenceTarget, TextQuoteAnchor } from "@/core/domain";
+
+import { commonPrefixLength, commonSuffixLength } from "./text-alignment";
+
+// 前後の文脈として保持する文字数。条文は同じ語が何度も出るので、
+// 短すぎると候補を絞れず、長すぎると改正の影響を受けやすくなる。
+const contextLength = 32;
+
+export const createTextQuoteAnchor = (
+  plainText: string,
+  start: number,
+  end: number,
+): { quote: string; prefix: string; suffix: string } => ({
+  quote: plainText.slice(start, end),
+  prefix: plainText.slice(Math.max(0, start - contextLength), start),
+  suffix: plainText.slice(end, end + contextLength),
+});
+
+// 引用文が複数箇所に出るときは前後の文脈の一致長で最良候補を選ぶ。
+// 見つからなければ undefined（条文が改正で変わった）。
+export const resolveTextQuoteAnchor = (
+  plainText: string,
+  anchor: TextQuoteAnchor,
+): { start: number; end: number } | undefined => {
+  if (anchor.quote === "") {
+    return undefined;
+  }
+
+  let best: number | undefined;
+  let bestScore = -1;
+
+  for (
+    let index = plainText.indexOf(anchor.quote);
+    index !== -1;
+    index = plainText.indexOf(anchor.quote, index + 1)
+  ) {
+    const score =
+      commonSuffixLength(plainText.slice(0, index), anchor.prefix) +
+      commonPrefixLength(plainText.slice(index + anchor.quote.length), anchor.suffix);
+
+    if (score > bestScore) {
+      bestScore = score;
+      best = index;
+    }
+  }
+
+  return best === undefined ? undefined : { start: best, end: best + anchor.quote.length };
+};
+
+// アンカーの対象ノードを path で引く。path は改版をまたいで安定し、
+// node.id は revisionId を含むため保存キーには使えない。
+export const findAnchorNode = (
+  nodes: LawNode[],
+  target: LawReferenceTarget,
+): LawNode | undefined => {
+  const path = target.path;
+
+  if (path === undefined || path === null || path === "") {
+    return undefined;
+  }
+
+  return nodes.find((node) => node.path === path);
+};
+```
+
+- [ ] **Step 4: テストが通ることを確認する**
+
+Run: `pnpm exec vitest run --dir src text-anchor`
+Expected: PASS（8 tests）
+
+- [ ] **Step 5: コミット**
+
+```bash
+git add src/core/viewer/text-anchor.ts src/core/viewer/text-anchor.test.ts
+git commit --no-verify -m "feat: 引用文アンカーの生成と再解決を追加する
+
+Refs #188
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 5: 交差の解決
+
+**Files:**
+
+- Create: `src/core/viewer/highlight-merge.ts`
+- Create: `src/core/viewer/highlight-merge.test.ts`
+
+**Interfaces:**
+
+- Consumes: `HighlightColor`（Task 2）
+- Produces:
+  - `interface HighlightRange { annotationId: string; start: number; end: number; color: HighlightColor }`
+  - `interface CreatedHighlightRange { start: number; end: number; color: HighlightColor; sourceAnnotationId?: string }`
+  - `interface ApplyHighlightResult { created: CreatedHighlightRange[]; updated: HighlightRange[]; deleted: string[] }`
+  - `applyHighlight(existing: HighlightRange[], next: { start: number; end: number; color: HighlightColor }): ApplyHighlightResult`
+
+- [ ] **Step 1: 失敗するテーブルテストを書く**
+
+`src/core/viewer/highlight-merge.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+
+import { applyHighlight, type HighlightRange } from "./highlight-merge";
+
+const range = (
+  annotationId: string,
+  start: number,
+  end: number,
+  color: HighlightRange["color"],
+): HighlightRange => ({ annotationId, start, end, color });
+
+describe("applyHighlight", () => {
+  it("既存が無ければ新規 1 件を作る", () => {
+    expect(applyHighlight([], { start: 2, end: 5, color: "yellow" })).toEqual({
+      created: [{ start: 2, end: 5, color: "yellow" }],
+      updated: [],
+      deleted: [],
+    });
+  });
+
+  it("離れた既存には触れない", () => {
+    const existing = [range("a", 10, 12, "pink")];
+
+    expect(applyHighlight(existing, { start: 2, end: 5, color: "yellow" })).toEqual({
+      created: [{ start: 2, end: 5, color: "yellow" }],
+      updated: [],
+      deleted: [],
+    });
+  });
+
+  const sameColorCases = [
+    { name: "重なる", existing: range("a", 3, 8, "yellow"), expected: { start: 2, end: 8 } },
+    { name: "隣接する", existing: range("a", 5, 9, "yellow"), expected: { start: 2, end: 9 } },
+    { name: "内包する", existing: range("a", 0, 9, "yellow"), expected: { start: 0, end: 9 } },
+  ];
+
+  for (const testCase of sameColorCases) {
+    it(`同色と${testCase.name}ときはマージして 1 本にする`, () => {
+      const result = applyHighlight([testCase.existing], { start: 2, end: 5, color: "yellow" });
+
+      expect(result.created).toEqual([]);
+      expect(result.updated).toEqual([
+        { annotationId: "a", color: "yellow", ...testCase.expected },
+      ]);
+      expect(result.deleted).toEqual([]);
+    });
+  }
+
+  it("同色が複数重なるときは先頭側を残して他を消す", () => {
+    const existing = [range("a", 0, 3, "yellow"), range("b", 7, 10, "yellow")];
+    const result = applyHighlight(existing, { start: 2, end: 8, color: "yellow" });
+
+    expect(result.created).toEqual([]);
+    expect(result.updated).toEqual([range("a", 0, 10, "yellow")]);
+    expect(result.deleted).toEqual(["b"]);
+  });
+
+  it("異色と部分的に重なるときは既存を削り取る", () => {
+    const existing = [range("a", 1, 4, "yellow")];
+    const result = applyHighlight(existing, { start: 3, end: 6, color: "pink" });
+
+    expect(result.created).toEqual([{ start: 3, end: 6, color: "pink" }]);
+    expect(result.updated).toEqual([range("a", 1, 3, "yellow")]);
+    expect(result.deleted).toEqual([]);
+  });
+
+  it("異色を完全に覆うときは既存を消す", () => {
+    const existing = [range("a", 3, 5, "yellow")];
+    const result = applyHighlight(existing, { start: 1, end: 8, color: "pink" });
+
+    expect(result.updated).toEqual([]);
+    expect(result.deleted).toEqual(["a"]);
+  });
+
+  it("異色の内側を塗るときは 2 本に分割する", () => {
+    const existing = [range("a", 1, 6, "yellow")];
+    const result = applyHighlight(existing, { start: 2, end: 4, color: "pink" });
+
+    expect(result.updated).toEqual([range("a", 1, 2, "yellow")]);
+    expect(result.created).toEqual([
+      { start: 2, end: 4, color: "pink" },
+      { start: 4, end: 6, color: "yellow", sourceAnnotationId: "a" },
+    ]);
+    expect(result.deleted).toEqual([]);
+  });
+
+  it("異色に接しているだけなら削らない", () => {
+    const existing = [range("a", 1, 3, "yellow")];
+    const result = applyHighlight(existing, { start: 3, end: 6, color: "pink" });
+
+    expect(result.updated).toEqual([]);
+    expect(result.deleted).toEqual([]);
+  });
+
+  it("同色マージで広がった範囲が別の異色に届く場合も削り取る", () => {
+    const existing = [range("a", 0, 3, "yellow"), range("b", 4, 8, "pink")];
+    const result = applyHighlight(existing, { start: 2, end: 5, color: "yellow" });
+
+    expect(result.updated).toEqual([range("a", 0, 5, "yellow"), range("b", 5, 8, "pink")]);
+    expect(result.created).toEqual([]);
+    expect(result.deleted).toEqual([]);
+  });
+});
+```
+
+- [ ] **Step 2: テストが失敗することを確認する**
+
+Run: `pnpm exec vitest run --dir src highlight-merge`
+Expected: FAIL
+
+- [ ] **Step 3: 実装する**
+
+`src/core/viewer/highlight-merge.ts`:
+
+```ts
+import type { HighlightColor } from "@/core/domain";
+
+export interface HighlightRange {
+  annotationId: string;
+  start: number;
+  end: number;
+  color: HighlightColor;
+}
+
+export interface CreatedHighlightRange {
+  start: number;
+  end: number;
+  color: HighlightColor;
+  // 異色分割で生じた断片のとき、元の注釈 id。createdAt やメモの複製元になる。
+  sourceAnnotationId?: string;
+}
+
+export interface ApplyHighlightResult {
+  created: CreatedHighlightRange[];
+  updated: HighlightRange[];
+  deleted: string[];
+}
+
+// 同色は隣接でも吸収する（継ぎ目を作らない）。吸収で範囲が広がると
+// さらに別の同色に届きうるので、変化が止まるまで繰り返す。
+const absorbSameColor = (
+  existing: HighlightRange[],
+  next: { start: number; end: number; color: HighlightColor },
+): { start: number; end: number; absorbed: HighlightRange[] } => {
+  let start = next.start;
+  let end = next.end;
+  const absorbed: HighlightRange[] = [];
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+
+    for (const range of existing) {
+      if (range.color !== next.color || absorbed.includes(range)) {
+        continue;
+      }
+
+      if (range.end < start || range.start > end) {
+        continue;
+      }
+
+      absorbed.push(range);
+      start = Math.min(start, range.start);
+      end = Math.max(end, range.end);
+      changed = true;
+    }
+  }
+
+  return { start, end, absorbed };
+};
+
+// 塗った範囲が既存と重なるとき、新しい色が勝ち、既存は削られる。
+// 結果として「同一ノード内でハイライトは互いに重ならない」不変条件が保たれる。
+export const applyHighlight = (
+  existing: HighlightRange[],
+  next: { start: number; end: number; color: HighlightColor },
+): ApplyHighlightResult => {
+  const { start, end, absorbed } = absorbSameColor(existing, next);
+  const created: CreatedHighlightRange[] = [];
+  const updated: HighlightRange[] = [];
+  const deleted: string[] = [];
+  // 代表は最も先頭側。createdAt を保つため id を引き継ぐ。
+  const survivor = [...absorbed].sort((a, b) => a.start - b.start)[0];
+
+  if (survivor === undefined) {
+    created.push({ start, end, color: next.color });
+  } else {
+    updated.push({ ...survivor, start, end });
+
+    for (const range of absorbed) {
+      if (range !== survivor) {
+        deleted.push(range.annotationId);
+      }
+    }
+  }
+
+  for (const range of existing) {
+    if (absorbed.includes(range) || range.end <= start || range.start >= end) {
+      continue;
+    }
+
+    const hasLeft = range.start < start;
+    const hasRight = range.end > end;
+
+    if (hasLeft && hasRight) {
+      updated.push({ ...range, end: start });
+      created.push({
+        start: end,
+        end: range.end,
+        color: range.color,
+        sourceAnnotationId: range.annotationId,
+      });
+    } else if (hasLeft) {
+      updated.push({ ...range, end: start });
+    } else if (hasRight) {
+      updated.push({ ...range, start: end });
+    } else {
+      deleted.push(range.annotationId);
+    }
+  }
+
+  return { created, updated, deleted };
+};
+```
+
+- [ ] **Step 4: テストが通ることを確認する**
+
+Run: `pnpm exec vitest run --dir src highlight-merge`
+Expected: PASS（11 tests）
+
+「異色の内側を塗るときは 2 本に分割する」で `created` の並び順が食い違ったら、実装の push 順に合わせてテストの期待値を並べ替える。順序自体に意味はないが、期待値は実装と一致させる。
+
+- [ ] **Step 5: コミット**
+
+```bash
+git add src/core/viewer/highlight-merge.ts src/core/viewer/highlight-merge.test.ts
+git commit --no-verify -m "feat: ハイライトの交差を解決する正規化を追加する
+
+Refs #188
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 6: 機能検出と座標→文字位置
+
+**Files:**
+
+- Create: `src/core/viewer/highlight-support.ts`
+- Create: `src/core/viewer/highlight-support.test.ts`
+- Create: `src/core/viewer/caret-position.ts`
+- Create: `src/core/viewer/caret-position.test.ts`
+
+**Interfaces:**
+
+- Consumes: なし
+- Produces:
+  - `isHighlightSupported(view?: { CSS?: unknown; Highlight?: unknown; document?: unknown }): boolean`
+  - `caretPositionAt(document: Document, x: number, y: number): { node: Node; offset: number } | undefined`
+
+- [ ] **Step 1: 失敗するテストを書く**
+
+`src/core/viewer/highlight-support.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+
+import { isHighlightSupported } from "./highlight-support";
+
+const supportedView = {
+  CSS: { highlights: {} },
+  Highlight: function Highlight() {},
+  document: { caretPositionFromPoint: () => undefined },
+};
+
+describe("isHighlightSupported", () => {
+  it("描画とヒットテストが両方揃っていれば true", () => {
+    expect(isHighlightSupported(supportedView)).toBe(true);
+  });
+
+  it("caretRangeFromPoint だけでも true", () => {
+    expect(
+      isHighlightSupported({
+        ...supportedView,
+        document: { caretRangeFromPoint: () => undefined },
+      }),
+    ).toBe(true);
+  });
+
+  it("CSS.highlights が無ければ false", () => {
+    expect(isHighlightSupported({ ...supportedView, CSS: {} })).toBe(false);
+  });
+
+  it("Highlight コンストラクタが無ければ false", () => {
+    expect(isHighlightSupported({ ...supportedView, Highlight: undefined })).toBe(false);
+  });
+
+  it("ヒットテスト手段が無ければ false", () => {
+    expect(isHighlightSupported({ ...supportedView, document: {} })).toBe(false);
+  });
+});
+```
+
+`src/core/viewer/caret-position.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+
+import { caretPositionAt } from "./caret-position";
+
+describe("caretPositionAt", () => {
+  const node = { nodeName: "#text" } as unknown as Node;
+
+  it("caretPositionFromPoint があればそれを使う", () => {
+    const document = {
+      caretPositionFromPoint: () => ({ offsetNode: node, offset: 3 }),
+    } as unknown as Document;
+
+    expect(caretPositionAt(document, 10, 20)).toEqual({ node, offset: 3 });
+  });
+
+  it("caretPositionFromPoint が無ければ caretRangeFromPoint を使う", () => {
+    const document = {
+      caretRangeFromPoint: () => ({ startContainer: node, startOffset: 5 }),
+    } as unknown as Document;
+
+    expect(caretPositionAt(document, 10, 20)).toEqual({ node, offset: 5 });
+  });
+
+  it("どちらも無ければ undefined", () => {
+    expect(caretPositionAt({} as unknown as Document, 10, 20)).toBeUndefined();
+  });
+
+  it("要素外を指して null が返れば undefined", () => {
+    const document = { caretPositionFromPoint: () => null } as unknown as Document;
+
+    expect(caretPositionAt(document, 10, 20)).toBeUndefined();
+  });
+});
+```
+
+- [ ] **Step 2: テストが失敗することを確認する**
+
+Run: `pnpm exec vitest run --dir src "highlight-support|caret-position"`
+Expected: FAIL
+
+- [ ] **Step 3: 実装する**
+
+`src/core/viewer/highlight-support.ts`:
+
+```ts
+interface HighlightCapableView {
+  CSS?: unknown;
+  Highlight?: unknown;
+  document?: unknown;
+}
+
+// 描画とヒットテストの両方が揃って初めて機能を出す。
+// 片方でも欠けると「色は付くが消せない」状態になり、機能を隠すより悪い。
+export const isHighlightSupported = (
+  view: HighlightCapableView = globalThis as HighlightCapableView,
+): boolean => {
+  const css = view.CSS;
+  const document = view.document;
+
+  if (typeof css !== "object" || css === null || !("highlights" in css)) {
+    return false;
+  }
+
+  if (typeof view.Highlight !== "function") {
+    return false;
+  }
+
+  if (typeof document !== "object" || document === null) {
+    return false;
+  }
+
+  return "caretPositionFromPoint" in document || "caretRangeFromPoint" in document;
+};
+```
+
+`src/core/viewer/caret-position.ts`:
+
+```ts
+interface CaretPosition {
+  node: Node;
+  offset: number;
+}
+
+interface CaretCapableDocument {
+  caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+  caretRangeFromPoint?: (x: number, y: number) => Range | null;
+}
+
+// 座標から文字位置を得る。caretPositionFromPoint が標準だが、
+// Safari は長らく caretRangeFromPoint のみだったため両対応にする。
+export const caretPositionAt = (
+  document: Document,
+  x: number,
+  y: number,
+): CaretPosition | undefined => {
+  const capable = document as CaretCapableDocument;
+
+  if (typeof capable.caretPositionFromPoint === "function") {
+    const position = capable.caretPositionFromPoint(x, y);
+
+    return position === null || position === undefined
+      ? undefined
+      : { node: position.offsetNode, offset: position.offset };
+  }
+
+  if (typeof capable.caretRangeFromPoint === "function") {
+    const range = capable.caretRangeFromPoint(x, y);
+
+    return range === null || range === undefined
+      ? undefined
+      : { node: range.startContainer, offset: range.startOffset };
+  }
+
+  return undefined;
+};
+```
+
+- [ ] **Step 4: テストが通ることを確認する**
+
+Run: `pnpm exec vitest run --dir src "highlight-support|caret-position"`
+Expected: PASS（9 tests）
+
+- [ ] **Step 5: コミット**
+
+```bash
+git add src/core/viewer/highlight-support.ts src/core/viewer/highlight-support.test.ts src/core/viewer/caret-position.ts src/core/viewer/caret-position.test.ts
+git commit --no-verify -m "feat: ハイライトの機能検出と座標解決を追加する
+
+Refs #188
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 7: repository への削除操作と読み出し正規化
+
+**Files:**
+
+- Modify: `src/core/storage/repository.ts`
+- Modify: `src/test/fixtures/storage.ts`
+- Modify: `src/core/storage/repository.test.ts`
+
+**Interfaces:**
+
+- Consumes: `normalizeAnnotation`（Task 2）
+- Produces: `StorageRepository.deleteAnnotation(annotationId: string): Promise<void>`
+
+- [ ] **Step 1: 失敗するテストを書く**
+
+`src/core/storage/repository.test.ts` に追加する。既存の `createDatabaseName` / `fixedNow` / `openedRepositories` / `openedDatabaseNames` を使うこと。
+
+```ts
+it("注釈を保存して削除できる", async () => {
+  const databaseName = createDatabaseName();
+  const repository = createStorageRepository({ databaseName, now: fixedNow });
+  openedRepositories.push(repository);
+  openedDatabaseNames.push(databaseName);
+
+  const target = { lawId: "322AC0000000125", article: "1", path: "Article:1" };
+
+  await repository.putAnnotation({
+    id: "h1",
+    target,
+    anchors: [{ target, quote: "私権", prefix: "", suffix: "は、" }],
+    color: "yellow",
+    tags: [],
+    createdAt: "2026-08-17T00:00:00.000Z",
+    updatedAt: "2026-08-17T00:00:00.000Z",
+  });
+
+  await expect(repository.listAnnotations({ lawId: target.lawId })).resolves.toHaveLength(1);
+
+  await repository.deleteAnnotation("h1");
+
+  await expect(repository.listAnnotations({ lawId: target.lawId })).resolves.toEqual([]);
+});
+
+it("存在しない注釈の削除はエラーにしない", async () => {
+  const databaseName = createDatabaseName();
+  const repository = createStorageRepository({ databaseName, now: fixedNow });
+  openedRepositories.push(repository);
+  openedDatabaseNames.push(databaseName);
+
+  await expect(repository.deleteAnnotation("missing")).resolves.toBeUndefined();
+});
+```
+
+- [ ] **Step 2: テストが失敗することを確認する**
+
+Run: `pnpm exec vitest run --dir src repository.test`
+Expected: FAIL（`deleteAnnotation is not a function`）
+
+- [ ] **Step 3: interface に追加する**
+
+`src/core/storage/repository.ts` の `StorageRepository` で `listAnnotations` の直後に追加する。
+
+```ts
+  deleteAnnotation(annotationId: string): Promise<void>;
+```
+
+- [ ] **Step 4: 実装する**
+
+`listAnnotations` を正規化つきに置き換え、`deleteAnnotation` を足す。`normalizeAnnotation` と型 `Annotation` を `@/core/domain` から import する。
+
+```ts
+    async listAnnotations(query = {}) {
+      return withDatabase(async (db) => {
+        const records =
+          query.lawId === undefined
+            ? await db.getAll("annotations")
+            : await db.getAllFromIndex("annotations", "by-law-id", query.lawId);
+
+        // 旧形式（anchors を持たない v2 由来）を吸収する。壊れた行は捨てて続行する。
+        return records
+          .map((record) => normalizeAnnotation(stripTargetIndexes(record)))
+          .filter((annotation): annotation is Annotation => annotation !== undefined);
+      });
+    },
+
+    async deleteAnnotation(annotationId) {
+      await withDatabase(async (db) => {
+        await db.delete("annotations", annotationId);
+      });
+    },
+```
+
+- [ ] **Step 5: fixture の in-memory 実装に追加する**
+
+`src/test/fixtures/storage.ts` の `listAnnotations` の隣に追加する。
+
+```ts
+      deleteAnnotation(annotationId) {
+        annotations = annotations.filter((annotation) => annotation.id !== annotationId);
+
+        return Promise.resolve();
+      },
+```
+
+- [ ] **Step 6: テストが通ることを確認する**
+
+Run: `pnpm exec vitest run --dir src repository.test`
+Expected: PASS
+
+- [ ] **Step 7: 検証ゲートを通してコミット**
+
+```bash
+pnpm run typecheck && pnpm run lint && pnpm run format:check && pnpm exec vitest run --dir src
+git add src/core/storage/repository.ts src/core/storage/repository.test.ts src/test/fixtures/storage.ts
+git commit --no-verify -m "feat: 注釈の削除と読み出し正規化を追加する
+
+Refs #188
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 8: 本文要素へのマーキングと選択範囲の抽出
+
+**Files:**
+
+- Modify: `src/core/viewer/LawNodeList.tsx`
+- Modify: `src/core/viewer/LawNodeList.test.tsx`
+- Create: `src/core/viewer/selection-range.ts`
+- Create: `src/core/viewer/selection-range.test.ts`
+
+**Interfaces:**
+
+- Consumes: なし
+- Produces:
+  - `const lawNodeIdAttribute = "data-law-node-id"`
+  - `interface NodeTextRange { lawNodeId: string; start: number; end: number; text: string }`
+  - `resolveNodeTextRange(range: Range): NodeTextRange | undefined`
+  - `findLawNodeElement(root: ParentNode, lawNodeId: string): HTMLElement | undefined`
+
+- [ ] **Step 1: LawNodeList の失敗するテストを書く**
+
+`src/core/viewer/LawNodeList.test.tsx` に追加する。既存ファイル冒頭のノード構築ヘルパー名に合わせること。
+
+```tsx
+it("本文要素に data-law-node-id を付ける", () => {
+  const { container } = render(<LawNodeList nodes={nodes} />);
+  const marked = container.querySelectorAll("[data-law-node-id]");
+
+  expect(marked.length).toBeGreaterThan(0);
+
+  for (const element of marked) {
+    // ハイライトの Range は単一の Text ノードを前提にするため、
+    // 本文要素の子は必ずテキスト 1 個であること。
+    expect(element.childNodes).toHaveLength(1);
+    expect(element.firstChild?.nodeType).toBe(Node.TEXT_NODE);
+  }
+});
+```
+
+- [ ] **Step 2: テストが失敗することを確認する**
+
+Run: `pnpm exec vitest run --dir src LawNodeList`
+Expected: FAIL（`marked.length` が 0）
+
+- [ ] **Step 3: LawNodeList に属性を付ける**
+
+`src/core/viewer/LawNodeList.tsx` の本文を描画している 4 箇所に `data-law-node-id={node.id}` を足す。
+
+1. Article が子を持たないときの `<p className="indent-[1em] font-law ...">{displayText}</p>`
+2. `isArticleParagraph` のときの `<span>{bodyText}</span>`
+3. それ以外の項・号の `<span className={cn("min-w-0 break-words", ...)}>{bodyText}</span>`
+4. 見出しノードの `<p className="font-law leading-display ...">{bodyText}</p>`
+
+例（2 番目）:
+
+```tsx
+<span data-law-node-id={node.id}>{bodyText}</span>
+```
+
+- [ ] **Step 4: テストが通ることを確認する**
+
+Run: `pnpm exec vitest run --dir src LawNodeList`
+Expected: PASS
+
+- [ ] **Step 5: selection-range の失敗するテストを書く**
+
+`src/core/viewer/selection-range.test.ts`:
+
+```ts
+import { afterEach, describe, expect, it } from "vitest";
+
+import { resolveNodeTextRange } from "./selection-range";
+
+afterEach(() => {
+  document.body.innerHTML = "";
+});
+
+const setup = (html: string): HTMLElement => {
+  const host = document.createElement("div");
+  host.innerHTML = html;
+  document.body.append(host);
+
+  return host;
+};
+
+const textNodeOf = (element: Element): Node => {
+  const text = element.firstChild;
+
+  if (text === null) {
+    throw new Error("text node is required");
+  }
+
+  return text;
+};
+
+const rangeIn = (element: Element, start: number, end: number): Range => {
+  const range = document.createRange();
+  range.setStart(textNodeOf(element), start);
+  range.setEnd(textNodeOf(element), end);
+
+  return range;
+};
+
+describe("resolveNodeTextRange", () => {
+  it("単一の本文要素に収まる選択を返す", () => {
+    const host = setup('<p><span data-law-node-id="n1">私権は、公共の福祉に適合する。</span></p>');
+    const span = host.querySelector("[data-law-node-id]");
+
+    expect(resolveNodeTextRange(rangeIn(span as Element, 4, 8))).toEqual({
+      lawNodeId: "n1",
+      start: 4,
+      end: 8,
+      text: "私権は、公共の福祉に適合する。",
+    });
+  });
+
+  it("折りたたみ選択は undefined", () => {
+    const host = setup('<p><span data-law-node-id="n1">あいうえお</span></p>');
+    const span = host.querySelector("[data-law-node-id]");
+
+    expect(resolveNodeTextRange(rangeIn(span as Element, 2, 2))).toBeUndefined();
+  });
+
+  it("本文要素の外側から始まる選択は undefined", () => {
+    const host = setup(
+      '<p><span class="marker">２</span><span data-law-node-id="n1">あいうえお</span></p>',
+    );
+    const marker = host.querySelector(".marker");
+    const span = host.querySelector("[data-law-node-id]");
+    const range = document.createRange();
+    range.setStart(textNodeOf(marker as Element), 0);
+    range.setEnd(textNodeOf(span as Element), 3);
+
+    expect(resolveNodeTextRange(range)).toBeUndefined();
+  });
+
+  it("2 つの本文要素にまたがる選択は undefined", () => {
+    const host = setup(
+      '<p><span data-law-node-id="n1">あいう</span><span data-law-node-id="n2">かきく</span></p>',
+    );
+    const [first, second] = [...host.querySelectorAll("[data-law-node-id]")];
+    const range = document.createRange();
+    range.setStart(textNodeOf(first), 0);
+    range.setEnd(textNodeOf(second), 2);
+
+    expect(resolveNodeTextRange(range)).toBeUndefined();
+  });
+});
+```
+
+- [ ] **Step 6: テストが失敗することを確認する**
+
+Run: `pnpm exec vitest run --dir src selection-range`
+Expected: FAIL
+
+- [ ] **Step 7: 実装する**
+
+`src/core/viewer/selection-range.ts`:
+
+```ts
+export const lawNodeIdAttribute = "data-law-node-id";
+
+export interface NodeTextRange {
+  lawNodeId: string;
+  start: number;
+  end: number;
+  // 要素に描画されている文字列。plainText への変換に使う。
+  text: string;
+}
+
+const findOwner = (node: Node | null): HTMLElement | undefined => {
+  const element = node instanceof Element ? node : (node?.parentElement ?? null);
+
+  if (element === null) {
+    return undefined;
+  }
+
+  return (element.closest(`[${lawNodeIdAttribute}]`) as HTMLElement | null) ?? undefined;
+};
+
+export const findLawNodeElement = (
+  root: ParentNode,
+  lawNodeId: string,
+): HTMLElement | undefined => {
+  for (const element of root.querySelectorAll(`[${lawNodeIdAttribute}]`)) {
+    if (element instanceof HTMLElement && element.dataset.lawNodeId === lawNodeId) {
+      return element;
+    }
+  }
+
+  return undefined;
+};
+
+// 選択が単一の本文要素のテキストノードに収まるときだけ範囲を返す。
+// 項番号の marker span や複数ノードにまたがる選択は扱わない（v1 のスコープ）。
+export const resolveNodeTextRange = (range: Range): NodeTextRange | undefined => {
+  if (range.collapsed) {
+    return undefined;
+  }
+
+  const owner = findOwner(range.startContainer);
+
+  if (owner === undefined || owner !== findOwner(range.endContainer)) {
+    return undefined;
+  }
+
+  const text = owner.firstChild;
+
+  if (
+    text === null ||
+    text.nodeType !== Node.TEXT_NODE ||
+    range.startContainer !== text ||
+    range.endContainer !== text
+  ) {
+    return undefined;
+  }
+
+  const lawNodeId = owner.dataset.lawNodeId;
+
+  if (lawNodeId === undefined) {
+    return undefined;
+  }
+
+  return {
+    lawNodeId,
+    start: range.startOffset,
+    end: range.endOffset,
+    text: text.textContent ?? "",
+  };
+};
+```
+
+- [ ] **Step 8: テストが通ることを確認する**
+
+Run: `pnpm exec vitest run --dir src "selection-range|LawNodeList"`
+Expected: PASS
+
+- [ ] **Step 9: コミット**
+
+```bash
+git add src/core/viewer/LawNodeList.tsx src/core/viewer/LawNodeList.test.tsx src/core/viewer/selection-range.ts src/core/viewer/selection-range.test.ts
+git commit --no-verify -m "feat: 本文要素に法令ノード ID を付与し選択範囲を抽出する
+
+Refs #188
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 9: ハイライト登録アダプタと配色
+
+**Files:**
+
+- Create: `src/core/viewer/highlight-registry.ts`
+- Create: `src/core/viewer/highlight-registry.test.ts`
+- Modify: `src/index.css`
+
+**Interfaces:**
+
+- Consumes: `HighlightColor` / `highlightColors`（Task 2）
+- Produces:
+  - `const highlightNameByColor: Record<HighlightColor, string>`
+  - `interface PaintedRange { annotationId: string; color: HighlightColor; range: Range }`
+  - `interface HighlightRegistryLike { set(name: string, highlight: unknown): void; delete(name: string): boolean }`
+  - `paintHighlights(registry: HighlightRegistryLike, createHighlight: (ranges: Range[]) => unknown, painted: PaintedRange[]): void`
+  - `clearHighlights(registry: HighlightRegistryLike): void`
+
+- [ ] **Step 1: 失敗するテストを書く**
+
+`src/core/viewer/highlight-registry.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+
+import {
+  clearHighlights,
+  type HighlightRegistryLike,
+  highlightNameByColor,
+  paintHighlights,
+  type PaintedRange,
+} from "./highlight-registry";
+
+const createFakeRegistry = () => {
+  const entries = new Map<string, Range[]>();
+  const deleted: string[] = [];
+  const registry: HighlightRegistryLike = {
+    set(name, highlight) {
+      entries.set(name, highlight as Range[]);
+    },
+    delete(name) {
+      deleted.push(name);
+
+      return entries.delete(name);
+    },
+  };
+
+  return { registry, entries, deleted };
+};
+
+const createHighlight = (ranges: Range[]) => ranges;
+
+const rangeFor = (text: string): Range => {
+  const host = document.createElement("p");
+  host.textContent = text;
+  document.body.append(host);
+  const range = document.createRange();
+  range.selectNodeContents(host);
+
+  return range;
+};
+
+describe("paintHighlights", () => {
+  it("色ごとに 1 つの Highlight を登録する", () => {
+    const { registry, entries } = createFakeRegistry();
+    const painted: PaintedRange[] = [
+      { annotationId: "a", color: "yellow", range: rangeFor("あ") },
+      { annotationId: "b", color: "yellow", range: rangeFor("い") },
+      { annotationId: "c", color: "pink", range: rangeFor("う") },
+    ];
+
+    paintHighlights(registry, createHighlight, painted);
+
+    expect(entries.get(highlightNameByColor.yellow)).toHaveLength(2);
+    expect(entries.get(highlightNameByColor.pink)).toHaveLength(1);
+  });
+
+  it("範囲が無い色は登録を消す", () => {
+    const { registry, deleted } = createFakeRegistry();
+
+    paintHighlights(registry, createHighlight, [
+      { annotationId: "a", color: "yellow", range: rangeFor("あ") },
+    ]);
+
+    expect(deleted).toContain(highlightNameByColor.pink);
+    expect(deleted).toContain(highlightNameByColor.cyan);
+    expect(deleted).toContain(highlightNameByColor.orange);
+    expect(deleted).not.toContain(highlightNameByColor.yellow);
+  });
+});
+
+describe("clearHighlights", () => {
+  it("4 色すべての登録を消す", () => {
+    const { registry, deleted } = createFakeRegistry();
+
+    clearHighlights(registry);
+
+    expect(deleted).toHaveLength(4);
+    expect(new Set(deleted)).toEqual(new Set(Object.values(highlightNameByColor)));
+  });
+});
+```
+
+- [ ] **Step 2: テストが失敗することを確認する**
+
+Run: `pnpm exec vitest run --dir src highlight-registry`
+Expected: FAIL
+
+- [ ] **Step 3: 実装する**
+
+`src/core/viewer/highlight-registry.ts`:
+
+```ts
+import type { HighlightColor } from "@/core/domain";
+import { highlightColors } from "@/core/domain";
+
+// ::highlight() の登録名。CSS 側の疑似要素セレクタと一致させる。
+export const highlightNameByColor: Record<HighlightColor, string> = {
+  yellow: "surasura-highlight-yellow",
+  cyan: "surasura-highlight-cyan",
+  pink: "surasura-highlight-pink",
+  orange: "surasura-highlight-orange",
+};
+
+export interface PaintedRange {
+  annotationId: string;
+  color: HighlightColor;
+  range: Range;
+}
+
+export interface HighlightRegistryLike {
+  set(name: string, highlight: unknown): void;
+  delete(name: string): boolean;
+}
+
+// 色ごとに Highlight を 1 個だけ登録し、そこへ複数の Range を入れる。
+// 注釈ごとに登録名を作ると registry が肥大し、CSS も書けなくなる。
+export const paintHighlights = (
+  registry: HighlightRegistryLike,
+  createHighlight: (ranges: Range[]) => unknown,
+  painted: PaintedRange[],
+): void => {
+  for (const color of highlightColors) {
+    const ranges = painted.filter((entry) => entry.color === color).map((entry) => entry.range);
+
+    if (ranges.length === 0) {
+      registry.delete(highlightNameByColor[color]);
+      continue;
+    }
+
+    registry.set(highlightNameByColor[color], createHighlight(ranges));
+  }
+};
+
+export const clearHighlights = (registry: HighlightRegistryLike): void => {
+  for (const name of Object.values(highlightNameByColor)) {
+    registry.delete(name);
+  }
+};
+```
+
+- [ ] **Step 4: テストが通ることを確認する**
+
+Run: `pnpm exec vitest run --dir src highlight-registry`
+Expected: PASS（3 tests）
+
+- [ ] **Step 5: CSS を追加する**
+
+`src/index.css` の `:root` ブロック末尾（`--sidebar-ring` の後）に追加する。
+
+```css
+--highlight-yellow: #fde68a;
+--highlight-cyan: #67e8f9;
+--highlight-pink: #f9a8d4;
+--highlight-orange: #fb923c;
+```
+
+`.dark` ブロック末尾に追加する。
+
+```css
+--highlight-yellow: #725f14;
+--highlight-cyan: #125a68;
+--highlight-pink: #7d2b57;
+--highlight-orange: #5e2b0c;
+```
+
+ファイル末尾（`button, input, textarea, select` 規則の後）に追加する。**Task 1 で `::highlight()` 内の `var()` が使えないと判明した場合は、`var(--highlight-*)` をライト値のリテラルに置き換え、`.dark ::highlight(...)` ブロックをダーク値のリテラルで別途書く。**
+
+```css
+/* 本文の文字色は変えない。地の色だけを変え、フォント設定やテーマと衝突させない。 */
+::highlight(surasura-highlight-yellow) {
+  background-color: var(--highlight-yellow);
+}
+
+::highlight(surasura-highlight-cyan) {
+  background-color: var(--highlight-cyan);
+}
+
+::highlight(surasura-highlight-pink) {
+  background-color: var(--highlight-pink);
+}
+
+::highlight(surasura-highlight-orange) {
+  background-color: var(--highlight-orange);
+}
+
+/* 強制カラーモードでは 4 色をシステム色に集約する。色の区別は失われるが存在は残る。 */
+@media (forced-colors: active) {
+  ::highlight(surasura-highlight-yellow),
+  ::highlight(surasura-highlight-cyan),
+  ::highlight(surasura-highlight-pink),
+  ::highlight(surasura-highlight-orange) {
+    background-color: Mark;
+    color: MarkText;
+  }
+}
+```
+
+- [ ] **Step 6: コミット**
+
+```bash
+pnpm run format:check || pnpm run format
+git add src/core/viewer/highlight-registry.ts src/core/viewer/highlight-registry.test.ts src/index.css
+git commit --no-verify -m "feat: ハイライトの登録アダプタと配色を追加する
+
+Refs #188
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 10: 描画 hook
+
+**Files:**
+
+- Create: `src/app/use-highlight-painting.ts`
+- Create: `src/app/use-highlight-painting.test.ts`
+- Modify: `src/core/viewer/index.ts`
+
+**Interfaces:**
+
+- Consumes: `alignTexts` / `toDisplayRange`（Task 3）、`resolveTextQuoteAnchor` / `findAnchorNode`（Task 4）、`findLawNodeElement`（Task 8）、`paintHighlights` / `clearHighlights` / `PaintedRange` / `HighlightRegistryLike`（Task 9）
+- Produces:
+  - `buildPaintedRanges(root: ParentNode, nodes: LawNode[], annotations: Annotation[]): PaintedRange[]`
+  - `useHighlightPainting(options): PaintedRange[]`
+
+- [ ] **Step 1: 失敗するテストを書く**
+
+`src/app/use-highlight-painting.test.ts`:
+
+```ts
+import type { Annotation, LawNode } from "@/core/domain";
+import { afterEach, describe, expect, it } from "vitest";
+
+import { buildPaintedRanges } from "./use-highlight-painting";
+
+afterEach(() => {
+  document.body.innerHTML = "";
+});
+
+const target = { lawId: "L", path: "Article:1/Paragraph:1" };
+const lawNodeId = "L:R:Article:1/Paragraph:1";
+
+const nodes = [
+  {
+    id: lawNodeId,
+    path: "Article:1/Paragraph:1",
+    plainText: "私権は、公共の福祉に適合しなければならない。",
+  },
+] as unknown as LawNode[];
+
+const annotation = (id: string, quote: string): Annotation =>
+  ({
+    id,
+    target,
+    anchors: [{ target, quote, prefix: "", suffix: "" }],
+    color: "yellow",
+    tags: [],
+    createdAt: "2026-08-17T00:00:00.000Z",
+    updatedAt: "2026-08-17T00:00:00.000Z",
+  }) as Annotation;
+
+const mount = (text: string): HTMLElement => {
+  const host = document.createElement("div");
+  host.innerHTML = `<span data-law-node-id="${lawNodeId}">${text}</span>`;
+  document.body.append(host);
+
+  return host;
+};
+
+describe("buildPaintedRanges", () => {
+  it("表示文字列が plainText と同じとき正しい位置に Range を作る", () => {
+    const host = mount("私権は、公共の福祉に適合しなければならない。");
+    const painted = buildPaintedRanges(host, nodes, [annotation("h1", "公共の福祉")]);
+
+    expect(painted).toHaveLength(1);
+    expect(painted[0].range.toString()).toBe("公共の福祉");
+    expect(painted[0].annotationId).toBe("h1");
+  });
+
+  it("readable 変換で文字数が変わっても正しい位置に Range を作る", () => {
+    const readableNodes = [
+      { ...nodes[0], plainText: "第三条の規定により、公共の福祉に適合する。" },
+    ] as unknown as LawNode[];
+    const host = mount("第3条の規定により、公共の福祉に適合する。");
+    const painted = buildPaintedRanges(host, readableNodes, [annotation("h1", "公共の福祉")]);
+
+    expect(painted[0].range.toString()).toBe("公共の福祉");
+  });
+
+  it("色を持たない注釈は描画しない", () => {
+    const host = mount("私権は、公共の福祉に適合しなければならない。");
+    const noteOnly = { ...annotation("h1", "公共の福祉"), color: undefined } as Annotation;
+
+    expect(buildPaintedRanges(host, nodes, [noteOnly])).toEqual([]);
+  });
+
+  it("引用文が見つからない注釈は描画しない", () => {
+    const host = mount("まったく別の条文になった。");
+
+    expect(buildPaintedRanges(host, nodes, [annotation("h1", "公共の福祉")])).toEqual([]);
+  });
+
+  it("対応する DOM 要素が無ければ描画しない", () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+
+    expect(buildPaintedRanges(host, nodes, [annotation("h1", "公共の福祉")])).toEqual([]);
+  });
+});
+```
+
+- [ ] **Step 2: テストが失敗することを確認する**
+
+Run: `pnpm exec vitest run --dir src use-highlight-painting`
+Expected: FAIL
+
+- [ ] **Step 3: viewer の re-export を足す**
+
+`src/core/viewer/index.ts` に追加する（`HighlightColorPopover` は Task 11 で足す）。
+
+```ts
+export { alignTexts, toDisplayRange, toSourceOffset } from "./text-alignment";
+export type { TextAlignment } from "./text-alignment";
+export { createTextQuoteAnchor, findAnchorNode, resolveTextQuoteAnchor } from "./text-anchor";
+export { applyHighlight } from "./highlight-merge";
+export type { CreatedHighlightRange, HighlightRange } from "./highlight-merge";
+export { isHighlightSupported } from "./highlight-support";
+export { caretPositionAt } from "./caret-position";
+export { findLawNodeElement, lawNodeIdAttribute, resolveNodeTextRange } from "./selection-range";
+export type { NodeTextRange } from "./selection-range";
+export { clearHighlights, highlightNameByColor, paintHighlights } from "./highlight-registry";
+export type { HighlightRegistryLike, PaintedRange } from "./highlight-registry";
+```
+
+- [ ] **Step 4: 実装する**
+
+`src/app/use-highlight-painting.ts`:
+
+```ts
+import { type RefObject, useEffect, useMemo } from "react";
+
+import type { Annotation, LawNode } from "@/core/domain";
+import {
+  alignTexts,
+  clearHighlights,
+  findAnchorNode,
+  findLawNodeElement,
+  type HighlightRegistryLike,
+  type PaintedRange,
+  paintHighlights,
+  resolveTextQuoteAnchor,
+  toDisplayRange,
+} from "@/core/viewer";
+
+interface HighlightPaintingOptions {
+  containerRef: RefObject<HTMLElement | null>;
+  nodes: LawNode[];
+  annotations: Annotation[];
+  enabled: boolean;
+  // テストからフェイクを差し込むための注入点。既定はブラウザの実装。
+  registry?: HighlightRegistryLike;
+  createHighlight?: (ranges: Range[]) => unknown;
+}
+
+// 保存された引用文アンカーを、いま描画されている DOM 上の Range に変換する。
+// 表示文字列と plainText の差はアラインメントで吸収する。
+export const buildPaintedRanges = (
+  root: ParentNode,
+  nodes: LawNode[],
+  annotations: Annotation[],
+): PaintedRange[] => {
+  const painted: PaintedRange[] = [];
+
+  for (const annotation of annotations) {
+    const color = annotation.color;
+
+    if (color === undefined) {
+      continue;
+    }
+
+    for (const anchor of annotation.anchors) {
+      const node = findAnchorNode(nodes, anchor.target);
+
+      if (node === undefined) {
+        continue;
+      }
+
+      const element = findLawNodeElement(root, node.id);
+      const textNode = element?.firstChild;
+
+      if (textNode === null || textNode === undefined) {
+        continue;
+      }
+
+      const sourceRange = resolveTextQuoteAnchor(node.plainText, anchor);
+
+      if (sourceRange === undefined) {
+        continue;
+      }
+
+      const displayText = textNode.textContent ?? "";
+      const displayRange = toDisplayRange(
+        alignTexts(node.plainText, displayText),
+        sourceRange.start,
+        sourceRange.end,
+      );
+
+      if (displayRange === undefined) {
+        continue;
+      }
+
+      const range = document.createRange();
+      range.setStart(textNode, Math.min(displayRange.start, displayText.length));
+      range.setEnd(textNode, Math.min(displayRange.end, displayText.length));
+      painted.push({ annotationId: annotation.id, color, range });
+    }
+  }
+
+  return painted;
+};
+
+const browserRegistry = (): HighlightRegistryLike | undefined => {
+  const css = (globalThis as { CSS?: { highlights?: unknown } }).CSS;
+
+  return css?.highlights as HighlightRegistryLike | undefined;
+};
+
+const browserHighlight = (ranges: Range[]): unknown =>
+  new (globalThis as unknown as { Highlight: new (...ranges: Range[]) => unknown }).Highlight(
+    ...ranges,
+  );
+
+export const useHighlightPainting = ({
+  annotations,
+  containerRef,
+  createHighlight,
+  enabled,
+  nodes,
+  registry,
+}: HighlightPaintingOptions): PaintedRange[] => {
+  // React が再レンダーで Text ノードを差し替えると、古い Range は例外も出さずに
+  // 描画されなくなる。差分更新はせず、依存が変わるたび全部作り直す。
+  const painted = useMemo(() => {
+    const root = containerRef.current;
+
+    if (!enabled || root === null) {
+      return [];
+    }
+
+    return buildPaintedRanges(root, nodes, annotations);
+  }, [annotations, containerRef, enabled, nodes]);
+
+  useEffect(() => {
+    const activeRegistry = registry ?? browserRegistry();
+
+    if (activeRegistry === undefined) {
+      return;
+    }
+
+    if (!enabled) {
+      clearHighlights(activeRegistry);
+
+      return;
+    }
+
+    paintHighlights(activeRegistry, createHighlight ?? browserHighlight, painted);
+
+    return () => {
+      clearHighlights(activeRegistry);
+    };
+  }, [createHighlight, enabled, painted, registry]);
+
+  return painted;
+};
+```
+
+- [ ] **Step 5: テストが通ることを確認する**
+
+Run: `pnpm exec vitest run --dir src use-highlight-painting`
+Expected: PASS（5 tests）
+
+- [ ] **Step 6: コミット**
+
+```bash
+git add src/app/use-highlight-painting.ts src/app/use-highlight-painting.test.ts src/core/viewer/index.ts
+git commit --no-verify -m "feat: 保存済みハイライトを DOM 上に描画する hook を追加する
+
+Refs #188
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 11: 色選択ポップアップ
+
+**Files:**
+
+- Create: `src/core/viewer/HighlightColorPopover.tsx`
+- Create: `src/core/viewer/HighlightColorPopover.test.tsx`
+- Modify: `src/core/viewer/index.ts`
+
+**Interfaces:**
+
+- Consumes: `HighlightColor` / `highlightColors`（Task 2）、`cn`（既存 `@/shared/utils/cn`）
+- Produces: `HighlightColorPopover({ anchorRect, selectedColor?, onSelect, onDelete?, onDismiss })`
+  - `anchorRect: { top: number; bottom: number; left: number; width: number }`
+  - `onSelect: (color: HighlightColor) => void`
+
+- [ ] **Step 1: 失敗するテストを書く**
+
+`src/core/viewer/HighlightColorPopover.test.tsx`:
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+
+import { HighlightColorPopover } from "./HighlightColorPopover";
+
+const anchorRect = { top: 100, bottom: 120, left: 50, width: 80 };
+
+describe("HighlightColorPopover", () => {
+  it("4 色すべてを名前付きのボタンとして出す", () => {
+    render(
+      <HighlightColorPopover anchorRect={anchorRect} onDismiss={vi.fn()} onSelect={vi.fn()} />,
+    );
+
+    expect(screen.getByRole("button", { name: "黄でハイライト" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "水色でハイライト" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "ピンクでハイライト" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "オレンジでハイライト" })).toBeInTheDocument();
+  });
+
+  it("色を押すと onSelect にその色が渡る", async () => {
+    const onSelect = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <HighlightColorPopover anchorRect={anchorRect} onDismiss={vi.fn()} onSelect={onSelect} />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "ピンクでハイライト" }));
+
+    expect(onSelect).toHaveBeenCalledWith("pink");
+  });
+
+  it("現在の色は押された状態として示す", () => {
+    render(
+      <HighlightColorPopover
+        anchorRect={anchorRect}
+        onDismiss={vi.fn()}
+        onSelect={vi.fn()}
+        selectedColor="cyan"
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "水色でハイライト" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "黄でハイライト" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+  });
+
+  it("onDelete があるときだけ削除ボタンを出す", async () => {
+    const onDelete = vi.fn();
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <HighlightColorPopover anchorRect={anchorRect} onDismiss={vi.fn()} onSelect={vi.fn()} />,
+    );
+
+    expect(screen.queryByRole("button", { name: "ハイライトを削除" })).not.toBeInTheDocument();
+
+    rerender(
+      <HighlightColorPopover
+        anchorRect={anchorRect}
+        onDelete={onDelete}
+        onDismiss={vi.fn()}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "ハイライトを削除" }));
+
+    expect(onDelete).toHaveBeenCalled();
+  });
+
+  it("Escape で onDismiss を呼ぶ", async () => {
+    const onDismiss = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <HighlightColorPopover anchorRect={anchorRect} onDismiss={onDismiss} onSelect={vi.fn()} />,
+    );
+
+    await user.keyboard("{Escape}");
+
+    expect(onDismiss).toHaveBeenCalled();
+  });
+});
+```
+
+- [ ] **Step 2: テストが失敗することを確認する**
+
+Run: `pnpm exec vitest run --dir src HighlightColorPopover`
+Expected: FAIL
+
+- [ ] **Step 3: 実装する**
+
+`src/core/viewer/HighlightColorPopover.tsx`:
+
+```tsx
+import { useEffect, useRef } from "react";
+
+import type { HighlightColor } from "@/core/domain";
+import { highlightColors } from "@/core/domain";
+import { cn } from "@/shared/utils/cn";
+
+// 色見本は色だけで意味を伝えない。読み上げ用の名前を必ず持たせる。
+const labelByColor: Record<HighlightColor, string> = {
+  yellow: "黄",
+  cyan: "水色",
+  pink: "ピンク",
+  orange: "オレンジ",
+};
+
+const swatchClassByColor: Record<HighlightColor, string> = {
+  yellow: "bg-[var(--highlight-yellow)]",
+  cyan: "bg-[var(--highlight-cyan)]",
+  pink: "bg-[var(--highlight-pink)]",
+  orange: "bg-[var(--highlight-orange)]",
+};
+
+interface AnchorRect {
+  top: number;
+  bottom: number;
+  left: number;
+  width: number;
+}
+
+interface HighlightColorPopoverProps {
+  anchorRect: AnchorRect;
+  selectedColor?: HighlightColor;
+  onSelect: (color: HighlightColor) => void;
+  onDelete?: () => void;
+  onDismiss: () => void;
+}
+
+const popoverHeight = 48;
+const popoverGap = 8;
+
+export const HighlightColorPopover = ({
+  anchorRect,
+  onDelete,
+  onDismiss,
+  onSelect,
+  selectedColor,
+}: HighlightColorPopoverProps) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onDismiss();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onDismiss]);
+
+  useEffect(() => {
+    containerRef.current?.querySelector("button")?.focus();
+  }, []);
+
+  // 選択範囲の直上に出す。画面上端に近ければ直下へ回り込ませる。
+  const showsBelow = anchorRect.top < popoverHeight + popoverGap;
+  const top = showsBelow ? anchorRect.bottom + popoverGap : anchorRect.top - popoverHeight;
+
+  return (
+    <div
+      ref={containerRef}
+      aria-label="ハイライトの色"
+      className="fixed z-50 flex items-center gap-1 rounded-md border border-border bg-popover p-1 shadow-md"
+      role="group"
+      style={{ top, left: anchorRect.left + anchorRect.width / 2, transform: "translateX(-50%)" }}
+    >
+      {highlightColors.map((color) => (
+        <button
+          key={color}
+          aria-label={`${labelByColor[color]}でハイライト`}
+          aria-pressed={selectedColor === color}
+          className={cn(
+            // スウォッチは popover 地色とのコントラストが 3:1 に満たないため枠線で輪郭を出す。
+            "size-7 rounded-full border border-input",
+            swatchClassByColor[color],
+            selectedColor === color && "ring-2 ring-ring ring-offset-1 ring-offset-popover",
+          )}
+          onClick={() => {
+            onSelect(color);
+          }}
+          type="button"
+        />
+      ))}
+      {onDelete === undefined ? null : (
+        <button
+          aria-label="ハイライトを削除"
+          className="ml-1 rounded-sm px-2 py-1 text-sm text-secondary-foreground hover:bg-accent hover:text-accent-foreground"
+          onClick={onDelete}
+          type="button"
+        >
+          削除
+        </button>
+      )}
+    </div>
+  );
+};
+```
+
+- [ ] **Step 4: re-export する**
+
+`src/core/viewer/index.ts` に追加する。
+
+```ts
+export { HighlightColorPopover } from "./HighlightColorPopover";
+```
+
+- [ ] **Step 5: テストが通ることを確認する**
+
+Run: `pnpm exec vitest run --dir src HighlightColorPopover`
+Expected: PASS（5 tests）
+
+- [ ] **Step 6: コミット**
+
+```bash
+git add src/core/viewer/HighlightColorPopover.tsx src/core/viewer/HighlightColorPopover.test.tsx src/core/viewer/index.ts
+git commit --no-verify -m "feat: ハイライトの色選択ポップアップを追加する
+
+Refs #188
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 12: ハイライトの読み書き
+
+**Files:**
+
+- Create: `src/app/use-article-highlights.ts`
+- Create: `src/app/use-article-highlights.test.ts`
+
+**Interfaces:**
+
+- Consumes: `applyHighlight` / `createTextQuoteAnchor` / `resolveTextQuoteAnchor` / `HighlightRange`（Task 4, 5）、`generateStorageId` と `StorageRepository`（既存 `@/core/storage`）
+- Produces:
+  - `buildHighlightMutations(input): { puts: Annotation[]; deletes: string[] }`
+  - `useArticleHighlights({ lawId, nodes, repository, enabled }): { annotations; highlight; remove }`
+
+- [ ] **Step 1: 失敗するテストを書く**
+
+`src/app/use-article-highlights.test.ts`:
+
+```ts
+import type { Annotation, LawNode } from "@/core/domain";
+import { describe, expect, it } from "vitest";
+
+import { buildHighlightMutations } from "./use-article-highlights";
+
+const target = { lawId: "L", revisionId: "R", article: "1", path: "Article:1/Paragraph:1" };
+
+const node = {
+  id: "L:R:Article:1/Paragraph:1",
+  path: "Article:1/Paragraph:1",
+  plainText: "私権は、公共の福祉に適合しなければならない。",
+} as unknown as LawNode;
+
+const existing = (id: string, quote: string, color: Annotation["color"]): Annotation =>
+  ({
+    id,
+    target,
+    anchors: [{ target, quote, prefix: "", suffix: "" }],
+    color,
+    tags: [],
+    createdAt: "2026-08-01T00:00:00.000Z",
+    updatedAt: "2026-08-01T00:00:00.000Z",
+  }) as Annotation;
+
+const createNextId = () => {
+  let count = 0;
+
+  return () => {
+    count += 1;
+
+    return `new-${String(count)}`;
+  };
+};
+
+const baseInput = { node, target, now: "2026-08-17T00:00:00.000Z" };
+
+describe("buildHighlightMutations", () => {
+  it("既存が無ければ新しい注釈を 1 件作る", () => {
+    const result = buildHighlightMutations({
+      ...baseInput,
+      nextId: createNextId(),
+      annotations: [],
+      range: { start: 4, end: 9 },
+      color: "yellow",
+    });
+
+    expect(result.deletes).toEqual([]);
+    expect(result.puts).toHaveLength(1);
+    expect(result.puts[0].color).toBe("yellow");
+    expect(result.puts[0].anchors[0].quote).toBe("公共の福祉");
+  });
+
+  it("同色と重なるときはマージして createdAt を保つ", () => {
+    const result = buildHighlightMutations({
+      ...baseInput,
+      nextId: createNextId(),
+      annotations: [existing("old", "公共", "yellow")],
+      range: { start: 6, end: 9 },
+      color: "yellow",
+    });
+
+    expect(result.deletes).toEqual([]);
+    expect(result.puts).toHaveLength(1);
+    expect(result.puts[0].id).toBe("old");
+    expect(result.puts[0].createdAt).toBe("2026-08-01T00:00:00.000Z");
+    expect(result.puts[0].updatedAt).toBe("2026-08-17T00:00:00.000Z");
+    expect(result.puts[0].anchors[0].quote).toBe("公共の福祉");
+  });
+
+  it("異色に完全に覆われた既存は削除される", () => {
+    const result = buildHighlightMutations({
+      ...baseInput,
+      nextId: createNextId(),
+      annotations: [existing("old", "公共", "yellow")],
+      range: { start: 0, end: 12 },
+      color: "pink",
+    });
+
+    expect(result.deletes).toEqual(["old"]);
+  });
+
+  it("他ノードの注釈は交差判定の対象にしない", () => {
+    const otherTarget = { ...target, path: "Article:2/Paragraph:1" };
+    const other = {
+      ...existing("other", "公共", "yellow"),
+      target: otherTarget,
+      anchors: [{ target: otherTarget, quote: "公共", prefix: "", suffix: "" }],
+    } as Annotation;
+
+    const result = buildHighlightMutations({
+      ...baseInput,
+      nextId: createNextId(),
+      annotations: [other],
+      range: { start: 4, end: 9 },
+      color: "pink",
+    });
+
+    expect(result.deletes).toEqual([]);
+    expect(result.puts).toHaveLength(1);
+    expect(result.puts[0].id).not.toBe("other");
+  });
+});
+```
+
+- [ ] **Step 2: テストが失敗することを確認する**
+
+Run: `pnpm exec vitest run --dir src use-article-highlights`
+Expected: FAIL
+
+- [ ] **Step 3: 実装する**
+
+`src/app/use-article-highlights.ts`:
+
+```ts
+import { useCallback, useEffect, useState } from "react";
+
+import type { Annotation, HighlightColor, LawNode, LawReferenceTarget } from "@/core/domain";
+import type { StorageRepository } from "@/core/storage";
+import { generateStorageId } from "@/core/storage";
+import {
+  applyHighlight,
+  createTextQuoteAnchor,
+  type HighlightRange,
+  resolveTextQuoteAnchor,
+} from "@/core/viewer";
+
+interface HighlightMutationInput {
+  annotations: Annotation[];
+  node: LawNode;
+  target: LawReferenceTarget;
+  range: { start: number; end: number };
+  color: HighlightColor;
+  now: string;
+  nextId: () => string;
+}
+
+interface HighlightMutations {
+  puts: Annotation[];
+  deletes: string[];
+}
+
+// 対象ノードに属し、いまも本文中に解決できる注釈だけを交差判定の対象にする。
+const collectNodeRanges = (
+  annotations: Annotation[],
+  node: LawNode,
+): { ranges: HighlightRange[]; byId: Map<string, Annotation> } => {
+  const ranges: HighlightRange[] = [];
+  const byId = new Map<string, Annotation>();
+
+  for (const annotation of annotations) {
+    const color = annotation.color;
+    const anchor = annotation.anchors[0];
+
+    if (color === undefined || anchor === undefined || anchor.target.path !== node.path) {
+      continue;
+    }
+
+    const resolved = resolveTextQuoteAnchor(node.plainText, anchor);
+
+    if (resolved === undefined) {
+      continue;
+    }
+
+    ranges.push({ annotationId: annotation.id, color, ...resolved });
+    byId.set(annotation.id, annotation);
+  }
+
+  return { ranges, byId };
+};
+
+export const buildHighlightMutations = ({
+  annotations,
+  color,
+  node,
+  nextId,
+  now,
+  range,
+  target,
+}: HighlightMutationInput): HighlightMutations => {
+  const { byId, ranges } = collectNodeRanges(annotations, node);
+  const result = applyHighlight(ranges, { ...range, color });
+  const anchorTarget: LawReferenceTarget = { ...target, path: node.path };
+  const puts: Annotation[] = [];
+
+  for (const updated of result.updated) {
+    const source = byId.get(updated.annotationId);
+
+    if (source === undefined) {
+      continue;
+    }
+
+    puts.push({
+      ...source,
+      color: updated.color,
+      anchors: [
+        {
+          target: anchorTarget,
+          ...createTextQuoteAnchor(node.plainText, updated.start, updated.end),
+        },
+      ],
+      updatedAt: now,
+    });
+  }
+
+  for (const created of result.created) {
+    const source =
+      created.sourceAnnotationId === undefined ? undefined : byId.get(created.sourceAnnotationId);
+
+    puts.push({
+      id: nextId(),
+      target: anchorTarget,
+      anchors: [
+        {
+          target: anchorTarget,
+          ...createTextQuoteAnchor(node.plainText, created.start, created.end),
+        },
+      ],
+      color: created.color,
+      // 分割で生じた断片は元のメモとタグを引き継ぐ。片方だけ消せる方が自然なため複製する。
+      ...(source?.note === undefined ? {} : { note: source.note }),
+      tags: source?.tags ?? [],
+      createdAt: source?.createdAt ?? now,
+      updatedAt: now,
+    });
+  }
+
+  return { puts, deletes: result.deleted };
+};
+
+interface ArticleHighlightsOptions {
+  lawId: string;
+  nodes: LawNode[];
+  repository: StorageRepository;
+  enabled: boolean;
+}
+
+interface HighlightInput {
+  lawNodeId: string;
+  range: { start: number; end: number };
+  color: HighlightColor;
+  target: LawReferenceTarget;
+}
+
+export const useArticleHighlights = ({
+  enabled,
+  lawId,
+  nodes,
+  repository,
+}: ArticleHighlightsOptions) => {
+  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+
+  useEffect(() => {
+    if (!enabled) {
+      setAnnotations([]);
+
+      return;
+    }
+
+    let cancelled = false;
+
+    void repository
+      .listAnnotations({ lawId })
+      .then((records) => {
+        if (!cancelled) {
+          setAnnotations(records.filter((record) => record.color !== undefined));
+        }
+      })
+      .catch(() => {
+        // 読み込みに失敗しても本文は読めるようにする。ハイライトだけ諦める。
+        if (!cancelled) {
+          setAnnotations([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, lawId, repository]);
+
+  const highlight = useCallback(
+    async (input: HighlightInput) => {
+      const node = nodes.find((candidate) => candidate.id === input.lawNodeId);
+
+      if (node === undefined) {
+        return;
+      }
+
+      const mutations = buildHighlightMutations({
+        annotations,
+        node,
+        target: input.target,
+        range: input.range,
+        color: input.color,
+        now: new Date().toISOString(),
+        nextId: generateStorageId,
+      });
+
+      await Promise.all([
+        ...mutations.puts.map((annotation) => repository.putAnnotation(annotation)),
+        ...mutations.deletes.map((id) => repository.deleteAnnotation(id)),
+      ]);
+
+      setAnnotations((current) => {
+        const replaced = new Set([
+          ...mutations.deletes,
+          ...mutations.puts.map((annotation) => annotation.id),
+        ]);
+
+        return [...current.filter((annotation) => !replaced.has(annotation.id)), ...mutations.puts];
+      });
+    },
+    [annotations, nodes, repository],
+  );
+
+  const remove = useCallback(
+    async (annotationId: string) => {
+      await repository.deleteAnnotation(annotationId);
+      setAnnotations((current) => current.filter((annotation) => annotation.id !== annotationId));
+    },
+    [repository],
+  );
+
+  return { annotations, highlight, remove };
+};
+```
+
+- [ ] **Step 4: テストが通ることを確認する**
+
+Run: `pnpm exec vitest run --dir src use-article-highlights`
+Expected: PASS（4 tests）
+
+- [ ] **Step 5: コミット**
+
+```bash
+git add src/app/use-article-highlights.ts src/app/use-article-highlights.test.ts
+git commit --no-verify -m "feat: ハイライトの保存と削除を組み立てる
+
+Refs #188
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 13: ビューアへの配線
+
+**Files:**
+
+- Modify: `src/app/law-viewer-page.tsx`
+- Modify: `src/app/law-viewer-page.test.tsx`
+
+**Interfaces:**
+
+- Consumes: Task 6, 8, 10, 11, 12 のすべて
+- Produces: なし（アプリの最終配線）
+
+- [ ] **Step 1: 失敗するテストを書く**
+
+`src/app/law-viewer-page.test.tsx` に追加する。既存の render ヘルパー（`createMemoryStorageRepository` を注入し `DisplayPreferencesProvider` で包む関数）と、本文が表示されるまで待つ既存の書き方に合わせること。
+
+補助関数はテストファイル内に置く。
+
+```tsx
+// jsdom に無い CSS Custom Highlight API を最小限だけ生やす。
+// 実描画は検証できないので、UI が有効になり保存が走ることだけを見る。
+const installHighlightApiStub = () => {
+  vi.stubGlobal("CSS", { ...globalThis.CSS, highlights: new Map<string, unknown>() });
+  vi.stubGlobal(
+    "Highlight",
+    class {
+      ranges: Range[];
+
+      constructor(...ranges: Range[]) {
+        this.ranges = ranges;
+      }
+    },
+  );
+  Object.defineProperty(document, "caretPositionFromPoint", {
+    configurable: true,
+    value: () => null,
+  });
+};
+
+const selectTextIn = (element: HTMLElement, start: number, end: number) => {
+  const text = element.firstChild;
+
+  if (text === null) {
+    throw new Error("text node is required");
+  }
+
+  const range = document.createRange();
+  range.setStart(text, start);
+  range.setEnd(text, end);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  document.dispatchEvent(new Event("selectionchange"));
+};
+```
+
+`afterEach` に `vi.unstubAllGlobals()` を足す。テスト本体。
+
+```tsx
+it("CSS Custom Highlight API 非対応ならハイライトを保存しない", async () => {
+  const repository = createMemoryStorageRepository({/* 既存テストと同じ引数 */});
+  renderLawViewer({ repository });
+
+  const body = await screen.findByText(/私権は/);
+  selectTextIn(body, 0, 2);
+
+  await waitFor(() => {
+    expect(screen.queryByRole("group", { name: "ハイライトの色" })).not.toBeInTheDocument();
+  });
+
+  expect(repository.getAnnotations()).toEqual([]);
+});
+
+it("対応ブラウザでは選択して色を選ぶと注釈が保存される", async () => {
+  installHighlightApiStub();
+
+  const repository = createMemoryStorageRepository({/* 既存テストと同じ引数 */});
+  const user = userEvent.setup();
+  renderLawViewer({ repository });
+
+  const body = await screen.findByText(/私権は/);
+  selectTextIn(body, 0, 2);
+
+  await user.click(await screen.findByRole("button", { name: "黄でハイライト" }));
+
+  await waitFor(() => {
+    expect(repository.getAnnotations()).toHaveLength(1);
+  });
+
+  expect(repository.getAnnotations()[0]).toMatchObject({ color: "yellow" });
+  expect(repository.getAnnotations()[0].anchors[0].quote).toBe("私権");
+});
+```
+
+`screen.findByText(/私権は/)` が本文 span（`data-law-node-id` を持つ要素）を返すことを確認する。返らない場合は `container.querySelector("[data-law-node-id]")` で取り直す。
+
+- [ ] **Step 2: テストが失敗することを確認する**
+
+Run: `pnpm exec vitest run --dir src law-viewer-page`
+Expected: FAIL（2 件目でポップアップが見つからない）
+
+- [ ] **Step 3: 本文コンテナに ref を付ける**
+
+`law-viewer-page.tsx` の `<LawDocumentView ... />` を包む要素に `ref={documentRef}` を付ける。包む要素が無ければ `<div ref={documentRef}>` で包む。
+
+```tsx
+const documentRef = useRef<HTMLDivElement>(null);
+```
+
+- [ ] **Step 4: hook を配線する**
+
+コンポーネント本体に追加する。`state.law` / `state.nodes` / `state.revision` / `storageRepository` は既存の名前に合わせること。
+
+```tsx
+const isHighlightEnabled = useMemo(() => isHighlightSupported(), []);
+const { annotations, highlight, remove } = useArticleHighlights({
+  lawId: state.law.lawId,
+  nodes: state.nodes,
+  repository: storageRepository,
+  enabled: isHighlightEnabled,
+});
+const paintedRanges = useHighlightPainting({
+  containerRef: documentRef,
+  nodes: state.nodes,
+  annotations,
+  enabled: isHighlightEnabled,
+});
+const [popover, setPopover] = useState<HighlightPopoverState | undefined>(undefined);
+```
+
+型と補助関数は同ファイル内に置く。
+
+```tsx
+interface HighlightPopoverState {
+  anchorRect: { top: number; bottom: number; left: number; width: number };
+  lawNodeId: string;
+  range: { start: number; end: number };
+  annotationId?: string;
+  color?: HighlightColor;
+}
+
+// 本文ノードから親をたどって、それが属する条の番号を求める。
+// targetKey の索引に条番号が要るため、ハイライト保存時に載せる。
+const findArticleNumberForNode = (nodes: LawNode[], lawNodeId: string): string | undefined => {
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  let current = nodeById.get(lawNodeId);
+
+  while (current !== undefined) {
+    if (current.type === "Article") {
+      return current.number;
+    }
+
+    current = current.parentId === undefined ? undefined : nodeById.get(current.parentId);
+  }
+
+  return undefined;
+};
+```
+
+- [ ] **Step 5: 選択の購読を書く**
+
+```tsx
+useEffect(() => {
+  if (!isHighlightEnabled) {
+    return;
+  }
+
+  const handleSelectionChange = () => {
+    const selection = window.getSelection();
+
+    if (selection === null || selection.rangeCount === 0) {
+      setPopover(undefined);
+
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+    const resolved = resolveNodeTextRange(range);
+
+    if (resolved === undefined) {
+      setPopover(undefined);
+
+      return;
+    }
+
+    const rect = range.getBoundingClientRect();
+    setPopover({
+      anchorRect: { top: rect.top, bottom: rect.bottom, left: rect.left, width: rect.width },
+      lawNodeId: resolved.lawNodeId,
+      range: { start: resolved.start, end: resolved.end },
+    });
+  };
+
+  document.addEventListener("selectionchange", handleSelectionChange);
+
+  return () => {
+    document.removeEventListener("selectionchange", handleSelectionChange);
+  };
+}, [isHighlightEnabled]);
+```
+
+- [ ] **Step 6: 既存ハイライトのヒットテストを書く**
+
+```tsx
+useEffect(() => {
+  if (!isHighlightEnabled) {
+    return;
+  }
+
+  const handlePointerUp = (event: PointerEvent) => {
+    const selection = window.getSelection();
+
+    // テキスト選択中は選択側のポップアップを優先する。
+    if (selection !== null && !selection.isCollapsed) {
+      return;
+    }
+
+    const position = caretPositionAt(document, event.clientX, event.clientY);
+
+    if (position === undefined) {
+      return;
+    }
+
+    const hit = paintedRanges.find((painted) =>
+      painted.range.isPointInRange(position.node, position.offset),
+    );
+
+    if (hit === undefined) {
+      setPopover(undefined);
+
+      return;
+    }
+
+    const resolved = resolveNodeTextRange(hit.range);
+
+    if (resolved === undefined) {
+      return;
+    }
+
+    const rect = hit.range.getBoundingClientRect();
+    setPopover({
+      anchorRect: { top: rect.top, bottom: rect.bottom, left: rect.left, width: rect.width },
+      lawNodeId: resolved.lawNodeId,
+      range: { start: resolved.start, end: resolved.end },
+      annotationId: hit.annotationId,
+      color: hit.color,
+    });
+  };
+
+  document.addEventListener("pointerup", handlePointerUp);
+
+  return () => {
+    document.removeEventListener("pointerup", handlePointerUp);
+  };
+}, [isHighlightEnabled, paintedRanges]);
+```
+
+- [ ] **Step 7: ポップアップを描画する**
+
+JSX の末尾（`</div>` を閉じる直前など、本文と同じツリー内）に置く。
+
+```tsx
+{
+  popover === undefined ? null : (
+    <HighlightColorPopover
+      anchorRect={popover.anchorRect}
+      onDelete={
+        popover.annotationId === undefined
+          ? undefined
+          : () => {
+              const annotationId = popover.annotationId;
+
+              if (annotationId !== undefined) {
+                void remove(annotationId);
+              }
+
+              setPopover(undefined);
+            }
+      }
+      onDismiss={() => {
+        setPopover(undefined);
+      }}
+      onSelect={(color) => {
+        void highlight({
+          lawNodeId: popover.lawNodeId,
+          range: popover.range,
+          color,
+          target: {
+            lawId: state.law.lawId,
+            revisionId: state.revision.revisionId,
+            article: findArticleNumberForNode(state.nodes, popover.lawNodeId),
+          },
+        });
+        setPopover(undefined);
+        window.getSelection()?.removeAllRanges();
+      }}
+      selectedColor={popover.color}
+    />
+  );
+}
+```
+
+- [ ] **Step 8: テストが通ることを確認する**
+
+Run: `pnpm exec vitest run --dir src law-viewer-page`
+Expected: PASS
+
+- [ ] **Step 9: 検証ゲートを通してコミット**
+
+```bash
+pnpm run typecheck && pnpm run lint && pnpm run format:check && pnpm exec vitest run --dir src
+git add src/app/law-viewer-page.tsx src/app/law-viewer-page.test.tsx
+git commit --no-verify -m "feat: 法令ビューアに条文ハイライトを組み込む
+
+Close #188
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 14: 実画面検証と PR
+
+**Files:**
+
+- Create: スクラッチディレクトリ配下のスクリーンショットと録画
+
+**Interfaces:**
+
+- Consumes: Task 1-13
+- Produces: PR
+
+- [ ] **Step 1: preview build を起動する**
+
+dev サーバーは HMR と依存再最適化でフルリロードを起こし、操作の途中で状態が飛ぶ。必ず preview build を使う。`run_in_background` で起動し、`Monitor` で待つ（`sleep` を使わない）。
+
+```bash
+pnpm run build && pnpm run preview
+```
+
+- [ ] **Step 2: 3 本の検証を撮る**
+
+`playwright-cli` で次を撮る。`--filename` は不安定なので出力先はディレクトリ指定にし、生成後にリネームする。
+
+1. 選択 → 黄を選ぶ → 再読込 → 色が残る（動画）
+2. 表示モードを readable ↔ original で切り替えてもハイライトがずれない（動画）
+3. ダークモードでの 4 色の見え方（4 色を並べたスクリーンショット 1 枚）
+
+- [ ] **Step 3: 録画をアニメーション WebP に変換する**
+
+GitHub は WebM を受け付けないため変換する。
+
+```bash
+ffmpeg -i input.webm -vcodec libwebp_anim -loop 0 output.webp
+```
+
+- [ ] **Step 4: 検証ゲートを最終確認する**
+
+```bash
+pnpm run typecheck && pnpm run lint && pnpm run format:check && pnpm exec vitest run --dir src
+```
+
+- [ ] **Step 5: PR を作る**
+
+```bash
+git push -u origin feat/issue-188-article-highlight
+gh pr create --title "feat: 条文のハイライト機能を追加する" --body-file <本文ファイル> --assignee SlashNephy
+```
+
+本文には次を含める。
+
+- 概要と `Close #188`
+- 設計ドキュメントへのリンク
+- 検証ゲート 4 種の実行結果（コマンドと出力）
+- `github-image-upload` スキル（`gh image upload`）で上げた録画・スクリーンショット
+  - 動画は `[{ファイル名}.webp](https://github.com/user-attachments/assets/...)` の形式にし、前後に空行を入れる
+- Task 1 の実機検証結果（`var()` 可否、Safari の caret API、強制カラーモード）
+- 未検証事項があれば明記する
+
+- [ ] **Step 6: マージ可否を確認する**
+
+```bash
+gh pr view --json mergeable,mergeStateStatus
+```
+
+コンフリクトしていれば `origin/main` を取り込んで解消する。
