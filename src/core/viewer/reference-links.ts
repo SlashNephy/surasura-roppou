@@ -209,6 +209,10 @@ export const segmentReferenceLinks = (
     }
 
     if (isSuppressedByArticleScope) {
+      // 抑止した項も列挙の一部なので、基準を進めておく。
+      // そうしないと「第2条第1項、第2項及び第3項」の3つ目が、間に挟まった
+      // 「第2項」のせいで列挙と判定されず、現在の条へ誤ってリンクしてしまう。
+      articleScopeEndIndex = scannedIndex;
       continue;
     }
 

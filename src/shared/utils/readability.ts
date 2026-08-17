@@ -30,14 +30,14 @@ const structuralHeadingPrefixRegex = new RegExp(
 );
 // 本文中の「第四編（親族）の規定」のような構造参照。見出しと違って文中に現れるため
 // 位置を限定できない。構造語の直後が漢字だと「第一目的」「第一編成」のように語の一部で
-// あることが多いので、参照の続きとして自然な漢字（第・中・別・及び・若しくは・並びに）
-// だけを許可して、それ以外の漢字が続く場合は変換しない。
-const structuralNumberContinuationPattern = "(?=$|[^\\p{Script=Han}]|[第中別及若並])";
+// あることが多いので、参照の続きとして自然な漢字（第・中・別と、法令用語の接続詞
+// 及び・並びに・又は・若しくは）だけを許可して、それ以外の漢字が続く場合は変換しない。
+const structuralNumberContinuationPattern = "(?=$|[^\\p{Script=Han}]|[第中別及並又若])";
 // 枝番の「の二」は「二つ」「二か所」「二次的」「一部」のように数量や別の語にも読める。
 // 枝番として確実に読める後続（句読点・括弧・空白・の・で・を・以下・以上・から・まで・
-// より・及び・若しくは・並びに・第）が続く場合だけ変換する。
+// より・及び・並びに・又は・若しくは・第）が続く場合だけ変換する。
 const structuralBranchContinuationPattern =
-  "(?=$|[、。（）\\s]|の|で|を|以下|以上|から|まで|より|及び|若しくは|並びに|第)";
+  "(?=$|[、。（）\\s]|の|で|を|以下|以上|から|まで|より|及び|並びに|又は|若しくは|第)";
 const structuralNumberRegex = new RegExp(
   `第(${kanjiNumberPattern})(編|章|節|款|目)${structuralNumberContinuationPattern}((?:の${kanjiNumberPattern}${structuralBranchContinuationPattern})*)`,
   "gu",

@@ -548,6 +548,18 @@ describe("segmentReferenceLinks with a multi paragraph article", () => {
       expected: ["第2条第1項"],
     },
     {
+      name: "does not link any bare paragraph of a three item list after an article scoped reference",
+      text: "第2条第1項、第2項及び第3項の規定による。",
+      context: { currentArticleNumber: "4", currentParagraphNumber: "1" },
+      expected: ["第2条第1項"],
+    },
+    {
+      name: "does not link any bare paragraph of a three item list following 同条",
+      text: "同条第1項、第2項及び第3項の規定による。",
+      context: { currentArticleNumber: "4", currentParagraphNumber: "1" },
+      expected: [],
+    },
+    {
       name: "does not link a bare paragraph joined by から・まで after an article scoped reference",
       text: "第2条第1項から第3項までの規定による。",
       context: { currentArticleNumber: "4", currentParagraphNumber: "1" },
