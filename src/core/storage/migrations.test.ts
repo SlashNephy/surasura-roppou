@@ -422,6 +422,13 @@ describe("v3 -> v4 migration", () => {
         savedAt: "2026-07-06T00:00:00.000Z",
         updatedAt: "2026-07-07T00:00:00.000Z",
       });
+
+      // v3 からの直接アップグレードは oldVersion=3 のまま v4 -> v5 が直列で走る経路
+      // （v4 が savedLaws ストアを作り直した直後に v5 が同じストアを読む）。v4 を経由せず
+      // v5 まで一気に上がった DB でもピン留めが引き継がれることを確認する。
+      await expect(database.getAll("pinnedLaws")).resolves.toEqual([
+        { lawId: legacySavedLaw.lawId, pinnedAt: legacySavedLaw.savedAt },
+      ]);
     } finally {
       database.close();
     }
@@ -488,6 +495,13 @@ describe("v3 -> v4 migration", () => {
 
       const allRecords = await database.getAll("savedLaws");
       expect(allRecords).toHaveLength(1);
+
+      // v4 が捨てたレコードにピンを立てない。v5 を先に走らせると v3 の生レコードを読むため、
+      // 本文の無い 129AC0000000999 のピンが生まれてしまう。migrateSavedLawStores の
+      // v4 -> v5 という順序が必要な理由はここにある。
+      await expect(database.getAll("pinnedLaws")).resolves.toEqual([
+        { lawId: legacySavedLaw.lawId, pinnedAt: "2026-07-06T00:00:00.000Z" },
+      ]);
     } finally {
       database.close();
     }

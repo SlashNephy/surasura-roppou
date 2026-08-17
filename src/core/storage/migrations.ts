@@ -198,7 +198,8 @@ export const migrateRecordsToVersion5 = async (
 };
 
 // savedLaws 系の移行は v4 → v5 の順に直列で走らせる。v4 は savedLaws を作り直すため、
-// v5 が並行して読むと削除済みのストアに当たる。
+// v5 が並行して読むと削除済みのストアに当たる。順序を入れ替えるだけでも壊れる: v5 が先に
+// 走ると v3 当時の生レコードを読むことになり、v4 が捨てる壊れたレコードにまでピンが立つ。
 export const migrateSavedLawStores = async (
   database: IDBPDatabase<SurasuraDatabase>,
   transaction: VersionChangeTransaction,

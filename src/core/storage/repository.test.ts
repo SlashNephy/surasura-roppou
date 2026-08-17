@@ -1316,6 +1316,24 @@ describe("StorageRepository", () => {
     await expect(repository.listPinnedLaws()).resolves.toEqual([]);
   });
 
+  it("removes a pin that has no saved document", async () => {
+    // 自動保存が失敗したままピン留めだけが成立する不整合（保存領域が満杯など）を想定する。
+    // savedLaws に該当法令の行が 1 件も無い（records.length === 0）ため、実装は早期 return する
+    // 前にピンを消しておく必要がある。この分岐は本文を事前に保存する既存テストでは検証できない。
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: fixedNow,
+    });
+
+    await repository.pinLaw(law.lawId);
+    await expect(repository.isLawPinned(law.lawId)).resolves.toBe(true);
+
+    await repository.deleteLawDocument(law.lawId);
+
+    await expect(repository.isLawPinned(law.lawId)).resolves.toBe(false);
+    await expect(repository.listPinnedLaws()).resolves.toEqual([]);
+  });
+
   it("keeps the first pinned time when the same law is pinned again", async () => {
     let currentTime = new Date("2026-07-06T00:00:00.000Z");
     const repository = createStorageRepository({
