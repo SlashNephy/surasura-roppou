@@ -21,7 +21,7 @@ import {
   setBaseDate,
 } from "@/core/settings";
 import { createJsonFetchStub, fixedTestNow as now, lawDataFixture } from "@/test/fixtures/egov";
-import { createSavedLawUseCase } from "@/core/storage";
+import { PERSISTENCE_REQUESTED_STORAGE_KEY, createSavedLawUseCase } from "@/core/storage";
 import type { SavedLawDocument, StorageRepository } from "@/core/storage";
 import { createMemoryStorageRepository, createSavedLawDocument } from "@/test/fixtures/storage";
 import { setupScrollMocks } from "@/test/scrollMocks";
@@ -84,6 +84,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   localStorage.clear();
   mediaListeners.clear();
   document.documentElement.className = "";
@@ -395,6 +396,39 @@ describe("LawViewerPageContent", () => {
     await expect(storage.repository.isLawPinned("129AC0000000089")).resolves.toBe(false);
     // ダウンロード指定の解除は本文を消さない（LRU 対象からは外れるだけ）。
     expect(storage.getSavedDocument()).toBeDefined();
+  });
+
+  it("requests storage persistence only on the first download, not on repeated downloads", async () => {
+    const persist = vi.fn(() => Promise.resolve(true));
+    vi.stubGlobal("navigator", {
+      storage: { persist, persisted: () => Promise.resolve(false) },
+    });
+
+    const storage = createMemoryStorageRepository();
+    const { user } = renderLawViewerRoute(
+      "/laws/129AC0000000089",
+      createFixtureRepository().repository,
+      storage.repository,
+    );
+
+    expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+
+    // 1 回目のダウンロード指定で要求が飛び、フラグが立つ。
+    await user.click(screen.getByRole("button", { name: "ダウンロード" }));
+    expect(await screen.findByRole("button", { name: "ダウンロード済み" })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(persist).toHaveBeenCalledTimes(1);
+    });
+    expect(localStorage.getItem(PERSISTENCE_REQUESTED_STORAGE_KEY)).toBe("1");
+
+    // 解除してから再度ダウンロード指定しても、2 回目は要求しない。
+    await user.click(screen.getByRole("button", { name: "ダウンロード済み" }));
+    expect(await screen.findByRole("button", { name: "ダウンロード" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "ダウンロード" }));
+    expect(await screen.findByRole("button", { name: "ダウンロード済み" })).toBeInTheDocument();
+
+    expect(persist).toHaveBeenCalledTimes(1);
   });
 
   it("pins a law opened with a base date without stealing the current revision slot", async () => {

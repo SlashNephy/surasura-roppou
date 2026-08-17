@@ -15,7 +15,13 @@ import { buildLawArticleUrl, computeArticleFingerprint } from "@/core/domain";
 import { createEgovLawRepository } from "@/core/egov";
 import type { LawRepository } from "@/core/egov";
 import { resolveAsOf } from "@/core/settings";
-import { createSavedLawUseCase, createStorageRepository, generateStorageId } from "@/core/storage";
+import {
+  PERSISTENCE_REQUESTED_STORAGE_KEY,
+  createSavedLawUseCase,
+  createStorageRepository,
+  generateStorageId,
+  requestStoragePersistence,
+} from "@/core/storage";
 import type { SavedLawUseCase, StorageRepository } from "@/core/storage";
 import {
   LawDocumentView,
@@ -506,6 +512,13 @@ const LawViewerReadyState = ({
         { isCurrent: state === baseState && baseState.requestedAsOf === undefined },
       );
       setSavedState((previous) => ({ ...previous, isPinned: true }));
+
+      // ダウンロードは「これを残しておきたい」という最も明確な意思表示であり、
+      // Firefox のプロンプトが出ても文脈が通る唯一の瞬間。以後は設定画面に委ねる。
+      if (window.localStorage.getItem(PERSISTENCE_REQUESTED_STORAGE_KEY) === null) {
+        window.localStorage.setItem(PERSISTENCE_REQUESTED_STORAGE_KEY, "1");
+        void requestStoragePersistence();
+      }
     } catch {
       // 解除の失敗は保存領域の空きと無関係（pinnedLaws からの削除は本文を書かない）なので、
       // ダウンロードと取り消しでメッセージを分け、ユーザーを誤誘導しないようにする。

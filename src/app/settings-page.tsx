@@ -1,4 +1,4 @@
-import { type ChangeEvent, type ReactNode, useId, useState } from "react";
+import { type ChangeEvent, type ReactNode, useEffect, useId, useState } from "react";
 import { Link } from "@tanstack/react-router";
 
 import {
@@ -11,13 +11,23 @@ import {
   isDisplayTheme,
   isValidBaseDate,
   listSelectableStudyYears,
+  selectableStorageLimits,
   studyYearToBaseDate,
+  type StorageLimitMegabytes,
 } from "@/core/settings";
+import {
+  estimateStorageUsage,
+  isStoragePersisted,
+  requestStoragePersistence,
+} from "@/core/storage";
+import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Select } from "@/shared/ui/select";
+import { formatByteSize } from "@/shared/utils/bytes";
 
 import { useBaseDate } from "./use-base-date";
 import { useDisplayPreferences } from "./use-display-preferences";
+import { useStorageLimit } from "./use-storage-limit";
 
 interface SettingsRow {
   label: string;
@@ -48,7 +58,6 @@ const staticGroups: SettingsGroup[] = [
   {
     heading: "データ",
     rows: [
-      { label: "オフライン保存の管理", value: "準備中" },
       {
         label: "エクスポート / インポート",
         route: "/settings/data-transfer",
@@ -280,6 +289,95 @@ const DisplaySettingsGroup = () => {
   );
 };
 
+const OfflineStorageSettingsGroup = () => {
+  const { limitMegabytes, setLimitMegabytes } = useStorageLimit();
+  const [isPersisted, setIsPersisted] = useState(false);
+  const [originUsage, setOriginUsage] = useState<number | undefined>();
+  const offlineHeadingId = useId();
+  const storageLimitSelectId = useId();
+
+  useEffect(() => {
+    let isActive = true;
+
+    void isStoragePersisted().then((persisted) => {
+      if (isActive) {
+        setIsPersisted(persisted);
+      }
+    });
+    void estimateStorageUsage().then((estimate) => {
+      if (isActive) {
+        setOriginUsage(estimate?.usage);
+      }
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  const handleRequestPersistence = async () => {
+    // 拒否されてもバナーは出さない。状態表示が変わらないことで伝わる。
+    setIsPersisted(await requestStoragePersistence());
+  };
+
+  return (
+    <section aria-labelledby={offlineHeadingId} className="grid gap-3">
+      <h2
+        id={offlineHeadingId}
+        className="text-xs font-medium tracking-widest text-muted-foreground"
+      >
+        オフライン保存
+      </h2>
+
+      <label className="grid gap-1 text-sm" htmlFor={storageLimitSelectId}>
+        オフライン保存の上限
+        <select
+          className="h-9 w-fit min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none dark:bg-input/30"
+          id={storageLimitSelectId}
+          onChange={(event) => {
+            setLimitMegabytes(Number(event.target.value) as StorageLimitMegabytes);
+          }}
+          value={limitMegabytes}
+        >
+          {selectableStorageLimits.map((limit) => (
+            <option key={limit} value={limit}>
+              {limit} MB
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <p className="text-sm text-muted-foreground">
+        {isPersisted ? "保護されています" : "保護されていません"}
+      </p>
+      {isPersisted ? null : (
+        <>
+          <p className="text-sm leading-display text-muted-foreground">
+            ブラウザは空き容量が足りなくなると、このアプリのデータをまとめて削除することがあります。
+            ホーム画面に追加しておくと、削除されにくくなります。
+          </p>
+          <Button
+            className="w-fit"
+            onClick={() => {
+              void handleRequestPersistence();
+            }}
+            type="button"
+            variant="outline"
+          >
+            保護を有効にする
+          </Button>
+        </>
+      )}
+
+      {originUsage === undefined ? null : (
+        <p className="text-sm text-muted-foreground">
+          このアプリ全体の使用量: {formatByteSize(originUsage)}
+        </p>
+      )}
+    </section>
+  );
+};
+
 export const SettingsPage = () => {
   const { baseDate, setBaseDate } = useBaseDate();
   const baseDateInputId = useId();
@@ -345,6 +443,8 @@ export const SettingsPage = () => {
       <h1 className="font-serif text-2xl font-semibold text-foreground">設定</h1>
 
       <DisplaySettingsGroup />
+
+      <OfflineStorageSettingsGroup />
 
       <section className="grid gap-2">
         <h2 className="text-xs font-medium tracking-widest text-muted-foreground">学習</h2>

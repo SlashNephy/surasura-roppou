@@ -31,6 +31,12 @@ export type {
   SavedDataImportResult,
 } from "./import-data";
 export { comparePinnedLaws } from "./pinned-law-order";
+export {
+  estimateStorageUsage,
+  isStoragePersisted,
+  PERSISTENCE_REQUESTED_STORAGE_KEY,
+  requestStoragePersistence,
+} from "./persistence";
 export { planEviction, type EvictionCandidate, type EvictionPlan } from "./eviction-plan";
 export type { LawIndexHook, SavedLawUseCase, SavedLawUseCaseOptions } from "./saved-law-use-case";
 export type {
