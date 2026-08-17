@@ -1,6 +1,6 @@
 import { type SyntheticEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
-import { Archive, Download, FolderPlus, StickyNote, type LucideIcon } from "lucide-react";
+import { Archive, Download, FolderPlus, Pin, StickyNote, type LucideIcon } from "lucide-react";
 
 import type { Bookmark, Collection } from "@/core/domain";
 import { createSavedDataFile } from "@/core/native-integration";
@@ -197,6 +197,7 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
           <SavedLawList
             emptyMessage="ピン留めした法令はまだありません。"
             headingId="pinned-laws-heading"
+            icon={Pin}
             // pinnedAt 降順。新しくピン留めしたものが先。
             savedLaws={savedLaws
               .filter((savedLaw) => pinnedAtByLawId.has(savedLaw.law.lawId))
@@ -210,6 +211,7 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
           <SavedLawList
             emptyMessage="最近開いた法令はまだありません。"
             headingId="recent-laws-heading"
+            icon={Archive}
             // updatedAt 降順。PR 3 の LRU が消す順の逆順にあたる。
             savedLaws={savedLaws
               .filter((savedLaw) => !pinnedAtByLawId.has(savedLaw.law.lawId))
@@ -351,16 +353,18 @@ export const SavedCollectionPage = ({
 const SavedLawList = ({
   emptyMessage,
   headingId,
+  icon,
   savedLaws,
   title,
 }: {
   emptyMessage: string;
   headingId: string;
+  icon: LucideIcon;
   savedLaws: SavedLawSummary[];
   title: string;
 }) => (
   <section aria-labelledby={headingId} className="grid gap-3">
-    <SectionHeading icon={Archive} id={headingId} title={title} />
+    <SectionHeading icon={icon} id={headingId} title={title} />
     {savedLaws.length === 0 ? (
       <EmptyState>{emptyMessage}</EmptyState>
     ) : (
