@@ -37,7 +37,7 @@ describe("storage limit", () => {
     expect(listener).toHaveBeenCalled();
 
     unsubscribe();
-    setStorageLimitMegabytes(25);
+    setStorageLimitMegabytes(500);
 
     // 解除後は通知されない。
     expect(listener).toHaveBeenCalledTimes(1);

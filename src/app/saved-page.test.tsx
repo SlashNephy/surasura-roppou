@@ -178,7 +178,7 @@ describe("SavedPage", () => {
     expect(within(recentSection).queryByText(/ノード/)).not.toBeInTheDocument();
 
     // 合計と上限を出す。上限だけあって使用量が見えないと「いつか勝手に消える」としか読めない。
-    expect(screen.getByText(/\/ 50 MB/)).toBeInTheDocument();
+    expect(screen.getByText(/\/ 250 MB/)).toBeInTheDocument();
   });
 
   it("orders each section by its own recency: pinnedAt for pinned laws, updatedAt for recent laws", async () => {

@@ -1,12 +1,12 @@
 // オフライン保存に使う容量の上限。表示設定と同じく localStorage に持ち、
 // 保存データ（IndexedDB）やエクスポート対象からは切り離す。
-const storageLimits = [25, 50, 100] as const;
+const storageLimits = [100, 250, 500] as const;
 
 export type StorageLimitMegabytes = (typeof storageLimits)[number];
 
 export const selectableStorageLimits: readonly StorageLimitMegabytes[] = storageLimits;
 
-export const DEFAULT_STORAGE_LIMIT_MEGABYTES: StorageLimitMegabytes = 50;
+export const DEFAULT_STORAGE_LIMIT_MEGABYTES: StorageLimitMegabytes = 250;
 
 export const STORAGE_LIMIT_STORAGE_KEY = "surasura:storage:limit-mb";
 
