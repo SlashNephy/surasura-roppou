@@ -53,6 +53,19 @@ export const createSavedLawUseCase = (
     return byteSize;
   };
 
+  // レコードの byteSize を解決する。持っていればそれを使い、持っていなければ
+  // backfillByteSize で実測する。evict と computeQuotaRetryEvictionTarget の両方が
+  // 「レコード一覧を取り、byteSize が無ければバックフィルする」という同じ処理を必要と
+  // するため、ここに切り出して片方だけ直し忘れる事故を防ぐ。
+  const resolveRecordByteSize = (record: {
+    lawId: string;
+    revisionId: string;
+    byteSize?: number;
+  }) =>
+    record.byteSize !== undefined
+      ? Promise.resolve(record.byteSize)
+      : backfillByteSize(record.lawId, record.revisionId);
+
   // quota 再試行のためのエビクション目標を計算する。定常状態では保存後の evictAfterSave
   // が毎回働くため、合計は既に上限以下に収まっている。通常の上限をそのまま目標に渡すと
   // planEviction は空プランを返す（eviction-plan.ts 冒頭の早期 return）。つまり、これから
@@ -61,12 +74,24 @@ export const createSavedLawUseCase = (
   // 目標は「現在の合計（既存レコードぶん。document 自身は未保存）から、これから書こうと
   // している本文のバイト数を引いた値」。上限が既に超過している異常系では上限側を優先し、
   // 0 以下・非有限値にはならないよう最低 1 バイトへ切り上げる。
+  //
+  // 合計を出す際は evict と同じくバックフィルを経由する。byteSize を持たない旧レコードを
+  // `?? 0` で素通りすると合計が実際よりはるかに小さく出て、この関数の返り値が 1 バイトに
+  // 丸められる。1 バイトという目標は「1 バイトでも超えたら削除」を意味するため、evict の
+  // 内部で backfillByteSize が真のサイズを解決した瞬間、ダウンロード指定の無い法令が
+  // 軒並み削除対象になる（未ダウンロードの法令が全滅する）。バックフィル後にこの下限へ
+  // 到達するのは「これから保存する本文が既存の合計と同等以上に大きい」という正当な理由の
+  // ときだけであり、そのときは実際に積極的なエビクションが必要なので 1 バイトへの丸めは
+  // 意図した動作のまま残す。
   const computeQuotaRetryEvictionTarget = async (
     document: LawDocumentInput,
     limitBytes: number,
   ): Promise<number> => {
     const records = await repository.listSavedLawRecords();
-    const currentTotalBytes = records.reduce((sum, record) => sum + (record.byteSize ?? 0), 0);
+    const currentTotalBytes = (await Promise.all(records.map(resolveRecordByteSize))).reduce(
+      (sum, byteSize) => sum + byteSize,
+      0,
+    );
     const documentByteSize = new Blob([JSON.stringify(document.nodes)]).size;
 
     return Math.max(1, Math.min(limitBytes, currentTotalBytes) - documentByteSize);
@@ -184,7 +209,7 @@ export const createSavedLawUseCase = (
           lawId: record.lawId,
           revisionId: record.revisionId,
           isCurrent: record.isCurrent === 1,
-          byteSize: record.byteSize ?? (await backfillByteSize(record.lawId, record.revisionId)),
+          byteSize: await resolveRecordByteSize(record),
           updatedAt: record.updatedAt,
         });
       }

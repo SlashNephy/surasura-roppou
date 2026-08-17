@@ -492,6 +492,90 @@ describe("createSavedLawUseCase", () => {
     // 未ピンの法令が丸ごと消えている: バックフィル値を候補として使った証拠。
     await expect(useCase.get(law.lawId)).resolves.toBeUndefined();
   });
+
+  it("does not wipe out every undownloaded law when the quota retry target is computed from legacy records without byteSize", async () => {
+    // 再現対象: PR 3 より前に保存された旧レコード（byteSize 無し）が複数ある状態で
+    // QuotaExceededError が飛んだとき、computeQuotaRetryEvictionTarget が合計を
+    // `?? 0` で素通りすると、実際には十分な余裕があるにもかかわらず目標が 1 バイトに
+    // 丸められる。evict の内部では backfillByteSize が真のサイズを解決するため、
+    // その 1 バイトという目標がダウンロード指定の無い法令を軒並み削除させてしまう。
+    const { repository } = createMemoryStorageRepository();
+    const bulkyNodes = [articleNode, articleNode, articleNode, articleNode];
+    const otherLaw2 = { ...otherLaw, lawId: "999AC0000000099", title: "その他の法令2" };
+    const otherRevision2 = {
+      ...otherRevision,
+      lawId: otherLaw2.lawId,
+      revisionId: "999AC0000000099_20260624_508AC0000000045",
+    };
+    const otherLaw3 = { ...otherLaw, lawId: "999AC0000000098", title: "その他の法令3" };
+    const otherRevision3 = {
+      ...otherRevision,
+      lawId: otherLaw3.lawId,
+      revisionId: "999AC0000000098_20260624_508AC0000000045",
+    };
+
+    // 3 件とも実測の byteSize を持つ状態でいったん保存する。
+    await repository.saveLawDocument({ law: otherLaw, revision: otherRevision, nodes: bulkyNodes });
+    await repository.saveLawDocument({
+      law: otherLaw2,
+      revision: otherRevision2,
+      nodes: bulkyNodes,
+    });
+    await repository.saveLawDocument({
+      law: otherLaw3,
+      revision: otherRevision3,
+      nodes: bulkyNodes,
+    });
+
+    const otherLawByteSize = new Blob([JSON.stringify(bulkyNodes)]).size;
+    const lawByteSize = new Blob([JSON.stringify(nodes)]).size;
+    // 上限には十分な余裕がある（3 件の合計 + 新規保存分を足しても大きく下回る）。
+    const limitBytes = (otherLawByteSize * 3 + lawByteSize) * 10;
+
+    let shouldFail = true;
+    const saveLawDocument = vi.fn(
+      (document: LawDocumentInput, options?: SaveLawDocumentOptions) => {
+        if (shouldFail) {
+          shouldFail = false;
+          const error = new Error("quota exceeded");
+
+          error.name = "QuotaExceededError";
+          return Promise.reject(error);
+        }
+        return repository.saveLawDocument(document, options);
+      },
+    );
+    const useCase = createSavedLawUseCase(
+      {
+        ...repository,
+        saveLawDocument,
+        // PR 3 より前に保存されたレコードを模す（byteSize を持たない）。
+        listSavedLawRecords: async () => {
+          const records = await repository.listSavedLawRecords();
+
+          return records.map(({ byteSize, ...rest }) => {
+            void byteSize;
+            return rest;
+          });
+        },
+      },
+      { getStorageLimitBytes: () => limitBytes },
+    );
+
+    await useCase.save({ law, revision, nodes });
+
+    expect(saveLawDocument).toHaveBeenCalledTimes(2);
+    await expect(useCase.get(law.lawId)).resolves.toBeDefined();
+
+    // 目標は「現在の合計 − 保存する本文のバイト数」なので、正しく計算できていれば
+    // 3 件のうち 1 件を消せば足り、残り 2 件は生き残る。バグ入り実装（`?? 0`）に戻すと、
+    // 目標が 1 バイトに丸められて 3 件とも消える（この行が 0 件になり FAIL する）。
+    const remainingOtherLaws = await Promise.all(
+      [otherLaw.lawId, otherLaw2.lawId, otherLaw3.lawId].map((lawId) => useCase.get(lawId)),
+    );
+
+    expect(remainingOtherLaws.filter((document) => document !== undefined)).toHaveLength(2);
+  });
 });
 
 const createDatabaseName = (): string => {
