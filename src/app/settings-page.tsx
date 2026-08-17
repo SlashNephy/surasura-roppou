@@ -331,8 +331,8 @@ const OfflineStorageSettingsGroup = () => {
 
       <label className="grid gap-1 text-sm" htmlFor={storageLimitSelectId}>
         オフライン保存の上限
-        <select
-          className="h-9 w-fit min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none dark:bg-input/30"
+        <Select
+          className="w-fit"
           id={storageLimitSelectId}
           onChange={(event) => {
             setLimitMegabytes(Number(event.target.value) as StorageLimitMegabytes);
@@ -344,7 +344,7 @@ const OfflineStorageSettingsGroup = () => {
               {limit} MB
             </option>
           ))}
-        </select>
+        </Select>
       </label>
 
       <p className="text-sm text-muted-foreground">

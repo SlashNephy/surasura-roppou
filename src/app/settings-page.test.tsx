@@ -328,11 +328,37 @@ describe("SettingsPage オフライン保存", () => {
     const { user } = renderSettingsRoute();
 
     expect(await screen.findByText("保護されていません")).toBeInTheDocument();
+    expect(await screen.findByText("このアプリ全体の使用量: 1 MB")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "保護を有効にする" }));
 
     expect(persist).toHaveBeenCalled();
     expect(await screen.findByText("保護されています")).toBeInTheDocument();
+  });
+
+  it("keeps the unprotected state and hides no banner when persistence is denied", async () => {
+    const persist = vi.fn(() => Promise.resolve(false));
+
+    vi.stubGlobal("navigator", {
+      storage: {
+        persisted: () => Promise.resolve(false),
+        persist,
+        estimate: () => Promise.resolve({ usage: 1_048_576, quota: 104_857_600 }),
+      },
+    });
+
+    const { user } = renderSettingsRoute();
+
+    expect(await screen.findByText("保護されていません")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "保護を有効にする" }));
+
+    expect(persist).toHaveBeenCalled();
+    expect(await screen.findByText("保護されていません")).toBeInTheDocument();
+    expect(screen.queryByText("保護されています")).not.toBeInTheDocument();
+    // 拒否時に別途エラーバナーやトーストを出さないのが設計方針。
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
   it("lets the user choose the offline storage limit", async () => {
