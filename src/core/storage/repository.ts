@@ -171,8 +171,14 @@ export const createStorageRepository = (
           (options.isCurrent ?? true) || existing?.isCurrent === 1 || !hasAnyCurrentRevision;
         const isCurrent: 0 | 1 = shouldBeCurrent ? 1 : 0;
 
+        const byteSize = measureNodesByteSize(document.nodes);
+        const rewritesNodes = shouldRewriteRevisionNodes(existing, byteSize, document.nodes.length);
+
         // 同じ版を書き直すときだけ、その版のノードを消して入れ直す。
-        await deleteRevisionNodes(nodes, lawId, revisionId);
+        // 中身が変わっていなければ、その入れ替えも省く。
+        if (rewritesNodes) {
+          await deleteRevisionNodes(nodes, lawId, revisionId);
+        }
 
         // 現行版スロットは 1 法令 1 件。旧現行版はフラグだけ降格し、履歴として残す。
         if (isCurrent === 1) {
@@ -182,14 +188,16 @@ export const createStorageRepository = (
         void tx.objectStore("laws").put(document.law);
         void tx.objectStore("lawRevisions").put(document.revision);
 
-        for (const [sortOrder, node] of document.nodes.entries()) {
-          void nodes.put({
-            id: node.id,
-            lawId: node.lawId,
-            revisionId: node.revisionId,
-            sortOrder,
-            node,
-          });
+        if (rewritesNodes) {
+          for (const [sortOrder, node] of document.nodes.entries()) {
+            void nodes.put({
+              id: node.id,
+              lawId: node.lawId,
+              revisionId: node.revisionId,
+              sortOrder,
+              node,
+            });
+          }
         }
 
         void savedLaws.put({
@@ -199,7 +207,7 @@ export const createStorageRepository = (
           nodeCount: document.nodes.length,
           savedAt: existing?.savedAt ?? updatedAt,
           updatedAt,
-          byteSize: measureNodesByteSize(document.nodes),
+          byteSize,
         });
         await tx.done;
 
@@ -803,6 +811,26 @@ const toOrderedNodes = (records: StoredLawNode[]): LawNode[] =>
 // シリアライズした JSON の UTF-8 バイト数を代理値にする。上限の判断に使うだけなので
 // 厳密さは要らないが、法令ごとの大小関係が正しく出る必要がある。
 const measureNodesByteSize = (nodes: LawNode[]): number => new Blob([JSON.stringify(nodes)]).size;
+
+/**
+ * その版のノードを削除して入れ直す必要があるか。
+ *
+ * 同じ版を開き直すたびに全ノードを書き直すと、民法なら毎回 4,283 件の削除と挿入が走る。
+ * 自動保存があるため、これは法令を開くたびに発生する。
+ *
+ * 判断に `revisionId` の一致だけを使ってはいけない。e-Gov の版が同じでも、こちらの
+ * 正規化処理が変われば保存すべきノードは変わり、アプリ更新後に古い結果が残り続ける。
+ * バイト数とノード数の一致まで見れば、その変化も捕まえられる。
+ */
+export const shouldRewriteRevisionNodes = (
+  existing: SavedLawRecord | undefined,
+  byteSize: number,
+  nodeCount: number,
+): boolean =>
+  // 記録以前のレコードは中身を照合できないため、安全側に倒す。
+  existing?.byteSize === undefined ||
+  existing.byteSize !== byteSize ||
+  existing.nodeCount !== nodeCount;
 
 // 現行版は 1 件のはずだが、万一複数あっても結果が揺れないよう updatedAt が最大のものを選ぶ。
 // 読み取り経路では修復書き込みを行わない（閲覧が保存領域の状態に巻き込まれるのを避けるため）。

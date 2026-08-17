@@ -22,8 +22,9 @@ import {
   createStorageRepository as originalCreateStorageRepository,
   deleteSurasuraDatabase,
   openSurasuraDatabase,
+  shouldRewriteRevisionNodes,
 } from "./repository";
-import type { StorageRepository, StorageRepositoryOptions } from "./repository";
+import type { SavedLawRecord, StorageRepository, StorageRepositoryOptions } from "./repository";
 
 const fixedNow = () => new Date("2026-07-06T00:00:00.000Z");
 const openedRepositories: StorageRepository[] = [];
@@ -1523,6 +1524,72 @@ describe("StorageRepository", () => {
     expect(records[0]?.byteSize).toBe(12_345);
     // 書き戻しは容量だけを触り、保存時刻を動かさない（LRU の順序が変わるため）。
     expect(records[0]?.updatedAt).toBe("2026-07-06T00:00:00.000Z");
+  });
+
+  it("keeps the document intact when the same revision is saved again", async () => {
+    let currentTime = new Date("2026-07-06T00:00:00.000Z");
+    const repository = createStorageRepository({
+      databaseName: createDatabaseName(),
+      now: () => currentTime,
+    });
+
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+    currentTime = new Date("2026-07-09T00:00:00.000Z");
+    await repository.saveLawDocument({ law, revision, nodes: [articleNode, paragraphNode] });
+
+    // ノードの書き直しを省いても本文は欠けない。
+    await expect(repository.getLawDocument(law.lawId)).resolves.toEqual({
+      law,
+      revision,
+      nodes: [articleNode, paragraphNode],
+      savedAt: "2026-07-06T00:00:00.000Z",
+    });
+
+    // LRU が使う updatedAt は書き直しの有無に関わらず進む。
+    const [record] = await repository.listSavedLawRecords();
+
+    expect(record.updatedAt).toBe("2026-07-09T00:00:00.000Z");
+  });
+});
+
+describe("shouldRewriteRevisionNodes", () => {
+  const stored = {
+    lawId: "129AC0000000089",
+    revisionId: "129AC0000000089_rev",
+    isCurrent: 1 as const,
+    nodeCount: 2,
+    savedAt: "2026-07-06T00:00:00.000Z",
+    updatedAt: "2026-07-06T00:00:00.000Z",
+    byteSize: 1_000,
+  };
+
+  it("rewrites when the revision has never been saved", () => {
+    expect(shouldRewriteRevisionNodes(undefined, 1_000, 2)).toBe(true);
+  });
+
+  it("rewrites when the stored record predates size tracking", () => {
+    // byteSize を持たないレコードは中身を照合できないので、安全側に倒して書き直す。
+    const withoutSize: SavedLawRecord = {
+      lawId: stored.lawId,
+      revisionId: stored.revisionId,
+      isCurrent: stored.isCurrent,
+      nodeCount: stored.nodeCount,
+      savedAt: stored.savedAt,
+      updatedAt: stored.updatedAt,
+    };
+
+    expect(shouldRewriteRevisionNodes(withoutSize, 1_000, 2)).toBe(true);
+  });
+
+  it("rewrites when the normalized text changed even though the revision id did not", () => {
+    // e-Gov の版が同じでも、こちらの正規化が変われば本文は変わる。
+    // revisionId だけで判断すると、アプリ更新後に古い正規化結果が残り続ける。
+    expect(shouldRewriteRevisionNodes(stored, 1_200, 2)).toBe(true);
+    expect(shouldRewriteRevisionNodes(stored, 1_000, 3)).toBe(true);
+  });
+
+  it("skips the rewrite when the stored content matches", () => {
+    expect(shouldRewriteRevisionNodes(stored, 1_000, 2)).toBe(false);
   });
 });
 
