@@ -82,6 +82,8 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
   const [exportError, setExportError] = useState<string | undefined>();
   const [isExporting, setIsExporting] = useState(false);
   const [lawPendingDeletion, setLawPendingDeletion] = useState<SavedLawSummary | undefined>();
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | undefined>();
   const { limitBytes } = useStorageLimit();
   const savedLawUseCase = useMemo(
     () =>
@@ -130,18 +132,29 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
   }, [applySavedPageData, loadSavedPageData]);
 
   const handleConfirmDelete = async () => {
-    if (lawPendingDeletion === undefined) {
+    if (lawPendingDeletion === undefined || isDeleting) {
       return;
     }
+
+    setIsDeleting(true);
+    setDeleteError(undefined);
 
     try {
       await savedLawUseCase.remove(lawPendingDeletion.law.lawId);
       setLawPendingDeletion(undefined);
       await reload();
     } catch {
-      // 明示操作なので、自動保存やエビクションの失敗とは異なりバナーで知らせる。
-      setError("法令を削除できませんでした。時間をおいて再試行してください。");
+      // ダイアログはポータルで別ツリーに描画され開いている間はページ本体が
+      // aria-hidden になるため、失敗はダイアログ内で知らせて再試行できるようにする。
+      setDeleteError("法令を削除できませんでした。時間をおいて再試行してください。");
+    } finally {
+      setIsDeleting(false);
     }
+  };
+
+  const requestDeleteLaw = (savedLaw: SavedLawSummary) => {
+    setDeleteError(undefined);
+    setLawPendingDeletion(savedLaw);
   };
 
   useEffect(() => {
@@ -250,7 +263,7 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
             emptyMessage="ダウンロードした法令はまだありません。"
             headingId="pinned-laws-heading"
             icon={CircleCheck}
-            onRequestDelete={setLawPendingDeletion}
+            onRequestDelete={requestDeleteLaw}
             savedLaws={toPinnedSavedLaws(savedLaws, pinnedAtByLawId)}
             title="ダウンロード済み"
           />
@@ -259,7 +272,7 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
             emptyMessage="最近開いた法令はまだありません。"
             headingId="recent-laws-heading"
             icon={Archive}
-            onRequestDelete={setLawPendingDeletion}
+            onRequestDelete={requestDeleteLaw}
             // updatedAt 降順。PR 3 の LRU が消す順の逆順にあたる。
             savedLaws={savedLaws
               .filter((savedLaw) => !pinnedAtByLawId.has(savedLaw.law.lawId))
@@ -284,8 +297,9 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
         <Dialog
           open
           onOpenChange={(open) => {
-            if (!open) {
+            if (!open && !isDeleting) {
               setLawPendingDeletion(undefined);
+              setDeleteError(undefined);
             }
           }}
         >
@@ -296,8 +310,10 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
                 この法令の保存データを削除します。もう一度開けば再取得されます。
               </DialogDescription>
             </DialogHeader>
+            {deleteError === undefined ? null : <ErrorMessage>{deleteError}</ErrorMessage>}
             <DialogFooter>
               <Button
+                disabled={isDeleting}
                 onClick={() => {
                   void handleConfirmDelete();
                 }}
@@ -307,8 +323,10 @@ export const SavedPage = ({ storageRepository = defaultStorageRepository }: Save
                 削除する
               </Button>
               <Button
+                disabled={isDeleting}
                 onClick={() => {
                   setLawPendingDeletion(undefined);
+                  setDeleteError(undefined);
                 }}
                 type="button"
                 variant="outline"

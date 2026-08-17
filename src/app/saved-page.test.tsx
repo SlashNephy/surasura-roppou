@@ -47,6 +47,68 @@ describe("SavedPage", () => {
     expect(screen.queryByRole("link", { name: "民法" })).not.toBeInTheDocument();
   });
 
+  it("shows a delete error inside the dialog and keeps the law when deletion fails", async () => {
+    const storage = createMemoryStorageRepository();
+
+    await storage.repository.saveLawDocument({
+      law: sampleLawViewerDocument.law,
+      nodes: sampleLawViewerDocument.nodes,
+      revision: sampleLawViewerDocument.revision,
+    });
+
+    const deleteLawDocument = vi.fn<StorageRepository["deleteLawDocument"]>(() =>
+      Promise.reject(new Error("storage unavailable")),
+    );
+    const repository: StorageRepository = { ...storage.repository, deleteLawDocument };
+
+    const { user } = renderSavedRoute("/saved", repository);
+
+    expect(await screen.findByRole("link", { name: "民法" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "民法を削除" }));
+    await user.click(await screen.findByRole("button", { name: "削除する" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      await within(dialog).findByText(
+        "法令を削除できませんでした。時間をおいて再試行してください。",
+      ),
+    ).toBeInTheDocument();
+
+    await expect(storage.repository.getLawDocument("129AC0000000089")).resolves.toBeDefined();
+  });
+
+  it("prevents duplicate delete requests while a deletion is in progress", async () => {
+    const storage = createMemoryStorageRepository();
+
+    await storage.repository.saveLawDocument({
+      law: sampleLawViewerDocument.law,
+      nodes: sampleLawViewerDocument.nodes,
+      revision: sampleLawViewerDocument.revision,
+    });
+
+    const deferred = createDeferred();
+    const deleteLawDocument = vi.fn<StorageRepository["deleteLawDocument"]>(() => deferred.promise);
+    const repository: StorageRepository = { ...storage.repository, deleteLawDocument };
+
+    const { user } = renderSavedRoute("/saved", repository);
+
+    expect(await screen.findByRole("link", { name: "民法" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "民法を削除" }));
+    const confirmButton = await screen.findByRole("button", { name: "削除する" });
+
+    await user.click(confirmButton);
+    expect(confirmButton).toBeDisabled();
+    await user.click(confirmButton);
+    expect(deleteLawDocument).toHaveBeenCalledTimes(1);
+
+    deferred.resolve();
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+  });
+
   it("keeps the law when the confirmation is dismissed", async () => {
     const storage = createMemoryStorageRepository();
 
