@@ -51,12 +51,13 @@ export const findLawNodeElement = (
 // 選択が単一の本文要素に収まるときだけ、表示文字列上の範囲を返す。
 // 項番号の marker span や複数の本文要素にまたがる選択は扱わない（v1 のスコープ）。
 export const resolveNodeTextRange = (range: Range): NodeTextRange | undefined => {
-  const owner = findRangeOwner(range);
+  const target = findRangeTarget(range);
 
-  if (owner === undefined) {
+  if (target === undefined) {
     return undefined;
   }
 
+  const { covered, owner } = target;
   const lawNodeId = owner.dataset.lawNodeId;
 
   if (lawNodeId === undefined) {
@@ -64,8 +65,14 @@ export const resolveNodeTextRange = (range: Range): NodeTextRange | undefined =>
   }
 
   const texts = collectDisplayTextNodes(owner);
-  const start = toDisplayOffset(owner, texts, range.startContainer, range.startOffset, "start");
-  const end = toDisplayOffset(owner, texts, range.endContainer, range.endOffset, "end");
+  const text = joinTextData(texts);
+  // 包み込みで選ばれた本文要素は、端点がどちらもその外にあり位置を写せない。全体を採る。
+  const start = covered
+    ? 0
+    : toDisplayOffset(owner, texts, range.startContainer, range.startOffset, "start");
+  const end = covered
+    ? text.length
+    : toDisplayOffset(owner, texts, range.endContainer, range.endOffset, "end");
 
   // 端点が別ノードでも表示文字列の上では同じ位置になることがある（ノード境界どうしの選択）。
   // その場合 Range は collapsed でないが選択された文字は無いので、範囲として扱わない。
@@ -73,12 +80,7 @@ export const resolveNodeTextRange = (range: Range): NodeTextRange | undefined =>
     return undefined;
   }
 
-  return {
-    lawNodeId,
-    start,
-    end,
-    text: joinTextData(texts),
-  };
+  return { lawNodeId, start, end, text };
 };
 
 // 表示文字列上の範囲から DOM の Range を作る。ハイライトの描画で使う。
@@ -108,23 +110,70 @@ export const createNodeTextRange = (
   return range;
 };
 
-// 選択が属する本文要素を決める。
+interface RangeTarget {
+  owner: HTMLElement;
+  // 端点がどちらも本文要素の外にあり、Range がその要素を丸ごと包んでいる場合。
+  covered: boolean;
+}
+
+// 選択が指す本文要素を決める。
 // 片方の端点だけが本文要素の外に出る選択（行末を越えたドラッグ、項番号 span からの
 // ドラッグ開始）は、ブラウザが親 <p> の中に端点を作るため実際に頻出する。
 // これを捨てると選択が黙って無視されるので、内側にある端点の本文要素を採る。
 // 外に出た端点の丸めは toDisplayOffset の走査が兼ねる。走査は本文要素配下の
 // テキストノードしか見ないため、その前にある端点は 0、後ろにある端点は全長になる。
 // Range は始点が終点より前という不変条件を持つので、丸め先は端点の前後関係と一致する。
-// 両端が外、または別々の本文要素の内側にあるときは、どの本文を指すか決まらないので扱わない。
-const findRangeOwner = (range: Range): HTMLElement | undefined => {
+// 両端が別々の本文要素の内側にあるときは、どの本文を指すか決まらないので扱わない。
+const findRangeTarget = (range: Range): RangeTarget | undefined => {
   const startOwner = findOwner(range.startContainer);
   const endOwner = findOwner(range.endContainer);
 
-  if (startOwner !== undefined && endOwner !== undefined && startOwner !== endOwner) {
-    return undefined;
+  if (startOwner !== undefined && endOwner !== undefined) {
+    return startOwner === endOwner ? { covered: false, owner: startOwner } : undefined;
   }
 
-  return startOwner ?? endOwner;
+  const owner = startOwner ?? endOwner;
+
+  if (owner !== undefined) {
+    return { covered: false, owner };
+  }
+
+  // 両端が外側でも、段落のトリプルクリックのように本文要素を丸ごと包む選択は起きる。
+  // 包んだ本文要素がちょうど 1 つに定まるときだけ、その全体を選択として扱う。
+  const covered = findCoveredElements(range);
+
+  return covered.length === 1 ? { covered: true, owner: covered[0] } : undefined;
+};
+
+const findCoveredElements = (range: Range): HTMLElement[] => {
+  const container = range.commonAncestorContainer;
+  const scope = container instanceof Element ? container : container.parentElement;
+
+  if (scope === null) {
+    return [];
+  }
+
+  const covered: HTMLElement[] = [];
+
+  for (const element of scope.querySelectorAll<HTMLElement>(`[${lawNodeIdAttribute}]`)) {
+    if (containsEntirely(range, element)) {
+      covered.push(element);
+    }
+  }
+
+  return covered;
+};
+
+// 要素を丸ごと包んでいるか。Range.intersectsNode は部分的な重なりでも true になるため使えない。
+// 選択の両境界が要素の両境界の外側（または同位置）にあることを直接見る。
+const containsEntirely = (range: Range, element: Element): boolean => {
+  const elementRange = element.ownerDocument.createRange();
+  elementRange.selectNode(element);
+
+  return (
+    range.compareBoundaryPoints(Range.START_TO_START, elementRange) <= 0 &&
+    range.compareBoundaryPoints(Range.END_TO_END, elementRange) >= 0
+  );
 };
 
 const findOwner = (node: Node | null): HTMLElement | undefined => {

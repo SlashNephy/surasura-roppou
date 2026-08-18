@@ -154,13 +154,49 @@ describe("resolveNodeTextRange", () => {
     });
   });
 
-  it("両端点とも本文要素の外にある選択は undefined", () => {
-    // 本文が span のときの段落トリプルクリックがこれにあたる。どの本文要素を
-    // 指しているのか端点からは決まらないため、丸めずに扱わない。
+  it("両端点とも外側でも、本文要素をちょうど 1 つ包むなら全体を採る", () => {
+    // 本文が span のときの段落トリプルクリックがこれにあたる。端点は本文要素の
+    // 外（親 <p> の子オフセット）に来るが、Range は本文 span を丸ごと含んでいる。
     const host = setup(markerHtml);
     const paragraph = elementOf(host, "p");
 
+    expect(resolveNodeTextRange(rangeOf([paragraph, 0], [paragraph, 2]))).toEqual({
+      lawNodeId: "n1",
+      start: 0,
+      end: 5,
+      text: "あいうえお",
+    });
+  });
+
+  it("両端点とも外側で、本文要素を 1 つも包まないなら undefined", () => {
+    const host = setup(markerHtml);
+    const paragraph = elementOf(host, "p");
+    // 子 index 0..1 は項番号 span だけを覆う。
+    expect(resolveNodeTextRange(rangeOf([paragraph, 0], [paragraph, 1]))).toBeUndefined();
+  });
+
+  it("両端点とも外側で、本文要素を 2 つ以上包むなら undefined", () => {
+    const host = setup(
+      '<p><span data-law-node-id="n1">あいう</span><span data-law-node-id="n2">かきく</span></p>',
+    );
+    const paragraph = elementOf(host, "p");
+
     expect(resolveNodeTextRange(rangeOf([paragraph, 0], [paragraph, 2]))).toBeUndefined();
+  });
+
+  it("本文要素の一部しか包まない Range は、包んだことにしない", () => {
+    // 終点が本文 span の途中（内部の <a> の手前）にある。span 全体は包まれていない。
+    const host = setup(
+      '<p><span class="marker">２</span><span data-law-node-id="n1">あい<a href="#x">第15条</a></span></p>',
+    );
+    const paragraph = elementOf(host, "p");
+    const owner = elementOf(host, "[data-law-node-id]");
+    const range = document.createRange();
+    range.setStart(paragraph, 0);
+    range.setEnd(owner, 1);
+
+    // 終点は本文要素の内側なので、丸めの規則で始点だけが 0 に寄る。
+    expect(resolveNodeTextRange(range)).toMatchObject({ start: 0, end: 2 });
   });
 
   it("2 つの本文要素にまたがる選択は undefined（丸めの対象にしない）", () => {
