@@ -10,7 +10,7 @@ import {
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { CircleCheck, Clipboard, Download, LinkIcon, ListTree } from "lucide-react";
 
-import type { LawNode, LawRevision } from "@/core/domain";
+import type { HighlightColor, LawNode, LawRevision } from "@/core/domain";
 import { buildLawArticleUrl, computeArticleFingerprint } from "@/core/domain";
 import { createEgovLawRepository } from "@/core/egov";
 import type { LawRepository } from "@/core/egov";
@@ -25,13 +25,21 @@ import {
 } from "@/core/storage";
 import type { SavedLawUseCase, StorageRepository } from "@/core/storage";
 import {
+  HighlightColorPopover,
   LawDocumentView,
   LawTableOfContents,
+  alignTexts,
   applyLawTextDisplayMode,
   articleAnchorId,
   buildArticleCopyText,
   buildLawTableOfContents,
+  caretPositionAt,
+  displayTextOf,
   findArticleNode,
+  findLawNodeElement,
+  isHighlightSupported,
+  resolveNodeTextRange,
+  toSourceOffset,
 } from "@/core/viewer";
 import type { LawTocItem } from "@/core/viewer";
 import { Button } from "@/shared/ui/button";
@@ -50,6 +58,8 @@ import { useRestoredReadingPosition } from "./scroll-restoration";
 import { useSavedViewerState } from "./law-viewer-hooks";
 import type { LawViewerDocument } from "./law-viewer-sample";
 import { useAnchorVerification } from "./use-anchor-verification";
+import { useArticleHighlights } from "./use-article-highlights";
+import { useHighlightPainting } from "./use-highlight-painting";
 import { useBaseDate } from "./use-base-date";
 import { useDisplayPreferences } from "./use-display-preferences";
 import { getCurrentStorageLimitBytes } from "./use-storage-limit";
@@ -210,6 +220,31 @@ export const LawViewerPageContent = ({
   }
 };
 
+interface HighlightPopoverState {
+  anchorRect: { top: number; bottom: number; left: number; width: number };
+  lawNodeId: string;
+  range: { start: number; end: number };
+  annotationId?: string;
+  color?: HighlightColor;
+}
+
+// 本文ノードから親をたどって、それが属する条の番号を求める。
+// targetKey の索引に条番号が要るため、ハイライト保存時に載せる。
+const findArticleNumberForNode = (nodes: LawNode[], lawNodeId: string): string | undefined => {
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  let current = nodeById.get(lawNodeId);
+
+  while (current !== undefined) {
+    if (current.type === "Article") {
+      return current.number;
+    }
+
+    current = current.parentId === undefined ? undefined : nodeById.get(current.parentId);
+  }
+
+  return undefined;
+};
+
 const LawViewerReadyState = ({
   activeArticleNumber: routeArticleNumber,
   lawId,
@@ -320,6 +355,155 @@ const LawViewerReadyState = ({
     pinnedRevisionId !== undefined && pinnedState?.revision.revisionId === pinnedRevisionId
       ? pinnedState
       : baseState;
+
+  // ハイライト（条文の着色）。CSS Custom Highlight API 非対応の環境では丸ごと無効にする。
+  const documentRef = useRef<HTMLDivElement>(null);
+  const isHighlightEnabled = useMemo(() => isHighlightSupported(), []);
+  const { annotations, highlight, remove } = useArticleHighlights({
+    lawId: state.law.lawId,
+    nodes: state.nodes,
+    repository: storageRepository,
+    enabled: isHighlightEnabled,
+  });
+  const paintedRangesRef = useHighlightPainting({
+    containerRef: documentRef,
+    nodes: state.nodes,
+    annotations,
+    enabled: isHighlightEnabled,
+  });
+  const [popover, setPopover] = useState<HighlightPopoverState | undefined>(undefined);
+
+  useEffect(() => {
+    if (!isHighlightEnabled) {
+      return;
+    }
+
+    const handleSelectionChange = () => {
+      const selection = window.getSelection();
+
+      // 潰れた選択は「選択が消えた」ではなく「まだ何も選ばれていない」として無視する。
+      // 再レンダーでの Text ノード差し替えやポップアップの操作でも選択は簡単に潰れるため、
+      // ここで閉じるとポップアップが押される前に消えてしまう。閉じる判断は Escape・
+      // 色の確定・どこにも当たらなかった pointerup に任せる。
+      if (selection === null || selection.rangeCount === 0 || selection.isCollapsed) {
+        return;
+      }
+
+      const range = selection.getRangeAt(0);
+      const resolved = resolveNodeTextRange(range);
+
+      if (resolved === undefined) {
+        setPopover(undefined);
+
+        return;
+      }
+
+      const rect = range.getBoundingClientRect();
+      setPopover({
+        anchorRect: { top: rect.top, bottom: rect.bottom, left: rect.left, width: rect.width },
+        lawNodeId: resolved.lawNodeId,
+        range: { start: resolved.start, end: resolved.end },
+      });
+    };
+
+    document.addEventListener("selectionchange", handleSelectionChange);
+
+    return () => {
+      document.removeEventListener("selectionchange", handleSelectionChange);
+    };
+  }, [isHighlightEnabled]);
+
+  useEffect(() => {
+    if (!isHighlightEnabled) {
+      return;
+    }
+
+    const handlePointerUp = (event: PointerEvent) => {
+      const selection = window.getSelection();
+
+      // テキスト選択中は選択側のポップアップを優先する。
+      if (selection !== null && !selection.isCollapsed) {
+        return;
+      }
+
+      const position = caretPositionAt(document, event.clientX, event.clientY);
+
+      if (position === undefined) {
+        return;
+      }
+
+      const hit = paintedRangesRef.current.find((painted) =>
+        painted.range.isPointInRange(position.node, position.offset),
+      );
+
+      if (hit === undefined) {
+        setPopover(undefined);
+
+        return;
+      }
+
+      const resolved = resolveNodeTextRange(hit.range);
+
+      if (resolved === undefined) {
+        return;
+      }
+
+      const rect = hit.range.getBoundingClientRect();
+      setPopover({
+        anchorRect: { top: rect.top, bottom: rect.bottom, left: rect.left, width: rect.width },
+        lawNodeId: resolved.lawNodeId,
+        range: { start: resolved.start, end: resolved.end },
+        annotationId: hit.annotationId,
+        color: hit.color,
+      });
+    };
+
+    document.addEventListener("pointerup", handlePointerUp);
+
+    return () => {
+      document.removeEventListener("pointerup", handlePointerUp);
+    };
+  }, [isHighlightEnabled, paintedRangesRef]);
+
+  // ポップアップが持つ範囲は表示文字列（display 空間）の座標なので、保存前に
+  // plainText 空間へ戻す。対応が取れないときは保存しない（本文全体を引用文にした
+  // アンカーを黙って書き込む事故を防ぐ）。
+  const highlightSelection = useCallback(
+    (target: HighlightPopoverState, color: HighlightColor) => {
+      const root = documentRef.current;
+      const node = state.nodes.find((candidate) => candidate.id === target.lawNodeId);
+
+      if (root === null || node === undefined) {
+        return;
+      }
+
+      const element = findLawNodeElement(root, node.id);
+
+      if (element === undefined) {
+        return;
+      }
+
+      const alignment = alignTexts(node.plainText, displayTextOf(element));
+      const start = toSourceOffset(alignment, target.range.start, "start");
+      const end = toSourceOffset(alignment, target.range.end, "end");
+
+      if (start === undefined || end === undefined || start >= end) {
+        return;
+      }
+
+      void highlight({
+        lawNodeId: target.lawNodeId,
+        range: { start, end },
+        color,
+        target: {
+          lawId: state.law.lawId,
+          revisionId: state.revision.revisionId,
+          article: findArticleNumberForNode(state.nodes, target.lawNodeId),
+        },
+      });
+    },
+    [highlight, state.law.lawId, state.nodes, state.revision.revisionId],
+  );
 
   const tocItems = useMemo(() => buildLawTableOfContents(state.nodes), [state.nodes]);
   const articleNumbers = useMemo(() => new Set(collectTocArticleNumbers(tocItems)), [tocItems]);
@@ -758,25 +942,27 @@ const LawViewerReadyState = ({
             </div>
           ) : null}
 
-          <LawDocumentView
-            activeArticleNumber={activeArticleNumber}
-            displayMode={displayMode}
-            law={state.law}
-            nodes={state.nodes}
-            onSelectArticle={navigateToArticle}
-            renderArticleActions={(article) => (
-              <ArticleQuickActions
-                article={article}
-                onCopy={(copyTarget) => {
-                  void handleArticleCopy(copyTarget);
-                }}
-                onUrlCopy={(copyTarget) => {
-                  void handleArticleUrlCopy(copyTarget);
-                }}
-              />
-            )}
-            revision={state.revision}
-          />
+          <div ref={documentRef}>
+            <LawDocumentView
+              activeArticleNumber={activeArticleNumber}
+              displayMode={displayMode}
+              law={state.law}
+              nodes={state.nodes}
+              onSelectArticle={navigateToArticle}
+              renderArticleActions={(article) => (
+                <ArticleQuickActions
+                  article={article}
+                  onCopy={(copyTarget) => {
+                    void handleArticleCopy(copyTarget);
+                  }}
+                  onUrlCopy={(copyTarget) => {
+                    void handleArticleUrlCopy(copyTarget);
+                  }}
+                />
+              )}
+              revision={state.revision}
+            />
+          </div>
 
           <p className="mt-6 border-t pt-4 text-xs leading-display text-muted-foreground">
             基準日 {formatBaseDateLabel(state)} ・ 施行日 {formatEffectiveDateLabel(state.revision)}{" "}
@@ -1077,6 +1263,33 @@ const LawViewerReadyState = ({
           storageRepository={storageRepository}
         />
       ) : null}
+      {popover === undefined ? null : (
+        <HighlightColorPopover
+          anchorRect={popover.anchorRect}
+          onDelete={
+            popover.annotationId === undefined
+              ? undefined
+              : () => {
+                  const annotationId = popover.annotationId;
+
+                  if (annotationId !== undefined) {
+                    void remove(annotationId);
+                  }
+
+                  setPopover(undefined);
+                }
+          }
+          onDismiss={() => {
+            setPopover(undefined);
+          }}
+          onSelect={(color) => {
+            highlightSelection(popover, color);
+            setPopover(undefined);
+            window.getSelection()?.removeAllRanges();
+          }}
+          selectedColor={popover.color}
+        />
+      )}
     </>
   );
 };

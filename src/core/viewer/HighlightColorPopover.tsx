@@ -73,6 +73,11 @@ export const HighlightColorPopover = ({
       ref={containerRef}
       aria-label="ハイライトの色"
       className="fixed z-50 flex items-center gap-1 rounded-md border border-border bg-popover p-1 shadow-md"
+      onMouseDown={(event) => {
+        // 既定動作のままだと、押した瞬間にブラウザが本文の選択を解除する。
+        // すると選択購読側がポップアップを閉じ、click が届く前に消えてしまう。
+        event.preventDefault();
+      }}
       role="group"
       style={{ top, left: anchorRect.left + anchorRect.width / 2, transform: "translateX(-50%)" }}
     >

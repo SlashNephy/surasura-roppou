@@ -23,6 +23,7 @@ import {
 import { createJsonFetchStub, fixedTestNow as now, lawDataFixture } from "@/test/fixtures/egov";
 import { PERSISTENCE_REQUESTED_STORAGE_KEY, createSavedLawUseCase } from "@/core/storage";
 import type { SavedLawDocument, StorageRepository } from "@/core/storage";
+import { createNodeTextRange } from "@/core/viewer";
 import { createMemoryStorageRepository, createSavedLawDocument } from "@/test/fixtures/storage";
 import { setupScrollMocks } from "@/test/scrollMocks";
 
@@ -1561,3 +1562,109 @@ const withClipboard = async (
     }
   }
 };
+
+// jsdom に無い CSS Custom Highlight API を最小限だけ生やす。
+// 実描画は検証できないので、UI が有効になり保存が走ることだけを見る。
+const installHighlightApiStub = () => {
+  vi.stubGlobal("CSS", { ...globalThis.CSS, highlights: new Map<string, unknown>() });
+  vi.stubGlobal(
+    "Highlight",
+    class {
+      ranges: Range[];
+
+      constructor(...ranges: Range[]) {
+        this.ranges = ranges;
+      }
+    },
+  );
+  Object.defineProperty(document, "caretPositionFromPoint", {
+    configurable: true,
+    value: () => null,
+  });
+  // jsdom はレイアウトを持たないため Range の矩形も無い。ポップアップの配置に
+  // 使うだけなので原点の矩形を返す。
+  Object.defineProperty(Range.prototype, "getBoundingClientRect", {
+    configurable: true,
+    value: () => ({ top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0, x: 0, y: 0 }),
+  });
+};
+
+const uninstallHighlightApiStub = () => {
+  Reflect.deleteProperty(document, "caretPositionFromPoint");
+  Reflect.deleteProperty(Range.prototype, "getBoundingClientRect");
+};
+
+// 本文要素の子は単一の Text ノードとは限らない（条文参照の <a>、ルビの
+// <ruby><rt> で複数ノードに割れる）ため、firstChild を Text ノード扱いしてはいけない。
+// createNodeTextRange は複数ノードを文書順に走査して表示文字列上の [start, end) を
+// DOM Range に変換してくれるので、テストの選択もそれを使って組み立てる。
+const selectTextIn = (element: HTMLElement, start: number, end: number) => {
+  const range = createNodeTextRange(element, start, end);
+
+  if (range === undefined) {
+    throw new Error("range is required");
+  }
+
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  document.dispatchEvent(new Event("selectionchange"));
+};
+
+const findLawBodyElement = async (): Promise<HTMLElement> => {
+  await screen.findByText(/私権は/u);
+  const element = document.querySelector<HTMLElement>("[data-law-node-id]");
+
+  if (element === null) {
+    throw new Error("law node element is required");
+  }
+
+  return element;
+};
+
+describe("条文のハイライト", () => {
+  afterEach(() => {
+    uninstallHighlightApiStub();
+  });
+
+  it("CSS Custom Highlight API 非対応ならハイライトを保存しない", async () => {
+    const storage = createMemoryStorageRepository();
+    renderLawViewerRoute(
+      "/laws/129AC0000000089",
+      createFixtureRepository().repository,
+      storage.repository,
+    );
+
+    const body = await findLawBodyElement();
+    selectTextIn(body, 0, 2);
+
+    await waitFor(() => {
+      expect(screen.queryByRole("group", { name: "ハイライトの色" })).not.toBeInTheDocument();
+    });
+
+    expect(storage.getAnnotations()).toEqual([]);
+  });
+
+  it("対応ブラウザでは選択して色を選ぶと注釈が保存される", async () => {
+    installHighlightApiStub();
+
+    const storage = createMemoryStorageRepository();
+    const { user } = renderLawViewerRoute(
+      "/laws/129AC0000000089",
+      createFixtureRepository().repository,
+      storage.repository,
+    );
+
+    const body = await findLawBodyElement();
+    selectTextIn(body, 0, 2);
+
+    await user.click(await screen.findByRole("button", { name: "黄でハイライト" }));
+
+    await waitFor(() => {
+      expect(storage.getAnnotations()).toHaveLength(1);
+    });
+
+    expect(storage.getAnnotations()[0]).toMatchObject({ color: "yellow" });
+    expect(storage.getAnnotations()[0].anchors[0].quote).toBe("私権");
+  });
+});

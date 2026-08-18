@@ -73,6 +73,17 @@ describe("HighlightColorPopover", () => {
     expect(onDelete).toHaveBeenCalled();
   });
 
+  it("押しても本文の選択が解除されないよう mousedown の既定動作を止める", () => {
+    render(
+      <HighlightColorPopover anchorRect={anchorRect} onDismiss={vi.fn()} onSelect={vi.fn()} />,
+    );
+
+    const event = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+    screen.getByRole("button", { name: "黄でハイライト" }).dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+  });
+
   it("Escape で onDismiss を呼ぶ", async () => {
     const onDismiss = vi.fn();
     const user = userEvent.setup();

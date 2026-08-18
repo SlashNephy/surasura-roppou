@@ -2304,6 +2304,19 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Consumes: Task 6, 8, 10, 11, 12 のすべて
 - Produces: なし（アプリの最終配線）
 
+**実装時の逸脱。** 参照実装のとおり `selectionchange` で無条件に
+`setPopover(undefined)` すると、選択直後に届く「潰れた（collapsed）selectionchange」で
+ポップアップが即座に閉じ、色を押せない（テストで再現。ブラウザでも再レンダーでの Text
+ノード差し替えやスウォッチの押下で選択は簡単に潰れる）。次の 2 点を変更した。
+
+1. `selectionchange` は **潰れた選択を無視する**（閉じる判断は Escape・色の確定・
+   どこにも当たらなかった pointerup に任せる）。
+2. `HighlightColorPopover` は `mousedown` の既定動作を打ち消し、押した瞬間に本文の
+   選択が解除されるのを防ぐ。
+
+また Task 10 の逸脱に伴い、`useHighlightPainting` の戻り値は `RefObject<PaintedRange[]>`
+なので、ヒットテストは `paintedRangesRef.current` を読む。
+
 - [ ] **Step 1: 失敗するテストを書く**
 
 `src/app/law-viewer-page.test.tsx` に追加する。既存の render ヘルパー（`createMemoryStorageRepository` を注入し `DisplayPreferencesProvider` で包む関数）と、本文が表示されるまで待つ既存の書き方に合わせること。
