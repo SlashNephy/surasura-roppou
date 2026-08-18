@@ -15,7 +15,18 @@ const nodeTypeByTag: Partial<Record<string, LawNodeType>> = {
   Article: "Article",
   Paragraph: "Paragraph",
   Item: "Item",
-  Subitem: "Subitem",
+  // 号の細分は階層ごとに Subitem1〜Subitem10 という別タグで表される。
+  // すらすら六法では階層の深さを木構造で表すため、いずれも Subitem 種別へ寄せる。
+  Subitem1: "Subitem",
+  Subitem2: "Subitem",
+  Subitem3: "Subitem",
+  Subitem4: "Subitem",
+  Subitem5: "Subitem",
+  Subitem6: "Subitem",
+  Subitem7: "Subitem",
+  Subitem8: "Subitem",
+  Subitem9: "Subitem",
+  Subitem10: "Subitem",
   SupplProvision: "SupplementaryProvision",
   AppdxTable: "AppdxTable",
   AppdxStyle: "AppdxStyle",
@@ -45,11 +56,14 @@ const titleTagByType = {
   Article: "ArticleTitle",
   Paragraph: "ParagraphNum",
   Item: "ItemTitle",
-  Subitem: "SubitemTitle",
   SupplementaryProvision: "SupplProvisionLabel",
   AppdxTable: "AppdxTableTitle",
   AppdxStyle: "AppdxStyleTitle",
-} satisfies Record<LawNodeType, string>;
+  // Subitem の見出しタグは階層番号を含む（Subitem1Title など）ため、タグ名から導く。
+} satisfies Record<Exclude<LawNodeType, "Subitem">, string>;
+
+const getTitleTag = (apiNode: EgovLawTextNode, nodeType: LawNodeType): string =>
+  nodeType === "Subitem" ? `${apiNode.tag}Title` : titleTagByType[nodeType];
 
 // 条見出しのかっこ書き（例: （基本原則））を持つノード種別だけ対象にする
 const captionTagByType: Partial<Record<LawNodeType, string>> = {
@@ -152,7 +166,7 @@ const getNodeNumber = (apiNode: EgovLawTextNode, nodeType: LawNodeType): string 
 };
 
 const getNodeTitle = (apiNode: EgovLawTextNode, nodeType: LawNodeType): string | undefined => {
-  const titleTag = titleTagByType[nodeType];
+  const titleTag = getTitleTag(apiNode, nodeType);
   const titleNode = apiNode.children.find(
     (child): child is EgovLawTextNode => typeof child !== "string" && child.tag === titleTag,
   );
@@ -296,7 +310,16 @@ const plainTextBlockTags = new Set([
   "Article",
   "Paragraph",
   "Item",
-  "Subitem",
+  "Subitem1",
+  "Subitem2",
+  "Subitem3",
+  "Subitem4",
+  "Subitem5",
+  "Subitem6",
+  "Subitem7",
+  "Subitem8",
+  "Subitem9",
+  "Subitem10",
   "SupplProvision",
   "AppdxTable",
   "AppdxStyle",
