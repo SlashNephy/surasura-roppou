@@ -61,6 +61,9 @@ const absorbSameColor = (
 //
 // 前提: existing は互いに重ならないこと（呼び出し側が保証する）。existing 同士が
 // 重なっていると、この関数の出力も重なりうる。
+// 前提: existing は単一の本文ノード内の範囲のみであること。座標は plainText 空間
+// （node.plainText 上のオフセット）であること。複数ノードにまたがる範囲を渡さないこと、
+// 座標を plainText 空間へ揃えることは、いずれも呼び出し側の責務である。
 export const applyHighlight = (
   existing: HighlightRange[],
   next: { start: number; end: number; color: HighlightColor },

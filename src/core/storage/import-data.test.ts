@@ -363,7 +363,6 @@ describe("parseSavedDataImport", () => {
           targetText: "私権",
           prefixText: "",
           suffixText: "",
-          note: "旧メモ",
           tags: [],
           createdAt: "2026-07-01T00:00:00.000Z",
           updatedAt: "2026-07-01T00:00:00.000Z",

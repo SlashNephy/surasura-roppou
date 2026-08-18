@@ -113,6 +113,13 @@ const pushSegment = (segments: AlignmentSegment[], segment: AlignmentSegment): v
   segments.push(segment);
 };
 
+// segments が空になるのは、共通の接頭辞・接尾辞が無く中間の LCS 計算も対象外
+// （source と display の共通文字が皆無、または source.length * display.length が
+// maxLcsCells を超える）だったとき。このとき toSourceOffset は劣化して
+// bias="start" なら常に 0、bias="end" なら常に sourceLength を返すため、
+// 「ノード全体が対応した」場合と見分けがつかない（非対称に、toDisplayRange は
+// 同じ状況で undefined を返す）。呼び出し側は `alignment.segments.length === 0` を
+// 見て、対応が取れなかった場合を自分で判別すること。
 export const alignTexts = (source: string, display: string): TextAlignment => {
   const prefix = commonPrefixLength(source, display);
   const suffix = Math.min(
@@ -149,6 +156,10 @@ export const alignTexts = (source: string, display: string): TextAlignment => {
 
 // display のオフセットを source のオフセットへ移す。
 // 対応の切れ目に落ちたときは bias に従って外側へ寄せ、置換された語をまるごと覆う。
+// alignment.segments が空（alignTexts のコメント参照）のときはループが一度も
+// 回らず、末尾処理により bias="start" は 0、bias="end" は sourceLength を返す。
+// これは「ノード全体が対応した」場合と同じ値になり区別できないので、
+// 呼び出し側が事前に `alignment.segments.length === 0` を確認する必要がある。
 export const toSourceOffset = (
   alignment: TextAlignment,
   displayOffset: number,

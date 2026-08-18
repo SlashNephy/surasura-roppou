@@ -1638,225 +1638,35 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
   - `resolveNodeTextRange(range: Range): NodeTextRange | undefined`
   - `findLawNodeElement(root: ParentNode, lawNodeId: string): HTMLElement | undefined`
 
-- [ ] **Step 1: LawNodeList の失敗するテストを書く**
+**実装済み。** 事前スキャンで「本文要素の子は単一 Text ノードである」という前提が
+実データと矛盾すると判明した（条文参照は `<a>` に、ルビ対象語は `<ruby><rt>` に
+分割されるため、本文要素の子は複数ノードに割れるのが普通）。ユーザー裁定により、
+「要素配下の Text ノードを文書順に走査し、その連結を表示文字列として扱う（`<rt>`
+は表示文字列から除外する）」方式に置き換えて実装されている。以下は概要のみ。
+実際の API・実装は `src/core/viewer/selection-range.ts` を、テストは
+`src/core/viewer/selection-range.test.ts` を参照すること。
 
-`src/core/viewer/LawNodeList.test.tsx` に追加する。既存ファイル冒頭のノード構築ヘルパー名に合わせること。
+- [x] **Step 1: LawNodeList に法令ノード ID を付与する**
 
-```tsx
-it("本文要素に data-law-node-id を付ける", () => {
-  const { container } = render(<LawNodeList nodes={nodes} />);
-  const marked = container.querySelectorAll("[data-law-node-id]");
+`src/core/viewer/LawNodeList.tsx` の本文を描画している 4 箇所に `data-law-node-id={node.id}` を付与済み。
 
-  expect(marked.length).toBeGreaterThan(0);
+- [x] **Step 2: selection-range を実装する**
 
-  for (const element of marked) {
-    // ハイライトの Range は単一の Text ノードを前提にするため、
-    // 本文要素の子は必ずテキスト 1 個であること。
-    expect(element.childNodes).toHaveLength(1);
-    expect(element.firstChild?.nodeType).toBe(Node.TEXT_NODE);
-  }
-});
-```
+`src/core/viewer/selection-range.ts` が次を export する:
 
-- [ ] **Step 2: テストが失敗することを確認する**
+- `lawNodeIdAttribute`, `NodeTextRange`
+- `collectDisplayTextNodes(owner: Element): Text[]` … 本文要素配下の表示対象 Text ノードを文書順に集める（`<rt>` 配下は除外）
+- `displayTextOf(owner: Element): string` … 上記の連結
+- `findLawNodeElement(root: ParentNode, lawNodeId: string): HTMLElement | undefined`
+- `resolveNodeTextRange(range: Range): NodeTextRange | undefined` … 選択を表示文字列上の範囲へ写す（複数の本文要素にまたがる選択、端点が外側に出る選択の丸め、ルビの読みへ落ちた端点の正規化などを扱う。詳細はソースのコメントを参照）
+- `createNodeTextRange(owner: Element, start: number, end: number): Range | undefined` … 表示文字列上の範囲から DOM Range を作る（Task 10 で使う）
 
-Run: `pnpm exec vitest run --dir src LawNodeList`
-Expected: FAIL（`marked.length` が 0）
-
-- [ ] **Step 3: LawNodeList に属性を付ける**
-
-`src/core/viewer/LawNodeList.tsx` の本文を描画している 4 箇所に `data-law-node-id={node.id}` を足す。
-
-1. Article が子を持たないときの `<p className="indent-[1em] font-law ...">{displayText}</p>`
-2. `isArticleParagraph` のときの `<span>{bodyText}</span>`
-3. それ以外の項・号の `<span className={cn("min-w-0 break-words", ...)}>{bodyText}</span>`
-4. 見出しノードの `<p className="font-law leading-display ...">{bodyText}</p>`
-
-例（2 番目）:
-
-```tsx
-<span data-law-node-id={node.id}>{bodyText}</span>
-```
-
-- [ ] **Step 4: テストが通ることを確認する**
-
-Run: `pnpm exec vitest run --dir src LawNodeList`
-Expected: PASS
-
-- [ ] **Step 5: selection-range の失敗するテストを書く**
-
-`src/core/viewer/selection-range.test.ts`:
-
-```ts
-import { afterEach, describe, expect, it } from "vitest";
-
-import { resolveNodeTextRange } from "./selection-range";
-
-afterEach(() => {
-  document.body.innerHTML = "";
-});
-
-const setup = (html: string): HTMLElement => {
-  const host = document.createElement("div");
-  host.innerHTML = html;
-  document.body.append(host);
-
-  return host;
-};
-
-const textNodeOf = (element: Element): Node => {
-  const text = element.firstChild;
-
-  if (text === null) {
-    throw new Error("text node is required");
-  }
-
-  return text;
-};
-
-const rangeIn = (element: Element, start: number, end: number): Range => {
-  const range = document.createRange();
-  range.setStart(textNodeOf(element), start);
-  range.setEnd(textNodeOf(element), end);
-
-  return range;
-};
-
-describe("resolveNodeTextRange", () => {
-  it("単一の本文要素に収まる選択を返す", () => {
-    const host = setup('<p><span data-law-node-id="n1">私権は、公共の福祉に適合する。</span></p>');
-    const span = host.querySelector("[data-law-node-id]");
-
-    expect(resolveNodeTextRange(rangeIn(span as Element, 4, 8))).toEqual({
-      lawNodeId: "n1",
-      start: 4,
-      end: 8,
-      text: "私権は、公共の福祉に適合する。",
-    });
-  });
-
-  it("折りたたみ選択は undefined", () => {
-    const host = setup('<p><span data-law-node-id="n1">あいうえお</span></p>');
-    const span = host.querySelector("[data-law-node-id]");
-
-    expect(resolveNodeTextRange(rangeIn(span as Element, 2, 2))).toBeUndefined();
-  });
-
-  it("本文要素の外側から始まる選択は undefined", () => {
-    const host = setup(
-      '<p><span class="marker">２</span><span data-law-node-id="n1">あいうえお</span></p>',
-    );
-    const marker = host.querySelector(".marker");
-    const span = host.querySelector("[data-law-node-id]");
-    const range = document.createRange();
-    range.setStart(textNodeOf(marker as Element), 0);
-    range.setEnd(textNodeOf(span as Element), 3);
-
-    expect(resolveNodeTextRange(range)).toBeUndefined();
-  });
-
-  it("2 つの本文要素にまたがる選択は undefined", () => {
-    const host = setup(
-      '<p><span data-law-node-id="n1">あいう</span><span data-law-node-id="n2">かきく</span></p>',
-    );
-    const [first, second] = [...host.querySelectorAll("[data-law-node-id]")];
-    const range = document.createRange();
-    range.setStart(textNodeOf(first), 0);
-    range.setEnd(textNodeOf(second), 2);
-
-    expect(resolveNodeTextRange(range)).toBeUndefined();
-  });
-});
-```
-
-- [ ] **Step 6: テストが失敗することを確認する**
-
-Run: `pnpm exec vitest run --dir src selection-range`
-Expected: FAIL
-
-- [ ] **Step 7: 実装する**
-
-`src/core/viewer/selection-range.ts`:
-
-```ts
-export const lawNodeIdAttribute = "data-law-node-id";
-
-export interface NodeTextRange {
-  lawNodeId: string;
-  start: number;
-  end: number;
-  // 要素に描画されている文字列。plainText への変換に使う。
-  text: string;
-}
-
-const findOwner = (node: Node | null): HTMLElement | undefined => {
-  const element = node instanceof Element ? node : (node?.parentElement ?? null);
-
-  if (element === null) {
-    return undefined;
-  }
-
-  return (element.closest(`[${lawNodeIdAttribute}]`) as HTMLElement | null) ?? undefined;
-};
-
-export const findLawNodeElement = (
-  root: ParentNode,
-  lawNodeId: string,
-): HTMLElement | undefined => {
-  for (const element of root.querySelectorAll(`[${lawNodeIdAttribute}]`)) {
-    if (element instanceof HTMLElement && element.dataset.lawNodeId === lawNodeId) {
-      return element;
-    }
-  }
-
-  return undefined;
-};
-
-// 選択が単一の本文要素のテキストノードに収まるときだけ範囲を返す。
-// 項番号の marker span や複数ノードにまたがる選択は扱わない（v1 のスコープ）。
-export const resolveNodeTextRange = (range: Range): NodeTextRange | undefined => {
-  if (range.collapsed) {
-    return undefined;
-  }
-
-  const owner = findOwner(range.startContainer);
-
-  if (owner === undefined || owner !== findOwner(range.endContainer)) {
-    return undefined;
-  }
-
-  const text = owner.firstChild;
-
-  if (
-    text === null ||
-    text.nodeType !== Node.TEXT_NODE ||
-    range.startContainer !== text ||
-    range.endContainer !== text
-  ) {
-    return undefined;
-  }
-
-  const lawNodeId = owner.dataset.lawNodeId;
-
-  if (lawNodeId === undefined) {
-    return undefined;
-  }
-
-  return {
-    lawNodeId,
-    start: range.startOffset,
-    end: range.endOffset,
-    text: text.textContent ?? "",
-  };
-};
-```
-
-- [ ] **Step 8: テストが通ることを確認する**
+- [x] **Step 3: テストが通ることを確認する**
 
 Run: `pnpm exec vitest run --dir src "selection-range|LawNodeList"`
-Expected: PASS
+Result: PASS
 
-- [ ] **Step 9: コミット**
+- [x] **Step 4: コミット**
 
 ```bash
 git add src/core/viewer/LawNodeList.tsx src/core/viewer/LawNodeList.test.tsx src/core/viewer/selection-range.ts src/core/viewer/selection-range.test.ts
@@ -2219,7 +2029,14 @@ export { applyHighlight } from "./highlight-merge";
 export type { CreatedHighlightRange, HighlightRange } from "./highlight-merge";
 export { isHighlightSupported } from "./highlight-support";
 export { caretPositionAt } from "./caret-position";
-export { findLawNodeElement, lawNodeIdAttribute, resolveNodeTextRange } from "./selection-range";
+export {
+  collectDisplayTextNodes,
+  createNodeTextRange,
+  displayTextOf,
+  findLawNodeElement,
+  lawNodeIdAttribute,
+  resolveNodeTextRange,
+} from "./selection-range";
 export type { NodeTextRange } from "./selection-range";
 export { clearHighlights, highlightNameByColor, paintHighlights } from "./highlight-registry";
 export type { HighlightRegistryLike, PaintedRange } from "./highlight-registry";
@@ -2236,6 +2053,8 @@ import type { Annotation, LawNode } from "@/core/domain";
 import {
   alignTexts,
   clearHighlights,
+  createNodeTextRange,
+  displayTextOf,
   findAnchorNode,
   findLawNodeElement,
   type HighlightRegistryLike,
@@ -2257,6 +2076,13 @@ interface HighlightPaintingOptions {
 
 // 保存された引用文アンカーを、いま描画されている DOM 上の Range に変換する。
 // 表示文字列と plainText の差はアラインメントで吸収する。
+//
+// 本文要素の子は単一の Text ノードとは限らない（条文参照は <a>、ルビ対象語は
+// <ruby><rt> に分割される）ため、`element.firstChild` を Text ノード扱いしては
+// いけない。表示文字列の取得は `displayTextOf(element)`、表示文字列上の範囲から
+// DOM Range を作るのは `createNodeTextRange(element, start, end)` を使う
+// （どちらも `src/core/viewer/selection-range.ts` が複数ノードを文書順に走査して
+// 吸収してくれる。詳細は同ファイルのコメントを参照）。
 export const buildPaintedRanges = (
   root: ParentNode,
   nodes: LawNode[],
@@ -2279,9 +2105,8 @@ export const buildPaintedRanges = (
       }
 
       const element = findLawNodeElement(root, node.id);
-      const textNode = element?.firstChild;
 
-      if (textNode === null || textNode === undefined) {
+      if (element === undefined) {
         continue;
       }
 
@@ -2291,7 +2116,7 @@ export const buildPaintedRanges = (
         continue;
       }
 
-      const displayText = textNode.textContent ?? "";
+      const displayText = displayTextOf(element);
       const displayRange = toDisplayRange(
         alignTexts(node.plainText, displayText),
         sourceRange.start,
@@ -2302,9 +2127,15 @@ export const buildPaintedRanges = (
         continue;
       }
 
-      const range = document.createRange();
-      range.setStart(textNode, Math.min(displayRange.start, displayText.length));
-      range.setEnd(textNode, Math.min(displayRange.end, displayText.length));
+      // alignment.segments.length === 0 のときは start=0 / end=displayText.length に
+      // 潰れる可能性がある（本文全体が塗られる事故）。Task 12 側で保存を止めるので
+      // ここでは createNodeTextRange の失敗（undefined）だけ弾けばよい。
+      const range = createNodeTextRange(element, displayRange.start, displayRange.end);
+
+      if (range === undefined) {
+        continue;
+      }
+
       painted.push({ annotationId: annotation.id, color, range });
     }
   }
@@ -2653,6 +2484,16 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Produces:
   - `buildHighlightMutations(input): { puts: Annotation[]; deletes: string[] }`
   - `useArticleHighlights({ lawId, nodes, repository, enabled }): { annotations; highlight; remove }`
+
+**注意（Task 13 の呼び出し側向け）**: `buildHighlightMutations` の `range` は
+`node.plainText` 空間（source 空間）の座標を期待する。DOM 選択（`resolveNodeTextRange`
+が返す表示文字列＝display 空間の座標）から渡すときは、呼び出し側が
+`alignTexts(node.plainText, displayText)` → `toSourceOffset` で変換すること。
+`alignTexts` が返す `segments` が空になる条件（`maxLcsCells` 超過、共通文字が無い）
+では `toSourceOffset` は `bias` に応じて 0 または `sourceLength` を返し、
+「ノード全体が対応した」場合と区別がつかない。呼び出し側は変換後に
+`alignment.segments.length === 0` を確認し、真なら位置が対応づかなかったとみなして
+アンカーを保存しないこと（本文全体を `quote` にしたアンカーを黙って保存する事故を防ぐ）。
 
 - [ ] **Step 1: 失敗するテストを書く**
 
@@ -3019,7 +2860,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 `src/app/law-viewer-page.test.tsx` に追加する。既存の render ヘルパー（`createMemoryStorageRepository` を注入し `DisplayPreferencesProvider` で包む関数）と、本文が表示されるまで待つ既存の書き方に合わせること。
 
-補助関数はテストファイル内に置く。
+補助関数はテストファイル内に置く。`createNodeTextRange` を `@/core/viewer` から import すること。
 
 ```tsx
 // jsdom に無い CSS Custom Highlight API を最小限だけ生やす。
@@ -3042,16 +2883,18 @@ const installHighlightApiStub = () => {
   });
 };
 
+// 本文要素の子は単一の Text ノードとは限らない（条文参照の <a>、ルビの
+// <ruby><rt> で複数ノードに割れる）ため、firstChild を Text ノード扱いしてはいけない。
+// `createNodeTextRange`（`@/core/viewer`、実体は selection-range.ts）は複数ノードを
+// 文書順に走査して表示文字列上の [start, end) を DOM Range に変換してくれるので、
+// テストの選択もそれを使って組み立てる。
 const selectTextIn = (element: HTMLElement, start: number, end: number) => {
-  const text = element.firstChild;
+  const range = createNodeTextRange(element, start, end);
 
-  if (text === null) {
-    throw new Error("text node is required");
+  if (range === undefined) {
+    throw new Error("range is required");
   }
 
-  const range = document.createRange();
-  range.setStart(text, start);
-  range.setEnd(text, end);
   const selection = window.getSelection();
   selection?.removeAllRanges();
   selection?.addRange(range);
@@ -3163,6 +3006,12 @@ const findArticleNumberForNode = (nodes: LawNode[], lawNodeId: string): string |
 ```
 
 - [ ] **Step 5: 選択の購読を書く**
+
+**注意**: 以下の `resolved.start` / `resolved.end`（`resolveNodeTextRange` の戻り値）は
+表示文字列＝display 空間の座標である。Step 7 の `onSelect` から `highlight()` を呼ぶ
+直前で、対象ノードの `node.plainText` を使い `alignTexts` → `toSourceOffset` で
+plainText 空間へ変換してから渡すこと（Task 12 の「注意」参照）。変換前の
+display 空間の座標をそのまま `buildHighlightMutations` の `range` に渡さないこと。
 
 ```tsx
 useEffect(() => {

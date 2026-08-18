@@ -37,8 +37,10 @@ export const findLawNodeElement = (
   root: ParentNode,
   lawNodeId: string,
 ): HTMLElement | undefined => {
-  // 法令ノード ID は `article:16/paragraph:1` のように記号を含むため、
-  // 属性値セレクタでの照合を避けて走査で突き合わせる。
+  // `[${lawNodeIdAttribute}="${lawNodeId}"]` の属性値セレクタでも記号自体は
+  // クォートすれば照合できるが、値のエスケープに使う CSS.escape はテスト環境の
+  // jsdom（29.1.1 時点）が window.CSS を実装しておらず未定義になる。
+  // テストを壊さずに済む走査で突き合わせる。
   for (const element of root.querySelectorAll(`[${lawNodeIdAttribute}]`)) {
     if (element instanceof HTMLElement && element.dataset.lawNodeId === lawNodeId) {
       return element;
