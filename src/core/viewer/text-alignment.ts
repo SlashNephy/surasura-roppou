@@ -160,7 +160,11 @@ export const toSourceOffset = (
   for (const segment of alignment.segments) {
     if (clamped < segment.displayStart) {
       // 区間と区間の隙間。start は手前の区間末尾へ、end は次の区間先頭へ寄せる。
-      return bias === "start" ? previousSourceEnd : segment.sourceStart;
+      // どちらも source 内の位置だが、念のため sourceLength で頭打ちにする。
+      return Math.min(
+        alignment.sourceLength,
+        bias === "start" ? previousSourceEnd : segment.sourceStart,
+      );
     }
 
     const segmentDisplayEnd = segment.displayStart + segment.length;
@@ -171,36 +175,61 @@ export const toSourceOffset = (
       return segment.sourceStart + (clamped - segment.displayStart);
     }
 
-    previousSourceEnd = segmentDisplayEnd;
+    previousSourceEnd = segment.sourceStart + segment.length;
   }
 
   return Math.min(alignment.sourceLength, previousSourceEnd);
 };
 
+// 範囲の始端を display へ移す。どの区間にも属さない位置（置換の内側）は
+// 手前の区間の display 末尾まで左へ広げ、置換された部分を取りこぼさないようにする。
+const toDisplayStart = (alignment: TextAlignment, sourceOffset: number): number => {
+  let previousDisplayEnd = 0;
+
+  for (const segment of alignment.segments) {
+    if (sourceOffset < segment.sourceStart) {
+      return previousDisplayEnd;
+    }
+
+    if (sourceOffset < segment.sourceStart + segment.length) {
+      return segment.displayStart + (sourceOffset - segment.sourceStart);
+    }
+
+    previousDisplayEnd = segment.displayStart + segment.length;
+  }
+
+  return previousDisplayEnd;
+};
+
+// 範囲の終端を display へ移す。区間の終端ちょうどは対応が取れているのでそのまま像を返し、
+// 置換の内側に落ちたときだけ次の区間の display 先頭（末尾の置換なら display 末尾）まで広げる。
+const toDisplayEnd = (alignment: TextAlignment, sourceOffset: number): number => {
+  for (const segment of alignment.segments) {
+    if (sourceOffset <= segment.sourceStart) {
+      return segment.displayStart;
+    }
+
+    if (sourceOffset <= segment.sourceStart + segment.length) {
+      return segment.displayStart + (sourceOffset - segment.sourceStart);
+    }
+  }
+
+  return alignment.displayLength;
+};
+
 // source の範囲を display の範囲へ移す。置換をまたぐ場合は置換全体を覆うよう広げる。
+// 対応区間が皆無なとき、および display 側で幅を持たない（削除された）範囲は undefined。
 export const toDisplayRange = (
   alignment: TextAlignment,
   sourceStart: number,
   sourceEnd: number,
 ): { start: number; end: number } | undefined => {
-  let start: number | undefined;
-  let end: number | undefined;
-
-  for (const segment of alignment.segments) {
-    const segmentSourceEnd = segment.sourceStart + segment.length;
-
-    if (segmentSourceEnd <= sourceStart || segment.sourceStart >= sourceEnd) {
-      continue;
-    }
-
-    const overlapStart = Math.max(segment.sourceStart, sourceStart);
-    const overlapEnd = Math.min(segmentSourceEnd, sourceEnd);
-    const displayStart = segment.displayStart + (overlapStart - segment.sourceStart);
-    const displayEnd = segment.displayStart + (overlapEnd - segment.sourceStart);
-
-    start = start === undefined ? displayStart : Math.min(start, displayStart);
-    end = end === undefined ? displayEnd : Math.max(end, displayEnd);
+  if (alignment.segments.length === 0) {
+    return undefined;
   }
 
-  return start === undefined || end === undefined || start >= end ? undefined : { start, end };
+  const start = toDisplayStart(alignment, sourceStart);
+  const end = toDisplayEnd(alignment, sourceEnd);
+
+  return start >= end ? undefined : { start, end };
 };
