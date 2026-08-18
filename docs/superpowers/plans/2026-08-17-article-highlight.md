@@ -2317,6 +2317,16 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 また Task 10 の逸脱に伴い、`useHighlightPainting` の戻り値は `RefObject<PaintedRange[]>`
 なので、ヒットテストは `paintedRangesRef.current` を読む。
 
+**Task 14 の実画面検証で判明した追加の修正。** 単体テストでは出ない不具合が 2 件あった。
+
+3. **ポップアップは選択の確定時（`pointerup` / Shift + キーの `keyup`）に出す。**
+   `selectionchange` で出すと、ドラッグの途中でポップアップが現れ、それに伴う再レンダーと
+   フォーカス移動でドラッグ自体が途切れ、途中までしか選べなくなる（Chromium で再現）。
+4. **ポップアップ自身の `pointerup` は無視する**（`data-highlight-popover` で判定）。
+   無視しないと、色を押した `click` が届く前にポップアップを閉じてしまい保存されない。
+   併せて、初期フォーカスはキーボード操作で開いたときだけに限定した（ポインタ操作で
+   フォーカスを奪うと本文の選択が解除される）。
+
 - [ ] **Step 1: 失敗するテストを書く**
 
 `src/app/law-viewer-page.test.tsx` に追加する。既存の render ヘルパー（`createMemoryStorageRepository` を注入し `DisplayPreferencesProvider` で包む関数）と、本文が表示されるまで待つ既存の書き方に合わせること。

@@ -4,6 +4,10 @@ import type { HighlightColor } from "@/core/domain";
 import { highlightColors } from "@/core/domain";
 import { cn } from "@/shared/utils/cn";
 
+// document で購読しているハンドラが、ポップアップ自身の操作を「外側の操作」と
+// 取り違えないための目印。
+export const highlightPopoverAttribute = "data-highlight-popover";
+
 // 色見本は色だけで意味を伝えない。読み上げ用の名前を必ず持たせる。
 const labelByColor: Record<HighlightColor, string> = {
   yellow: "黄",
@@ -28,6 +32,8 @@ interface AnchorRect {
 
 interface HighlightColorPopoverProps {
   anchorRect: AnchorRect;
+  // キーボードで開いたときだけ true。ポインタ操作でフォーカスを奪うと本文の選択が消える。
+  autoFocus?: boolean;
   selectedColor?: HighlightColor;
   onSelect: (color: HighlightColor) => void;
   onDelete?: () => void;
@@ -39,6 +45,7 @@ const popoverGap = 8;
 
 export const HighlightColorPopover = ({
   anchorRect,
+  autoFocus = false,
   onDelete,
   onDismiss,
   onSelect,
@@ -61,8 +68,10 @@ export const HighlightColorPopover = ({
   }, [onDismiss]);
 
   useEffect(() => {
-    containerRef.current?.querySelector("button")?.focus();
-  }, []);
+    if (autoFocus) {
+      containerRef.current?.querySelector("button")?.focus();
+    }
+  }, [autoFocus]);
 
   // 選択範囲の直上に出す。画面上端に近ければ直下へ回り込ませる。
   const showsBelow = anchorRect.top < popoverHeight + popoverGap;
@@ -71,6 +80,7 @@ export const HighlightColorPopover = ({
   return (
     <div
       ref={containerRef}
+      {...{ [highlightPopoverAttribute]: "" }}
       aria-label="ハイライトの色"
       className="fixed z-50 flex items-center gap-1 rounded-md border border-border bg-popover p-1 shadow-md"
       onMouseDown={(event) => {

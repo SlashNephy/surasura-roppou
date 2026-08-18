@@ -37,6 +37,7 @@ import {
   displayTextOf,
   findArticleNode,
   findLawNodeElement,
+  highlightPopoverAttribute,
   isHighlightSupported,
   resolveNodeTextRange,
   toSourceOffset,
@@ -226,6 +227,9 @@ interface HighlightPopoverState {
   range: { start: number; end: number };
   annotationId?: string;
   color?: HighlightColor;
+  // キーボードで選択したときだけ最初の色へフォーカスを移す。ポインタ操作で移すと
+  // 本文の選択が解除され、続けて選び直せなくなる。
+  autoFocus?: boolean;
 }
 
 // 本文ノードから親をたどって、それが属する条の番号を求める。
@@ -378,58 +382,36 @@ const LawViewerReadyState = ({
       return;
     }
 
-    const handleSelectionChange = () => {
+    // 生きている選択からポップアップの状態を作る。選択が無ければ undefined。
+    const popoverFromSelection = (): HighlightPopoverState | undefined => {
       const selection = window.getSelection();
 
-      // 潰れた選択は「選択が消えた」ではなく「まだ何も選ばれていない」として無視する。
-      // 再レンダーでの Text ノード差し替えやポップアップの操作でも選択は簡単に潰れるため、
-      // ここで閉じるとポップアップが押される前に消えてしまう。閉じる判断は Escape・
-      // 色の確定・どこにも当たらなかった pointerup に任せる。
       if (selection === null || selection.rangeCount === 0 || selection.isCollapsed) {
-        return;
+        return undefined;
       }
 
       const range = selection.getRangeAt(0);
       const resolved = resolveNodeTextRange(range);
 
       if (resolved === undefined) {
-        setPopover(undefined);
-
-        return;
+        return undefined;
       }
 
       const rect = range.getBoundingClientRect();
-      setPopover({
+
+      return {
         anchorRect: { top: rect.top, bottom: rect.bottom, left: rect.left, width: rect.width },
         lawNodeId: resolved.lawNodeId,
         range: { start: resolved.start, end: resolved.end },
-      });
+      };
     };
 
-    document.addEventListener("selectionchange", handleSelectionChange);
-
-    return () => {
-      document.removeEventListener("selectionchange", handleSelectionChange);
-    };
-  }, [isHighlightEnabled]);
-
-  useEffect(() => {
-    if (!isHighlightEnabled) {
-      return;
-    }
-
-    const handlePointerUp = (event: PointerEvent) => {
-      const selection = window.getSelection();
-
-      // テキスト選択中は選択側のポップアップを優先する。
-      if (selection !== null && !selection.isCollapsed) {
-        return;
-      }
-
-      const position = caretPositionAt(document, event.clientX, event.clientY);
+    // 座標に既存のハイライトがあれば、その色と注釈 id を載せたポップアップを作る。
+    const popoverFromPoint = (x: number, y: number): HighlightPopoverState | undefined => {
+      const position = caretPositionAt(document, x, y);
 
       if (position === undefined) {
-        return;
+        return undefined;
       }
 
       const hit = paintedRangesRef.current.find((painted) =>
@@ -437,31 +419,61 @@ const LawViewerReadyState = ({
       );
 
       if (hit === undefined) {
-        setPopover(undefined);
-
-        return;
+        return undefined;
       }
 
       const resolved = resolveNodeTextRange(hit.range);
 
       if (resolved === undefined) {
-        return;
+        return undefined;
       }
 
       const rect = hit.range.getBoundingClientRect();
-      setPopover({
+
+      return {
         anchorRect: { top: rect.top, bottom: rect.bottom, left: rect.left, width: rect.width },
         lawNodeId: resolved.lawNodeId,
         range: { start: resolved.start, end: resolved.end },
         annotationId: hit.annotationId,
         color: hit.color,
-      });
+      };
+    };
+
+    // 選択の途中（selectionchange）ではなく、選択が確定してから出す。
+    // ドラッグ中に出すと、ポップアップの出現に伴う再レンダーとフォーカス移動で
+    // ドラッグそのものが途切れ、途中までしか選べなくなる。
+    const handlePointerUp = (event: PointerEvent) => {
+      // ポップアップ自身の操作は無視する。ここで閉じると、色を押した click が届く前に
+      // ボタンごと消えてしまう。
+      if (
+        event.target instanceof Element &&
+        event.target.closest(`[${highlightPopoverAttribute}]`) !== null
+      ) {
+        return;
+      }
+
+      setPopover(popoverFromSelection() ?? popoverFromPoint(event.clientX, event.clientY));
+    };
+
+    // キーボード操作（Shift + 矢印）での選択にも追随する。
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (!event.shiftKey) {
+        return;
+      }
+
+      const next = popoverFromSelection();
+
+      if (next !== undefined) {
+        setPopover({ ...next, autoFocus: true });
+      }
     };
 
     document.addEventListener("pointerup", handlePointerUp);
+    document.addEventListener("keyup", handleKeyUp);
 
     return () => {
       document.removeEventListener("pointerup", handlePointerUp);
+      document.removeEventListener("keyup", handleKeyUp);
     };
   }, [isHighlightEnabled, paintedRangesRef]);
 
@@ -1266,6 +1278,7 @@ const LawViewerReadyState = ({
       {popover === undefined ? null : (
         <HighlightColorPopover
           anchorRect={popover.anchorRect}
+          autoFocus={popover.autoFocus}
           onDelete={
             popover.annotationId === undefined
               ? undefined

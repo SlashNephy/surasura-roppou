@@ -1608,7 +1608,8 @@ const selectTextIn = (element: HTMLElement, start: number, end: number) => {
   const selection = window.getSelection();
   selection?.removeAllRanges();
   selection?.addRange(range);
-  document.dispatchEvent(new Event("selectionchange"));
+  // ポップアップは選択の途中ではなく確定時（pointerup）に出る。
+  document.dispatchEvent(new Event("pointerup"));
 };
 
 const findLawBodyElement = async (): Promise<HTMLElement> => {
