@@ -7,6 +7,7 @@ import { gyoseishoshiSubjects, isLawInSubject } from "@/core/study";
 import { formatByteSize } from "@/shared/utils/bytes";
 import { formatIsoDateLabel } from "@/shared/utils/dates";
 
+import { useDocumentTitle } from "./document-title";
 import { useSavedLaws } from "./use-saved-laws";
 import { useStudyDashboard } from "./use-study-dashboard";
 
@@ -17,6 +18,7 @@ export const LawsPage = ({
 }: {
   storageRepository?: StorageRepository;
 }) => {
+  useDocumentTitle("法令を探す");
   const { savedLaws, savedLawsError } = useSavedLaws(storageRepository);
 
   return (
@@ -90,6 +92,7 @@ const formatSavedLawFetchedDate = (savedLaw: SavedLawSummary): string =>
 export const StudyPage = ({
   storageRepository,
 }: { storageRepository?: StorageRepository } = {}) => {
+  useDocumentTitle("復習");
   const { dashboard, error } = useStudyDashboard(storageRepository);
 
   return (

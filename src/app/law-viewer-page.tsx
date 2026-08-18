@@ -54,6 +54,7 @@ import { AnchorCompareDialog } from "./AnchorCompareDialog";
 import { QuizGenerateDialog } from "./QuizGenerateDialog";
 import { StudyCardCreateDialog } from "./StudyCardCreateDialog";
 import { AnchorDriftBadge } from "./AnchorDriftBadge";
+import { useDocumentTitle } from "./document-title";
 import { loadLawViewerDocument } from "./law-viewer-loader";
 import { useRestoredReadingPosition } from "./scroll-restoration";
 import { useSavedViewerState } from "./law-viewer-hooks";
@@ -126,6 +127,8 @@ const LawViewerPageLoader = ({
   storageRepository: StorageRepository;
 }) => {
   const [state, setState] = useState<LawViewerState>({ status: "loading" });
+  // 本文を取得できるまでは中間状態の文言を出さず、アプリ名だけを表示する。
+  useDocumentTitle(state.status === "ready" ? state.law.title : undefined);
   // 上限は useMemo の依存に入れない。依存に入れると上限変更のたびに参照が変わり、
   // 下の読み込み effect（deps に savedLawUseCase を持つ）まで再実行されてしまう
   // （e-Gov への不要な再取得を誘発する）。getStorageLimitBytes は呼ばれるたびに

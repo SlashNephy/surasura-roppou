@@ -11,6 +11,7 @@ import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Skeleton } from "@/shared/ui/skeleton";
 
+import { useDocumentTitle } from "./document-title";
 import { studyCardTypeLabels } from "./study-card-form";
 import { loadLawViewerDocument } from "./law-viewer-loader";
 import type { LawViewerState } from "./law-viewer-page";
@@ -66,6 +67,8 @@ export const StudyReviewPage = ({
   // 本番ルーターは createAppRouter() を引数なしで呼ぶため、DI がないときは既定のリポジトリへフォールバックする。
   storageRepository = defaultStorageRepository,
 }: StudyReviewPageProps = {}) => {
+  const title = mode === "new" ? "新しく覚える" : "今日の復習";
+  useDocumentTitle(title);
   const [state, setState] = useState<SessionState>({ status: "loading" });
   // 読み込み失敗時の「再試行」で加算し、読み込み effect を再実行させる。
   const [reloadToken, setReloadToken] = useState(0);
@@ -340,8 +343,6 @@ export const StudyReviewPage = ({
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [gradingRef, gradeCard, revealAnswer, state]);
-
-  const title = mode === "new" ? "新しく覚える" : "今日の復習";
 
   return (
     <section className="mx-auto grid w-full max-w-2xl gap-4 px-5 py-10">

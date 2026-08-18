@@ -18,6 +18,7 @@ import { Select } from "@/shared/ui/select";
 import { Skeleton } from "@/shared/ui/skeleton";
 import { Textarea } from "@/shared/ui/textarea";
 
+import { useDocumentTitle } from "./document-title";
 import { parseTagsInput, studyCardTypeLabels } from "./study-card-form";
 
 const defaultStorageRepository = createStorageRepository();
@@ -36,6 +37,7 @@ interface StudyCardDetailPageProps {
 export const StudyCardDetailPage = ({
   storageRepository = defaultStorageRepository,
 }: StudyCardDetailPageProps = {}) => {
+  useDocumentTitle("条文カード");
   const { cardId } = useParams({ from: "/study/cards/$cardId" });
   const navigate = useNavigate();
   const [state, setState] = useState<DetailState>({ status: "loading" });

@@ -15,6 +15,7 @@ import type { StorageRepository } from "@/core/storage";
 import { generateStorageId } from "@/core/storage";
 import { Button } from "@/shared/ui/button";
 
+import { useDocumentTitle } from "./document-title";
 import { useCamera } from "./use-camera";
 import { OcrPanel } from "./ocr-panel";
 import { OcrReferenceResults } from "./OcrReferenceResults";
@@ -72,6 +73,8 @@ export const ScannerPage = ({
   onOpenCandidate,
   onAddToReview,
 }: ScannerPageProps) => {
+  // 見出しはカメラの状態で 3 通りに変わるため、タイトルはナビゲーションのラベルに合わせて固定する。
+  useDocumentTitle("撮る");
   // Hook は無条件で呼ぶ必要があるため、prop が渡されても useOcr() 自体は常に呼ぶ。
   const ocrDefault = useOcr();
   const ocr = ocrProp ?? ocrDefault;

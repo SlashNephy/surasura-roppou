@@ -779,6 +779,22 @@ describe("parseTags", () => {
   });
 });
 
+describe("saved collection document title", () => {
+  it("uses the collection title once the collection is loaded", async () => {
+    document.title = "未設定";
+    const storage = createMemoryStorageRepository().repository;
+    const bookmark = createBookmark();
+    await storage.putBookmark(bookmark);
+    await storage.putCollection(createCollection(bookmark.id));
+
+    renderSavedRoute("/saved/collections/collection-1", storage);
+
+    await waitFor(() => {
+      expect(document.title).toBe("民法総則 | すらすら六法");
+    });
+  });
+});
+
 const renderSavedRoute = (
   path: string,
   storageRepository = createMemoryStorageRepository().repository,

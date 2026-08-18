@@ -25,6 +25,7 @@ import { Input } from "@/shared/ui/input";
 import { Select } from "@/shared/ui/select";
 import { formatByteSize } from "@/shared/utils/bytes";
 
+import { useDocumentTitle } from "./document-title";
 import { useBaseDate } from "./use-base-date";
 import { useDisplayPreferences } from "./use-display-preferences";
 import { useStorageLimit } from "./use-storage-limit";
@@ -379,6 +380,7 @@ const OfflineStorageSettingsGroup = () => {
 };
 
 export const SettingsPage = () => {
+  useDocumentTitle("設定");
   const { baseDate, setBaseDate } = useBaseDate();
   const baseDateInputId = useId();
   const baseDateErrorId = useId();

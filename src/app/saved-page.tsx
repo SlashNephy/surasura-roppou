@@ -34,6 +34,7 @@ import { Input } from "@/shared/ui/input";
 import { formatByteSize } from "@/shared/utils/bytes";
 import { formatIsoDateLabel } from "@/shared/utils/dates";
 
+import { useDocumentTitle } from "./document-title";
 import { downloadTextFile } from "./download-text-file";
 import { parseTags } from "./saved-page-utils";
 import { getCurrentStorageLimitBytes, useStorageLimit } from "./use-storage-limit";
@@ -71,6 +72,7 @@ interface SavedPageData {
 }
 
 export const SavedPage = ({ storageRepository = defaultStorageRepository }: SavedPageProps) => {
+  useDocumentTitle("保存リスト");
   const [savedLaws, setSavedLaws] = useState<SavedLawSummary[]>([]);
   const [pinnedAtByLawId, setPinnedAtByLawId] = useState<Map<string, string>>(
     new Map<string, string>(),
@@ -360,6 +362,8 @@ export const SavedCollectionPage = ({
       }),
     [storageRepository],
   );
+  // 読み込み中とコレクション未検出のときは、実タイトルが確定していないのでアプリ名だけを出す。
+  useDocumentTitle(state.status === "loaded" ? state.collection?.title : undefined);
 
   useEffect(() => {
     let isCurrent = true;
