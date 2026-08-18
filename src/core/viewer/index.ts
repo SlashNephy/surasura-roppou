@@ -36,3 +36,4 @@ export {
 export type { NodeTextRange } from "./selection-range";
 export { clearHighlights, highlightNameByColor, paintHighlights } from "./highlight-registry";
 export type { HighlightRegistryLike, PaintedRange } from "./highlight-registry";
+export { HighlightColorPopover } from "./HighlightColorPopover";
