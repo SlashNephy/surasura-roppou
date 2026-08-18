@@ -1407,8 +1407,7 @@ describe("StorageRepository", () => {
     const repository = createStorageRepository({ databaseName, now: fixedNow });
 
     const target = { lawId: "322AC0000000125", article: "1", path: "Article:1" };
-
-    await repository.putAnnotation({
+    const annotation = {
       id: "h1",
       target,
       anchors: [{ target, quote: "私権", prefix: "", suffix: "は、" }],
@@ -1416,9 +1415,15 @@ describe("StorageRepository", () => {
       tags: [],
       createdAt: "2026-08-17T00:00:00.000Z",
       updatedAt: "2026-08-17T00:00:00.000Z",
-    });
+    } satisfies Annotation;
 
-    await expect(repository.listAnnotations({ lawId: target.lawId })).resolves.toHaveLength(1);
+    await repository.putAnnotation(annotation);
+
+    // withTargetIndexes/stripTargetIndexes/normalizeAnnotation を通す往復で
+    // anchors・color・target が落ちていないことを検証する。
+    await expect(repository.listAnnotations({ lawId: target.lawId })).resolves.toEqual([
+      annotation,
+    ]);
 
     await repository.deleteAnnotation("h1");
 

@@ -539,7 +539,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
   - `interface AlignmentSegment { sourceStart: number; displayStart: number; length: number }`
   - `interface TextAlignment { segments: AlignmentSegment[]; sourceLength: number; displayLength: number }`
   - `alignTexts(source: string, display: string): TextAlignment`
-  - `toSourceOffset(alignment: TextAlignment, displayOffset: number, bias: "end" | "start"): number`
+  - `toSourceOffset(alignment: TextAlignment, displayOffset: number, bias: "end" | "start"): number | undefined`
   - `toDisplayRange(alignment: TextAlignment, sourceStart: number, sourceEnd: number): { start: number; end: number } | undefined`
 
 - [ ] **Step 1: 失敗するテストを書く**
@@ -2489,11 +2489,10 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 `node.plainText` 空間（source 空間）の座標を期待する。DOM 選択（`resolveNodeTextRange`
 が返す表示文字列＝display 空間の座標）から渡すときは、呼び出し側が
 `alignTexts(node.plainText, displayText)` → `toSourceOffset` で変換すること。
-`alignTexts` が返す `segments` が空になる条件（`maxLcsCells` 超過、共通文字が無い）
-では `toSourceOffset` は `bias` に応じて 0 または `sourceLength` を返し、
-「ノード全体が対応した」場合と区別がつかない。呼び出し側は変換後に
-`alignment.segments.length === 0` を確認し、真なら位置が対応づかなかったとみなして
-アンカーを保存しないこと（本文全体を `quote` にしたアンカーを黙って保存する事故を防ぐ）。
+`toSourceOffset` は戻り値の型が `number | undefined` で、`alignTexts` が返す
+`segments` が空になる条件（`maxLcsCells` 超過、共通文字が無い）では `undefined` を返す。
+呼び出し側は `start` / `end` いずれかが `undefined` を受け取ったら位置が対応づかなかった
+とみなし、アンカーを保存しないこと（本文全体を `quote` にしたアンカーを黙って保存する事故を防ぐ）。
 
 - [ ] **Step 1: 失敗するテストを書く**
 

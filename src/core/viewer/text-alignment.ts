@@ -39,6 +39,23 @@ export const commonSuffixLength = (a: string, b: string): number => {
   return index;
 };
 
+// 末尾の区間に連続していれば伸ばし、そうでなければ新しい区間として足す。
+const pushSegment = (segments: AlignmentSegment[], segment: AlignmentSegment): void => {
+  const last = segments.at(-1);
+
+  if (
+    last !== undefined &&
+    last.sourceStart + last.length === segment.sourceStart &&
+    last.displayStart + last.length === segment.displayStart
+  ) {
+    last.length += segment.length;
+
+    return;
+  }
+
+  segments.push(segment);
+};
+
 // 中間部の最長共通部分列を求め、連続する一致を 1 区間にまとめて返す。
 const lcsSegments = (
   source: string,
@@ -68,21 +85,11 @@ const lcsSegments = (
 
   while (i < source.length && j < display.length) {
     if (source[i] === display[j]) {
-      const last = segments.at(-1);
-
-      if (
-        last !== undefined &&
-        last.sourceStart + last.length === sourceOffset + i &&
-        last.displayStart + last.length === displayOffset + j
-      ) {
-        last.length += 1;
-      } else {
-        segments.push({
-          sourceStart: sourceOffset + i,
-          displayStart: displayOffset + j,
-          length: 1,
-        });
-      }
+      pushSegment(segments, {
+        sourceStart: sourceOffset + i,
+        displayStart: displayOffset + j,
+        length: 1,
+      });
 
       i += 1;
       j += 1;
@@ -96,30 +103,10 @@ const lcsSegments = (
   return segments;
 };
 
-// 末尾の区間に連続していれば伸ばし、そうでなければ新しい区間として足す。
-const pushSegment = (segments: AlignmentSegment[], segment: AlignmentSegment): void => {
-  const last = segments.at(-1);
-
-  if (
-    last !== undefined &&
-    last.sourceStart + last.length === segment.sourceStart &&
-    last.displayStart + last.length === segment.displayStart
-  ) {
-    last.length += segment.length;
-
-    return;
-  }
-
-  segments.push(segment);
-};
-
 // segments が空になるのは、共通の接頭辞・接尾辞が無く中間の LCS 計算も対象外
 // （source と display の共通文字が皆無、または source.length * display.length が
-// maxLcsCells を超える）だったとき。このとき toSourceOffset は劣化して
-// bias="start" なら常に 0、bias="end" なら常に sourceLength を返すため、
-// 「ノード全体が対応した」場合と見分けがつかない（非対称に、toDisplayRange は
-// 同じ状況で undefined を返す）。呼び出し側は `alignment.segments.length === 0` を
-// 見て、対応が取れなかった場合を自分で判別すること。
+// maxLcsCells を超える）だったとき。この場合 toSourceOffset は undefined を返し、
+// toDisplayRange と同じ規約で対応が取れなかったことを呼び出し側へ伝える。
 export const alignTexts = (source: string, display: string): TextAlignment => {
   const prefix = commonPrefixLength(source, display);
   const suffix = Math.min(
@@ -156,15 +143,18 @@ export const alignTexts = (source: string, display: string): TextAlignment => {
 
 // display のオフセットを source のオフセットへ移す。
 // 対応の切れ目に落ちたときは bias に従って外側へ寄せ、置換された語をまるごと覆う。
-// alignment.segments が空（alignTexts のコメント参照）のときはループが一度も
-// 回らず、末尾処理により bias="start" は 0、bias="end" は sourceLength を返す。
-// これは「ノード全体が対応した」場合と同じ値になり区別できないので、
-// 呼び出し側が事前に `alignment.segments.length === 0` を確認する必要がある。
+// alignment.segments が空（alignTexts のコメント参照）で対応が一切取れないときは
+// undefined を返す。呼び出し側は戻り値の undefined だけを見ればよく、
+// `alignment.segments.length === 0` を自分で判別する必要はない。
 export const toSourceOffset = (
   alignment: TextAlignment,
   displayOffset: number,
   bias: "end" | "start",
-): number => {
+): number | undefined => {
+  if (alignment.segments.length === 0) {
+    return undefined;
+  }
+
   const clamped = Math.max(0, Math.min(displayOffset, alignment.displayLength));
   let previousSourceEnd = 0;
 

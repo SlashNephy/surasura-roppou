@@ -101,7 +101,7 @@ export const createSavedDataExportFixture = (): SavedDataExport => {
               pinned: false,
             },
             quote: "私権は、公共の福祉に適合しなければならない。",
-            prefix: "第一条　",
+            prefix: "第一条 ",
             suffix: "",
           },
         ],

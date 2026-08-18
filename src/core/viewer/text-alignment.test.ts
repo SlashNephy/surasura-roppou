@@ -86,6 +86,16 @@ describe("toSourceOffset", () => {
 
     expect(toSourceOffset(alignment, 99, "end")).toBe(3);
   });
+
+  it("共通文字が皆無で segments が空なら undefined を返す", () => {
+    // 「ノード全体が対応した」場合の 0 / sourceLength と区別できるように、
+    // 対応が一切取れなかったことを undefined で明示する。
+    const alignment = alignTexts("abc", "xyz");
+
+    expect(alignment.segments).toEqual([]);
+    expect(toSourceOffset(alignment, 0, "start")).toBeUndefined();
+    expect(toSourceOffset(alignment, 3, "end")).toBeUndefined();
+  });
 });
 
 describe("toDisplayRange", () => {
