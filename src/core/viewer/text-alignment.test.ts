@@ -65,13 +65,20 @@ describe("toSourceOffset", () => {
     expect(toSourceOffset(alignment, 3, "end")).toBe(2);
   });
 
-  it("末尾が置換されていても sourceLength を超えない", () => {
-    // segments は [{source 0, display 1, 長さ 3}]。display 末尾の「ZZ」は
-    // どの区間にも属さないので、手前の区間の source 末尾 3 に寄る。
+  it("末尾の置換は end で覆う", () => {
+    // segments は [{source 0, display 1, 長さ 3}]、sourceLength 5 / displayLength 6。
+    // display 末尾の「ZZ」は source 末尾の「XY」を置き換えた隙間。end は中間の隙間と
+    // 同じく置換の外側（＝ここでは source の終端）へ寄せ、置換語をまるごと覆う。
+    const alignment = alignTexts("abcXY", "WabcZZ");
+
+    expect(toSourceOffset(alignment, 6, "end")).toBe(5);
+  });
+
+  it("末尾の置換でも start は手前で止まる", () => {
+    // start は隙間の手前、最後の一致区間の source 末尾 3 に寄る。
     const alignment = alignTexts("abcXY", "WabcZZ");
 
     expect(toSourceOffset(alignment, 6, "start")).toBe(3);
-    expect(toSourceOffset(alignment, 6, "end")).toBe(3);
   });
 
   it("末尾を超えるオフセットは sourceLength に丸める", () => {

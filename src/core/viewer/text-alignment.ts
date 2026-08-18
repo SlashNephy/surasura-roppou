@@ -178,7 +178,15 @@ export const toSourceOffset = (
     previousSourceEnd = segment.sourceStart + segment.length;
   }
 
-  return Math.min(alignment.sourceLength, previousSourceEnd);
+  // 最後の一致区間より後ろの隙間。末尾の未対応領域を仮想の区間 (sourceLength, displayLength)
+  // とみなし、中間の隙間と同じ規約で end は次の区間先頭（＝ source の終端）へ寄せる。
+  // toDisplayEnd が末尾を displayLength まで広げるのと表裏で、往復しても置換語が落ちない。
+  return Math.min(
+    alignment.sourceLength,
+    bias === "end" && previousSourceEnd < alignment.sourceLength
+      ? alignment.sourceLength
+      : previousSourceEnd,
+  );
 };
 
 // 範囲の始端を display へ移す。どの区間にも属さない位置（置換の内側）は
