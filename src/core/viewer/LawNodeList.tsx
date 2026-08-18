@@ -178,7 +178,10 @@ const LawNodeBlock = ({
                 renderArticleActions,
               })
             ) : (
-              <p className="indent-[1em] font-law leading-display font-medium text-foreground break-words">
+              <p
+                data-law-node-id={node.id}
+                className="indent-[1em] font-law leading-display font-medium text-foreground break-words"
+              >
                 {renderLinkedText(
                   displayText,
                   linking,
@@ -250,7 +253,7 @@ const LawNodeBlock = ({
                   {displayMarker}
                 </span>
               ) : null}
-              <span>
+              <span data-law-node-id={node.id}>
                 {renderLinkedText(
                   bodyText,
                   linking,
@@ -267,6 +270,7 @@ const LawNodeBlock = ({
               ) : null}
               {/* 前文など条直下でない項は、番号がなければ先頭1文字を字下げして体裁を整える。 */}
               <span
+                data-law-node-id={node.id}
                 className={cn("min-w-0 break-words", displayMarker === undefined && "indent-[1em]")}
               >
                 {renderLinkedText(
@@ -317,7 +321,10 @@ const LawNodeBlock = ({
         </Heading>
       ) : null}
       {bodyText !== "" ? (
-        <p className="font-law leading-display font-medium text-foreground break-words">
+        <p
+          data-law-node-id={node.id}
+          className="font-law leading-display font-medium text-foreground break-words"
+        >
           {renderLinkedText(
             bodyText,
             linking,
