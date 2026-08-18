@@ -28,6 +28,7 @@ export type { ArticleReference, AnchoredArticleReference, LawReferenceTarget } f
 export {
   buildArticleReferenceKey,
   buildLawArticleUrl,
+  hasReferenceValue,
   parseArticleReferenceKey,
 } from "./references";
 export { computeArticleFingerprint } from "./article-fingerprint";

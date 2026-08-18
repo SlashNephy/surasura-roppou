@@ -155,6 +155,8 @@ const decodeReferenceSegment = (value: string): string | undefined => {
   }
 };
 
-const hasReferenceValue = (value: string | null | undefined): value is string => {
+// 参照フィールド（revisionId, article, path 等）が「値を持つ」ことの定義。
+// undefined / null / 空文字列はすべて「不在」として扱う。
+export const hasReferenceValue = (value: string | null | undefined): value is string => {
   return value !== undefined && value !== null && value !== "";
 };

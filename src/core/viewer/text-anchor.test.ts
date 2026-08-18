@@ -27,6 +27,24 @@ describe("createTextQuoteAnchor", () => {
       suffix: "",
     });
   });
+
+  it("前後の文脈は contextLength (32文字) で打ち切る", () => {
+    const plainText = `${"a".repeat(40)}Q${"b".repeat(40)}`;
+
+    expect(createTextQuoteAnchor(plainText, 40, 41)).toEqual({
+      quote: "Q",
+      prefix: "a".repeat(32),
+      suffix: "b".repeat(32),
+    });
+  });
+
+  it("start が負のときは 0 に丸める（slice の負数インデックス解釈を避ける）", () => {
+    expect(createTextQuoteAnchor("あいう", -1, 2)).toEqual({
+      quote: "あい",
+      prefix: "",
+      suffix: "う",
+    });
+  });
 });
 
 describe("resolveTextQuoteAnchor", () => {
@@ -55,13 +73,39 @@ describe("resolveTextQuoteAnchor", () => {
   it("空の引用文は undefined", () => {
     expect(resolveTextQuoteAnchor("あいう", anchorOf("", "", ""))).toBeUndefined();
   });
+
+  it("候補が複数あってどれも文脈が一致しない（score 0）なら undefined", () => {
+    const plainText = "犬が乙になる。猫も乙になる。";
+
+    expect(
+      resolveTextQuoteAnchor(plainText, anchorOf("乙", "様々な地", "犬が化ける")),
+    ).toBeUndefined();
+  });
+
+  it("出現が1箇所だけなら文脈が一致しなくても（score 0 でも）解決する", () => {
+    const plainText = "犬が乙になる。";
+
+    expect(resolveTextQuoteAnchor(plainText, anchorOf("乙", "様々な地", "犬が化ける"))).toEqual({
+      start: 2,
+      end: 3,
+    });
+  });
+
+  it("複数候補が同点（score > 0）のときは先頭が勝つ", () => {
+    const plainText = "甲は乙とする。甲は乙とする。";
+
+    expect(resolveTextQuoteAnchor(plainText, anchorOf("乙", "甲は", "とする"))).toEqual({
+      start: 2,
+      end: 3,
+    });
+  });
 });
 
 describe("findAnchorNode", () => {
-  const nodes = [
+  const nodes: Pick<LawNode, "id" | "path" | "type">[] = [
     { id: "n1", path: "Article:1", type: "Article" },
     { id: "n2", path: "Article:1/Paragraph:1", type: "Paragraph" },
-  ] as unknown as LawNode[];
+  ];
 
   it("path で対象ノードを引く", () => {
     expect(findAnchorNode(nodes, { lawId: "x", path: "Article:1/Paragraph:1" })?.id).toBe("n2");
