@@ -6,6 +6,10 @@ export interface EgovLawTextNode {
   children: (EgovLawTextNode | string)[];
 }
 
+// 号の細分は階層ごとに Subitem1〜Subitem10 という別タグで表される。
+// すらすら六法では階層の深さを木構造で表すため、いずれも Subitem 種別へ寄せる。
+const subitemTags = Array.from({ length: 10 }, (_, index) => `Subitem${String(index + 1)}`);
+
 const nodeTypeByTag: Partial<Record<string, LawNodeType>> = {
   Part: "Part",
   Chapter: "Chapter",
@@ -15,18 +19,7 @@ const nodeTypeByTag: Partial<Record<string, LawNodeType>> = {
   Article: "Article",
   Paragraph: "Paragraph",
   Item: "Item",
-  // 号の細分は階層ごとに Subitem1〜Subitem10 という別タグで表される。
-  // すらすら六法では階層の深さを木構造で表すため、いずれも Subitem 種別へ寄せる。
-  Subitem1: "Subitem",
-  Subitem2: "Subitem",
-  Subitem3: "Subitem",
-  Subitem4: "Subitem",
-  Subitem5: "Subitem",
-  Subitem6: "Subitem",
-  Subitem7: "Subitem",
-  Subitem8: "Subitem",
-  Subitem9: "Subitem",
-  Subitem10: "Subitem",
+  ...Object.fromEntries(subitemTags.map((tag) => [tag, "Subitem"] as const)),
   SupplProvision: "SupplementaryProvision",
   AppdxTable: "AppdxTable",
   AppdxStyle: "AppdxStyle",
@@ -310,16 +303,7 @@ const plainTextBlockTags = new Set([
   "Article",
   "Paragraph",
   "Item",
-  "Subitem1",
-  "Subitem2",
-  "Subitem3",
-  "Subitem4",
-  "Subitem5",
-  "Subitem6",
-  "Subitem7",
-  "Subitem8",
-  "Subitem9",
-  "Subitem10",
+  ...subitemTags,
   "SupplProvision",
   "AppdxTable",
   "AppdxStyle",

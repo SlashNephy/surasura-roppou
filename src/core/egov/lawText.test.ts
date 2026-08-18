@@ -223,6 +223,39 @@ describe("normalizeEgovLawText", () => {
       ],
     },
     {
+      name: "deepest subitem level",
+      children: [
+        article("第一条", [
+          paragraph([
+            item("第一号", [
+              subitem(1, "イ", "1", [
+                subitem(2, "(1)", "1", [
+                  subitem(3, "(i)", "1", [
+                    subitem(4, "ｲ", "1", [
+                      subitem(5, "(a)", "1", [
+                        subitem(6, "a", "1", [
+                          subitem(7, "A", "1", [
+                            subitem(8, "①", "1", [subitem(9, "㋐", "1", [subitem(10, "㊀", "1")])]),
+                          ]),
+                        ]),
+                      ]),
+                    ]),
+                  ]),
+                ]),
+              ]),
+            ]),
+          ]),
+        ]),
+      ],
+      expected: [
+        {
+          type: "Subitem",
+          number: "1",
+          path: `article:1/paragraph:1/item:1${"/subitem:1".repeat(10)}`,
+        },
+      ],
+    },
+    {
       name: "nested subitem levels",
       children: [
         article("第一条", [
