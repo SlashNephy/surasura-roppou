@@ -1132,7 +1132,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
   - `paintHighlights(registry: HighlightRegistryLike, createHighlight: (ranges: Range[]) => unknown, painted: PaintedRange[]): void`
   - `clearHighlights(registry: HighlightRegistryLike): void`
 
-- [ ] **Step 1: 失敗するテストを書く**
+- [x] **Step 1: 失敗するテストを書く**
 
 `src/core/viewer/highlight-registry.test.ts`:
 
@@ -1217,12 +1217,12 @@ describe("clearHighlights", () => {
 });
 ```
 
-- [ ] **Step 2: テストが失敗することを確認する**
+- [x] **Step 2: テストが失敗することを確認する**
 
 Run: `pnpm exec vitest run --dir src highlight-registry`
 Expected: FAIL
 
-- [ ] **Step 3: 実装する**
+- [x] **Step 3: 実装する**
 
 `src/core/viewer/highlight-registry.ts`:
 
@@ -1275,12 +1275,12 @@ export const clearHighlights = (registry: HighlightRegistryLike): void => {
 };
 ```
 
-- [ ] **Step 4: テストが通ることを確認する**
+- [x] **Step 4: テストが通ることを確認する**
 
 Run: `pnpm exec vitest run --dir src highlight-registry`
 Expected: PASS（3 tests）
 
-- [ ] **Step 5: CSS を追加する**
+- [x] **Step 5: CSS を追加する**
 
 `src/index.css` の `:root` ブロック末尾（`--sidebar-ring` の後）に追加する。
 
@@ -1332,7 +1332,7 @@ Expected: PASS（3 tests）
 }
 ```
 
-- [ ] **Step 6: コミット**
+- [x] **Step 6: コミット**
 
 ```bash
 pnpm run format:check || pnpm run format
@@ -1375,7 +1375,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
    逃がすと今度は `set-state-in-effect` に触れる。ヒットテストは pointerup ハンドラからしか読まないため
    ref 公開で足り、Task 13 側は `paintedRef.current` を参照する（effect の依存にも入れない）。
 
-- [ ] **Step 1: 失敗するテストを書く**
+- [x] **Step 1: 失敗するテストを書く**
 
 `src/app/use-highlight-painting.test.ts`:
 
@@ -1461,12 +1461,12 @@ describe("buildPaintedRanges", () => {
 });
 ```
 
-- [ ] **Step 2: テストが失敗することを確認する**
+- [x] **Step 2: テストが失敗することを確認する**
 
 Run: `pnpm exec vitest run --dir src use-highlight-painting`
 Expected: FAIL
 
-- [ ] **Step 3: viewer の re-export を足す**
+- [x] **Step 3: viewer の re-export を足す**
 
 `src/core/viewer/index.ts` に追加する（`HighlightColorPopover` は Task 11 で足す）。
 
@@ -1491,7 +1491,7 @@ export { clearHighlights, highlightNameByColor, paintHighlights } from "./highli
 export type { HighlightRegistryLike, PaintedRange } from "./highlight-registry";
 ```
 
-- [ ] **Step 4: 実装する**
+- [x] **Step 4: 実装する**
 
 `src/app/use-highlight-painting.ts`:
 
@@ -1647,12 +1647,12 @@ export const useHighlightPainting = ({
 };
 ```
 
-- [ ] **Step 5: テストが通ることを確認する**
+- [x] **Step 5: テストが通ることを確認する**
 
 Run: `pnpm exec vitest run --dir src use-highlight-painting`
 Expected: PASS（5 tests）
 
-- [ ] **Step 6: コミット**
+- [x] **Step 6: コミット**
 
 ```bash
 git add src/app/use-highlight-painting.ts src/app/use-highlight-painting.test.ts src/core/viewer/index.ts
@@ -1680,7 +1680,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
   - `anchorRect: { top: number; bottom: number; left: number; width: number }`
   - `onSelect: (color: HighlightColor) => void`
 
-- [ ] **Step 1: 失敗するテストを書く**
+- [x] **Step 1: 失敗するテストを書く**
 
 `src/core/viewer/HighlightColorPopover.test.tsx`:
 
@@ -1774,12 +1774,12 @@ describe("HighlightColorPopover", () => {
 });
 ```
 
-- [ ] **Step 2: テストが失敗することを確認する**
+- [x] **Step 2: テストが失敗することを確認する**
 
 Run: `pnpm exec vitest run --dir src HighlightColorPopover`
 Expected: FAIL
 
-- [ ] **Step 3: 実装する**
+- [x] **Step 3: 実装する**
 
 `src/core/viewer/HighlightColorPopover.tsx`:
 
@@ -1894,7 +1894,7 @@ export const HighlightColorPopover = ({
 };
 ```
 
-- [ ] **Step 4: re-export する**
+- [x] **Step 4: re-export する**
 
 `src/core/viewer/index.ts` に追加する。
 
@@ -1902,12 +1902,12 @@ export const HighlightColorPopover = ({
 export { HighlightColorPopover } from "./HighlightColorPopover";
 ```
 
-- [ ] **Step 5: テストが通ることを確認する**
+- [x] **Step 5: テストが通ることを確認する**
 
 Run: `pnpm exec vitest run --dir src HighlightColorPopover`
 Expected: PASS（5 tests）
 
-- [ ] **Step 6: コミット**
+- [x] **Step 6: コミット**
 
 ```bash
 git add src/core/viewer/HighlightColorPopover.tsx src/core/viewer/HighlightColorPopover.test.tsx src/core/viewer/index.ts
@@ -1943,7 +1943,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 呼び出し側は `start` / `end` いずれかが `undefined` を受け取ったら位置が対応づかなかった
 とみなし、アンカーを保存しないこと（本文全体を `quote` にしたアンカーを黙って保存する事故を防ぐ）。
 
-- [ ] **Step 1: 失敗するテストを書く**
+- [x] **Step 1: 失敗するテストを書く**
 
 `src/app/use-article-highlights.test.ts`:
 
@@ -2052,12 +2052,12 @@ describe("buildHighlightMutations", () => {
 });
 ```
 
-- [ ] **Step 2: テストが失敗することを確認する**
+- [x] **Step 2: テストが失敗することを確認する**
 
 Run: `pnpm exec vitest run --dir src use-article-highlights`
 Expected: FAIL
 
-- [ ] **Step 3: 実装する**
+- [x] **Step 3: 実装する**
 
 `src/app/use-article-highlights.ts`:
 
@@ -2274,12 +2274,12 @@ export const useArticleHighlights = ({
 };
 ```
 
-- [ ] **Step 4: テストが通ることを確認する**
+- [x] **Step 4: テストが通ることを確認する**
 
 Run: `pnpm exec vitest run --dir src use-article-highlights`
 Expected: PASS（4 tests）
 
-- [ ] **Step 5: コミット**
+- [x] **Step 5: コミット**
 
 ```bash
 git add src/app/use-article-highlights.ts src/app/use-article-highlights.test.ts
@@ -2327,7 +2327,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
    併せて、初期フォーカスはキーボード操作で開いたときだけに限定した（ポインタ操作で
    フォーカスを奪うと本文の選択が解除される）。
 
-- [ ] **Step 1: 失敗するテストを書く**
+- [x] **Step 1: 失敗するテストを書く**
 
 `src/app/law-viewer-page.test.tsx` に追加する。既存の render ヘルパー（`createMemoryStorageRepository` を注入し `DisplayPreferencesProvider` で包む関数）と、本文が表示されるまで待つ既存の書き方に合わせること。
 
@@ -2413,12 +2413,12 @@ it("対応ブラウザでは選択して色を選ぶと注釈が保存される"
 
 `screen.findByText(/私権は/)` が本文 span（`data-law-node-id` を持つ要素）を返すことを確認する。返らない場合は `container.querySelector("[data-law-node-id]")` で取り直す。
 
-- [ ] **Step 2: テストが失敗することを確認する**
+- [x] **Step 2: テストが失敗することを確認する**
 
 Run: `pnpm exec vitest run --dir src law-viewer-page`
 Expected: FAIL（2 件目でポップアップが見つからない）
 
-- [ ] **Step 3: 本文コンテナに ref を付ける**
+- [x] **Step 3: 本文コンテナに ref を付ける**
 
 `law-viewer-page.tsx` の `<LawDocumentView ... />` を包む要素に `ref={documentRef}` を付ける。包む要素が無ければ `<div ref={documentRef}>` で包む。
 
@@ -2426,7 +2426,7 @@ Expected: FAIL（2 件目でポップアップが見つからない）
 const documentRef = useRef<HTMLDivElement>(null);
 ```
 
-- [ ] **Step 4: hook を配線する**
+- [x] **Step 4: hook を配線する**
 
 コンポーネント本体に追加する。`state.law` / `state.nodes` / `state.revision` / `storageRepository` は既存の名前に合わせること。
 
@@ -2476,7 +2476,7 @@ const findArticleNumberForNode = (nodes: LawNode[], lawNodeId: string): string |
 };
 ```
 
-- [ ] **Step 5: 選択の購読を書く**
+- [x] **Step 5: 選択の購読を書く**
 
 **注意**: 以下の `resolved.start` / `resolved.end`（`resolveNodeTextRange` の戻り値）は
 表示文字列＝display 空間の座標である。Step 7 の `onSelect` から `highlight()` を呼ぶ
@@ -2524,7 +2524,7 @@ useEffect(() => {
 }, [isHighlightEnabled]);
 ```
 
-- [ ] **Step 6: 既存ハイライトのヒットテストを書く**
+- [x] **Step 6: 既存ハイライトのヒットテストを書く**
 
 ```tsx
 useEffect(() => {
@@ -2580,7 +2580,7 @@ useEffect(() => {
 }, [isHighlightEnabled, paintedRanges]);
 ```
 
-- [ ] **Step 7: ポップアップを描画する**
+- [x] **Step 7: ポップアップを描画する**
 
 JSX の末尾（`</div>` を閉じる直前など、本文と同じツリー内）に置く。
 
@@ -2625,12 +2625,12 @@ JSX の末尾（`</div>` を閉じる直前など、本文と同じツリー内�
 }
 ```
 
-- [ ] **Step 8: テストが通ることを確認する**
+- [x] **Step 8: テストが通ることを確認する**
 
 Run: `pnpm exec vitest run --dir src law-viewer-page`
 Expected: PASS
 
-- [ ] **Step 9: 検証ゲートを通してコミット**
+- [x] **Step 9: 検証ゲートを通してコミット**
 
 ```bash
 pnpm run typecheck && pnpm run lint && pnpm run format:check && pnpm exec vitest run --dir src
@@ -2655,7 +2655,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Consumes: Task 1-13
 - Produces: PR
 
-- [ ] **Step 1: preview build を起動する**
+- [x] **Step 1: preview build を起動する**
 
 dev サーバーは HMR と依存再最適化でフルリロードを起こし、操作の途中で状態が飛ぶ。必ず preview build を使う。`run_in_background` で起動し、`Monitor` で待つ（`sleep` を使わない）。
 
@@ -2663,7 +2663,7 @@ dev サーバーは HMR と依存再最適化でフルリロードを起こし�
 pnpm run build && pnpm run preview
 ```
 
-- [ ] **Step 2: 3 本の検証を撮る**
+- [x] **Step 2: 3 本の検証を撮る**
 
 `playwright-cli` で次を撮る。`--filename` は不安定なので出力先はディレクトリ指定にし、生成後にリネームする。
 
@@ -2671,7 +2671,7 @@ pnpm run build && pnpm run preview
 2. 表示モードを readable ↔ original で切り替えてもハイライトがずれない（動画）
 3. ダークモードでの 4 色の見え方（4 色を並べたスクリーンショット 1 枚）
 
-- [ ] **Step 3: 録画をアニメーション WebP に変換する**
+- [x] **Step 3: 録画をアニメーション WebP に変換する**
 
 GitHub は WebM を受け付けないため変換する。
 
@@ -2679,13 +2679,13 @@ GitHub は WebM を受け付けないため変換する。
 ffmpeg -i input.webm -vcodec libwebp_anim -loop 0 output.webp
 ```
 
-- [ ] **Step 4: 検証ゲートを最終確認する**
+- [x] **Step 4: 検証ゲートを最終確認する**
 
 ```bash
 pnpm run typecheck && pnpm run lint && pnpm run format:check && pnpm exec vitest run --dir src
 ```
 
-- [ ] **Step 5: PR を作る**
+- [x] **Step 5: PR を作る**
 
 ```bash
 git push -u origin feat/issue-188-article-highlight
@@ -2702,7 +2702,7 @@ gh pr create --title "feat: 条文のハイライト機能を追加する" --bod
 - Task 1 の実機検証結果（`var()` 可否、Safari の caret API、強制カラーモード）
 - 未検証事項があれば明記する
 
-- [ ] **Step 6: マージ可否を確認する**
+- [x] **Step 6: マージ可否を確認する**
 
 ```bash
 gh pr view --json mergeable,mergeStateStatus
