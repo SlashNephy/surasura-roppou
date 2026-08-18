@@ -1359,7 +1359,21 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Consumes: `alignTexts` / `toDisplayRange`（Task 3）、`resolveTextQuoteAnchor` / `findAnchorNode`（Task 4）、`findLawNodeElement`（Task 8）、`paintHighlights` / `clearHighlights` / `PaintedRange` / `HighlightRegistryLike`（Task 9）
 - Produces:
   - `buildPaintedRanges(root: ParentNode, nodes: LawNode[], annotations: Annotation[]): PaintedRange[]`
-  - `useHighlightPainting(options): PaintedRange[]`
+  - `useHighlightPainting(options): RefObject<PaintedRange[]>`
+
+**実装時の逸脱（ユーザー裁定・lint 由来）。** 以下 2 点は下の参照実装と異なる。実装は
+`src/app/use-highlight-painting.ts` を参照すること。
+
+1. **過半数被覆のガードを足した。** 参照実装（「`createNodeTextRange` の失敗だけ弾けばよい」）は
+   本タスクの Step 1 のテスト「引用文が見つからない注釈は描画しない」に落ちる。引用文が本文から
+   失われていても、散らばった共通文字がアラインメントで拾われ、`toDisplayRange` が置換をまたぐ
+   範囲を広げるため、無関係な位置に Range ができてしまうためである（計測値: 正常系の被覆率 1.0 に
+   対し破綻系 0.2）。**ユーザー裁定により「引用文の過半数が display 側に残っていること」を要求する**。
+   readable 変換（漢数字 → 算用数字）をまたぐ引用文は大半の文字が残るため通る（テストで担保）。
+2. **`useMemo` ではなく `useEffect` で構築し、結果は `RefObject` で返す。** レンダー中の
+   `containerRef.current` 読みは `react-hooks/refs`（v7・error）に反し、`useEffect` + `useState` へ
+   逃がすと今度は `set-state-in-effect` に触れる。ヒットテストは pointerup ハンドラからしか読まないため
+   ref 公開で足り、Task 13 側は `paintedRef.current` を参照する（effect の依存にも入れない）。
 
 - [ ] **Step 1: 失敗するテストを書く**
 

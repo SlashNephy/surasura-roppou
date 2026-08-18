@@ -18,3 +18,21 @@ export type {
   ReferenceLinkCaption,
   ReferenceLinkSegment,
 } from "./reference-links";
+export { alignTexts, toDisplayRange, toSourceOffset } from "./text-alignment";
+export type { AlignmentSegment, TextAlignment } from "./text-alignment";
+export { createTextQuoteAnchor, findAnchorNode, resolveTextQuoteAnchor } from "./text-anchor";
+export { applyHighlight } from "./highlight-merge";
+export type { CreatedHighlightRange, HighlightRange } from "./highlight-merge";
+export { isHighlightSupported } from "./highlight-support";
+export { caretPositionAt } from "./caret-position";
+export {
+  collectDisplayTextNodes,
+  createNodeTextRange,
+  displayTextOf,
+  findLawNodeElement,
+  lawNodeIdAttribute,
+  resolveNodeTextRange,
+} from "./selection-range";
+export type { NodeTextRange } from "./selection-range";
+export { clearHighlights, highlightNameByColor, paintHighlights } from "./highlight-registry";
+export type { HighlightRegistryLike, PaintedRange } from "./highlight-registry";
