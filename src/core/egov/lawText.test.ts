@@ -39,6 +39,9 @@ const itemSentence = (text: string) =>
   lawTextNode("ItemSentence", [lawTextNode("Sentence", [text])]);
 
 // e-Gov 法令データの号の細分は Subitem1・Subitem2 のように階層番号付きのタグで表される。
+const columnNode = (text: string, num: number) =>
+  lawTextNode("Column", [lawTextNode("Sentence", [text])], { Num: num });
+
 const subitem = (
   level: number,
   title: string,
@@ -410,49 +413,50 @@ describe("normalizeEgovLawText", () => {
 
     expect(findNode(nodes, "Article", "article:1")).not.toHaveProperty("caption");
   });
-  it("separates sibling columns with an ideographic space", () => {
+  // 欄（Column）の区切りは、欄が複数あるときだけ全角空白で入る。
+  it.each([
+    {
+      name: "separates sibling columns with an ideographic space",
+      body: lawTextNode("ItemSentence", [
+        columnNode("不利益処分", 1),
+        columnNode("行政庁が、法令に基づき、…", 2),
+      ]),
+      expected: {
+        rawText: "四不利益処分\u3000行政庁が、法令に基づき、…",
+        plainText: "四 不利益処分\u3000行政庁が、法令に基づき、…",
+        normalizedText: "四 不利益処分\u3000行政庁が、法令に基づき、…",
+      },
+    },
+    {
+      name: "keeps a single column unseparated",
+      body: lawTextNode("ItemSentence", [columnNode("単一の欄の本文。", 1)]),
+      expected: {
+        rawText: "四単一の欄の本文。",
+        plainText: "四 単一の欄の本文。",
+        normalizedText: "四 単一の欄の本文。",
+      },
+    },
+    {
+      name: "keeps a sentence without columns unseparated",
+      body: lawTextNode("ItemSentence", [lawTextNode("Sentence", ["欄のない本文。"])]),
+      expected: {
+        rawText: "四欄のない本文。",
+        plainText: "四 欄のない本文。",
+        normalizedText: "四 欄のない本文。",
+      },
+    },
+  ])("$name", ({ body, expected }) => {
     const nodes = normalizeLawBody([
       article("第二条", [
         paragraph([
           lawTextNode("ParagraphSentence", [lawTextNode("Sentence", ["この法律において…"])]),
-          lawTextNode("Item", [
-            lawTextNode("ItemTitle", ["四"]),
-            lawTextNode("ItemSentence", [
-              lawTextNode("Column", [lawTextNode("Sentence", ["不利益処分"])], { Num: 1 }),
-              lawTextNode("Column", [lawTextNode("Sentence", ["行政庁が、法令に基づき、…"])], {
-                Num: 2,
-              }),
-            ]),
-          ]),
+          lawTextNode("Item", [lawTextNode("ItemTitle", ["四"]), body]),
         ]),
       ]),
     ]);
 
     expect(findNode(nodes, "Item", "article:2/paragraph:1/item:4")).toEqual(
-      expect.objectContaining({
-        rawText: "四不利益処分\u3000行政庁が、法令に基づき、…",
-        plainText: "四 不利益処分\u3000行政庁が、法令に基づき、…",
-        normalizedText: "四 不利益処分\u3000行政庁が、法令に基づき、…",
-      }),
-    );
-  });
-
-  it("does not add a separator when the sentence has a single column", () => {
-    const nodes = normalizeLawBody([
-      article("第一条", [
-        paragraph([
-          lawTextNode("ParagraphSentence", [
-            lawTextNode("Column", [lawTextNode("Sentence", ["単一の欄の本文。"])], { Num: 1 }),
-          ]),
-        ]),
-      ]),
-    ]);
-
-    expect(findNode(nodes, "Paragraph", "article:1/paragraph:1")).toEqual(
-      expect.objectContaining({
-        rawText: "単一の欄の本文。",
-        plainText: "単一の欄の本文。",
-      }),
+      expect.objectContaining(expected),
     );
   });
 });
