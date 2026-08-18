@@ -6,6 +6,10 @@ export interface EgovLawTextNode {
   children: (EgovLawTextNode | string)[];
 }
 
+// 号の細分は階層ごとに Subitem1〜Subitem10 という別タグで表される。
+// すらすら六法では階層の深さを木構造で表すため、いずれも Subitem 種別へ寄せる。
+const subitemTags = Array.from({ length: 10 }, (_, index) => `Subitem${String(index + 1)}`);
+
 const nodeTypeByTag: Partial<Record<string, LawNodeType>> = {
   Part: "Part",
   Chapter: "Chapter",
@@ -15,7 +19,7 @@ const nodeTypeByTag: Partial<Record<string, LawNodeType>> = {
   Article: "Article",
   Paragraph: "Paragraph",
   Item: "Item",
-  Subitem: "Subitem",
+  ...Object.fromEntries(subitemTags.map((tag) => [tag, "Subitem"] as const)),
   SupplProvision: "SupplementaryProvision",
   AppdxTable: "AppdxTable",
   AppdxStyle: "AppdxStyle",
@@ -45,11 +49,14 @@ const titleTagByType = {
   Article: "ArticleTitle",
   Paragraph: "ParagraphNum",
   Item: "ItemTitle",
-  Subitem: "SubitemTitle",
   SupplementaryProvision: "SupplProvisionLabel",
   AppdxTable: "AppdxTableTitle",
   AppdxStyle: "AppdxStyleTitle",
-} satisfies Record<LawNodeType, string>;
+  // Subitem の見出しタグは階層番号を含む（Subitem1Title など）ため、タグ名から導く。
+} satisfies Record<Exclude<LawNodeType, "Subitem">, string>;
+
+const getTitleTag = (apiNode: EgovLawTextNode, nodeType: LawNodeType): string =>
+  nodeType === "Subitem" ? `${apiNode.tag}Title` : titleTagByType[nodeType];
 
 // 条見出しのかっこ書き（例: （基本原則））を持つノード種別だけ対象にする
 const captionTagByType: Partial<Record<LawNodeType, string>> = {
@@ -152,7 +159,7 @@ const getNodeNumber = (apiNode: EgovLawTextNode, nodeType: LawNodeType): string 
 };
 
 const getNodeTitle = (apiNode: EgovLawTextNode, nodeType: LawNodeType): string | undefined => {
-  const titleTag = titleTagByType[nodeType];
+  const titleTag = getTitleTag(apiNode, nodeType);
   const titleNode = apiNode.children.find(
     (child): child is EgovLawTextNode => typeof child !== "string" && child.tag === titleTag,
   );
@@ -296,7 +303,7 @@ const plainTextBlockTags = new Set([
   "Article",
   "Paragraph",
   "Item",
-  "Subitem",
+  ...subitemTags,
   "SupplProvision",
   "AppdxTable",
   "AppdxStyle",

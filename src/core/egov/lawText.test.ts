@@ -38,11 +38,24 @@ const item = (title: string, children: EgovLawTextNode[] = [itemSentence("本文
 const itemSentence = (text: string) =>
   lawTextNode("ItemSentence", [lawTextNode("Sentence", [text])]);
 
-const subitem = (title: string) =>
-  lawTextNode("Subitem", [
-    lawTextNode("SubitemTitle", [title]),
-    lawTextNode("SubitemSentence", [lawTextNode("Sentence", [`${title}の本文。`])]),
-  ]);
+// e-Gov 法令データの号の細分は Subitem1・Subitem2 のように階層番号付きのタグで表される。
+const subitem = (
+  level: number,
+  title: string,
+  num: string | undefined,
+  children: EgovLawTextNode[] = [],
+) =>
+  lawTextNode(
+    `Subitem${String(level)}`,
+    [
+      lawTextNode(`Subitem${String(level)}Title`, [title]),
+      lawTextNode(`Subitem${String(level)}Sentence`, [
+        lawTextNode("Sentence", [`${title}の本文。`]),
+      ]),
+      ...children,
+    ],
+    num === undefined ? {} : { Num: num },
+  );
 
 const appdxTable = (title: string) =>
   lawTextNode("AppdxTable", [
@@ -187,10 +200,75 @@ describe("normalizeEgovLawText", () => {
     },
     {
       name: "kana subitem labels",
-      children: [article("第一条", [paragraph([item("第一号", [subitem("イ"), subitem("ロ")])])])],
+      children: [
+        article("第一条", [
+          paragraph([item("第一号", [subitem(1, "イ", "1"), subitem(1, "ロ", "2")])]),
+        ]),
+      ],
+      expected: [
+        { type: "Subitem", number: "1", path: "article:1/paragraph:1/item:1/subitem:1" },
+        { type: "Subitem", number: "2", path: "article:1/paragraph:1/item:1/subitem:2" },
+      ],
+    },
+    {
+      name: "kana subitem labels without Num attributes",
+      children: [
+        article("第一条", [
+          paragraph([item("第一号", [subitem(1, "イ", undefined), subitem(1, "ロ", undefined)])]),
+        ]),
+      ],
       expected: [
         { type: "Subitem", number: "イ", path: "article:1/paragraph:1/item:1/subitem:イ" },
         { type: "Subitem", number: "ロ", path: "article:1/paragraph:1/item:1/subitem:ロ" },
+      ],
+    },
+    {
+      name: "deepest subitem level",
+      children: [
+        article("第一条", [
+          paragraph([
+            item("第一号", [
+              subitem(1, "イ", "1", [
+                subitem(2, "(1)", "1", [
+                  subitem(3, "(i)", "1", [
+                    subitem(4, "ｲ", "1", [
+                      subitem(5, "(a)", "1", [
+                        subitem(6, "a", "1", [
+                          subitem(7, "A", "1", [
+                            subitem(8, "①", "1", [subitem(9, "㋐", "1", [subitem(10, "㊀", "1")])]),
+                          ]),
+                        ]),
+                      ]),
+                    ]),
+                  ]),
+                ]),
+              ]),
+            ]),
+          ]),
+        ]),
+      ],
+      expected: [
+        {
+          type: "Subitem",
+          number: "1",
+          path: `article:1/paragraph:1/item:1${"/subitem:1".repeat(10)}`,
+        },
+      ],
+    },
+    {
+      name: "nested subitem levels",
+      children: [
+        article("第一条", [
+          paragraph([item("第一号", [subitem(1, "イ", "1", [subitem(2, "(1)", "1")])])]),
+        ]),
+      ],
+      expected: [
+        { type: "Subitem", number: "1", path: "article:1/paragraph:1/item:1/subitem:1" },
+        {
+          type: "Subitem",
+          number: "1",
+          path: "article:1/paragraph:1/item:1/subitem:1/subitem:1",
+        },
       ],
     },
     {
@@ -219,6 +297,31 @@ describe("normalizeEgovLawText", () => {
         ]),
       );
     }
+  });
+
+  it("keeps subitem levels as nested nodes carrying their own titles", () => {
+    const nodes = normalizeLawBody([
+      article("第一条", [
+        paragraph([item("第一号", [subitem(1, "イ", "1", [subitem(2, "(1)", "1")])])]),
+      ]),
+    ]);
+    const outer = findNode(nodes, "Subitem", "article:1/paragraph:1/item:1/subitem:1");
+    const inner = findNode(nodes, "Subitem", "article:1/paragraph:1/item:1/subitem:1/subitem:1");
+
+    expect(outer).toEqual(
+      expect.objectContaining({
+        title: "イ",
+        plainText: "イ イの本文。 (1) (1)の本文。",
+        children: [inner.id],
+      }),
+    );
+    expect(inner).toEqual(
+      expect.objectContaining({
+        title: "(1)",
+        plainText: "(1) (1)の本文。",
+        parentId: outer.id,
+      }),
+    );
   });
 
   it("builds text without ruby readings or inline spaces", () => {
