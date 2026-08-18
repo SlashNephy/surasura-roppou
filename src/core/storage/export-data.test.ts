@@ -62,6 +62,7 @@ const collection = {
 const annotation = {
   id: "annotation-1",
   target: { lawId: law.lawId, article: "1" },
+  anchors: [],
   note: "基本原則として確認する。",
   tags: ["民法"],
   createdAt: "2026-07-06T00:00:00.000Z",

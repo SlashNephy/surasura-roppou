@@ -1694,7 +1694,7 @@ const collection = {
 const annotation = {
   id: "annotation-1",
   target: bookmark.target,
-  targetText: "公共の福祉",
+  anchors: [{ target: bookmark.target, quote: "公共の福祉", prefix: "", suffix: "" }],
   note: "基本原則として確認する",
   tags: ["論点"],
   createdAt: "2026-07-06T00:00:00.000Z",

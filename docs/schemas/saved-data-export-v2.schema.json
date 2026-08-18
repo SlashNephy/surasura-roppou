@@ -182,10 +182,25 @@
     "annotation": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "target", "note", "tags", "createdAt", "updatedAt"],
+      "required": ["id", "target", "tags", "createdAt", "updatedAt"],
       "properties": {
         "id": { "type": "string" },
         "target": { "$ref": "#/$defs/target" },
+        "anchors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["target", "quote", "prefix", "suffix"],
+            "properties": {
+              "target": { "$ref": "#/$defs/target" },
+              "quote": { "type": "string" },
+              "prefix": { "type": "string" },
+              "suffix": { "type": "string" }
+            }
+          }
+        },
+        "color": { "type": "string", "enum": ["cyan", "orange", "pink", "yellow"] },
         "targetText": { "type": "string" },
         "prefixText": { "type": "string" },
         "suffixText": { "type": "string" },

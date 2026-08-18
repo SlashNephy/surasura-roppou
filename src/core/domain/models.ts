@@ -78,13 +78,28 @@ export interface Collection {
   updatedAt: ISODateString;
 }
 
+export type HighlightColor = "cyan" | "orange" | "pink" | "yellow";
+
+// ポップアップに並ぶ順。輝度の高い順に並べ、両テーマで同じ順序を保つ。
+export const highlightColors: readonly HighlightColor[] = ["yellow", "cyan", "pink", "orange"];
+
+// 1つのテキスト範囲。W3C Web Annotation の TextQuoteSelector 相当。
+// 位置を文字オフセットではなく引用文と前後文脈で表すので、条文が改正で伸縮しても再探索できる。
+export interface TextQuoteAnchor {
+  target: LawReferenceTarget;
+  quote: string;
+  prefix: string;
+  suffix: string;
+}
+
 export interface Annotation {
   id: string;
   target: LawReferenceTarget;
-  targetText?: string;
-  prefixText?: string;
-  suffixText?: string;
-  note: string;
+  // 1回のユーザー選択の断片。v1 は必ず長さ 1。複数ノードにまたがる選択で伸びる。
+  anchors: TextQuoteAnchor[];
+  // 未定義なら色なしの純粋な注釈。ハイライトとしては描画しない。
+  color?: HighlightColor;
+  note?: string;
   tags: string[];
   createdAt: ISODateString;
   updatedAt: ISODateString;
