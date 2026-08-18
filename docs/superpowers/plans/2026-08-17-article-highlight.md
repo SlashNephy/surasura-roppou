@@ -81,7 +81,14 @@
 - Consumes: なし
 - Produces: 後続タスクが使う CSS の書き方（`var()` 可否）と `caret-position.ts` の分岐方針
 
-- [ ] **Step 1: 検証用 HTML をスクラッチディレクトリに作る**
+**実装済み。** 検証結果は `docs/superpowers/specs/2026-08-17-article-highlight-design.md`
+の「実機検証結果（Task 1）」節に記録済み（検証日 2026-08-18、Chromium 151 / headless）。
+要点: `::highlight()` 内の `var()` は解決される。`caretPositionFromPoint` /
+`caretRangeFromPoint` は検証環境では両方とも存在する（Safari 実機は未検証のまま宿題として
+残っている）。`forced-colors: active` では author 指定色が `Mark`/`MarkText` へ強制される
+（色の区別は失われるがハイライトの存在は保たれる）。以下は実施したステップの記録。
+
+- [x] **Step 1: 検証用 HTML をスクラッチディレクトリに作る**
 
 ```html
 <!doctype html>
@@ -133,7 +140,7 @@
 </script>
 ```
 
-- [ ] **Step 2: ブラウザで開いて 3 項目を確認する**
+- [x] **Step 2: ブラウザで開いて 3 項目を確認する**
 
 `playwright-cli` で開き、次を確認してスクリーンショットを撮る。
 
@@ -143,11 +150,11 @@
 
 強制カラーモードは `page.emulateMedia({ forcedColors: "active" })` で確認する。`playwright-cli` から指定できなければ「未検証」として記録し、`@media (forced-colors: active)` のブロックは設計どおり入れておく。
 
-- [ ] **Step 3: 結果を spec に追記する**
+- [x] **Step 3: 結果を spec に追記する**
 
 `docs/superpowers/specs/2026-08-17-article-highlight-design.md` の「実装前に実機検証が必要な項目」節を、確認結果に置き換える。各項目に「検証日 / 検証環境 / 結果 / 設計への反映」を書く。
 
-- [ ] **Step 4: コミット**
+- [x] **Step 4: コミット**
 
 ```bash
 git add docs/superpowers/specs/2026-08-17-article-highlight-design.md
@@ -181,7 +188,11 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
   - `interface Annotation { id; target; anchors: TextQuoteAnchor[]; color?: HighlightColor; note?: string; tags: string[]; createdAt; updatedAt }`
   - `normalizeAnnotation(record: unknown): Annotation | undefined`
 
-- [ ] **Step 1: 正規化関数の失敗するテストを書く**
+**実装済み。** 以下の参照実装は出荷コード（`src/core/domain/models.ts`,
+`src/core/domain/annotation.ts`, `src/core/domain/index.ts`,
+`docs/schemas/saved-data-export-v2.schema.json`）と一致していることを確認済み。差分は無い。
+
+- [x] **Step 1: 正規化関数の失敗するテストを書く**
 
 `src/core/domain/annotation.test.ts`:
 
@@ -281,12 +292,12 @@ describe("normalizeAnnotation", () => {
 });
 ```
 
-- [ ] **Step 2: テストが失敗することを確認する**
+- [x] **Step 2: テストが失敗することを確認する**
 
 Run: `pnpm exec vitest run --dir src annotation.test`
 Expected: FAIL（`./annotation` が解決できない）
 
-- [ ] **Step 3: 型を追加する**
+- [x] **Step 3: 型を追加する**
 
 `src/core/domain/models.ts` の `Annotation` を置き換える。
 
@@ -319,7 +330,7 @@ export interface Annotation {
 }
 ```
 
-- [ ] **Step 4: 正規化関数を実装する**
+- [x] **Step 4: 正規化関数を実装する**
 
 `src/core/domain/annotation.ts`:
 
@@ -403,7 +414,7 @@ export const normalizeAnnotation = (record: unknown): Annotation | undefined => 
 };
 ```
 
-- [ ] **Step 5: re-export する**
+- [x] **Step 5: re-export する**
 
 `src/core/domain/index.ts` の型 export に `HighlightColor` と `TextQuoteAnchor` を追加し、値 export に次を足す。
 
@@ -412,12 +423,12 @@ export { highlightColors } from "./models";
 export { normalizeAnnotation } from "./annotation";
 ```
 
-- [ ] **Step 6: テストが通ることを確認する**
+- [x] **Step 6: テストが通ることを確認する**
 
 Run: `pnpm exec vitest run --dir src annotation.test`
 Expected: PASS（6 tests）
 
-- [ ] **Step 7: エクスポートスキーマを更新する**
+- [x] **Step 7: エクスポートスキーマを更新する**
 
 `docs/schemas/saved-data-export-v2.schema.json` の `$defs.annotation` を次のようにする。`required` から `note` を外し、`anchors` と `color` を追加する。`anchors` は `required` に入れない（旧エクスポートが通らなくなるため）。`targetText` / `prefixText` / `suffixText` は残す。
 
@@ -455,7 +466,7 @@ Expected: PASS（6 tests）
 }
 ```
 
-- [ ] **Step 8: 後方互換のテストを追加する**
+- [x] **Step 8: 後方互換のテストを追加する**
 
 `src/core/storage/import-data.test.ts` に追加する。既存ファイルの import 文と、有効なエクスポートを組み立てるヘルパーの名前を先に読んで合わせること（下記の `minimalExport` と `parseSavedDataExport` は既存の名前に置き換える）。
 
@@ -502,7 +513,7 @@ it("color と anchors を持つ新形式の annotation を受け入れる", () =
 });
 ```
 
-- [ ] **Step 9: 検証ゲートを通す**
+- [x] **Step 9: 検証ゲートを通す**
 
 ```bash
 pnpm run typecheck && pnpm run lint && pnpm run format:check && pnpm exec vitest run --dir src
@@ -510,7 +521,7 @@ pnpm run typecheck && pnpm run lint && pnpm run format:check && pnpm exec vitest
 
 Expected: すべて成功。`Annotation.note` を必須前提にしていた箇所があれば型エラーになるので修正する。
 
-- [ ] **Step 10: コミット**
+- [x] **Step 10: コミット**
 
 ```bash
 git add src/core/domain docs/schemas/saved-data-export-v2.schema.json src/core/storage/import-data.test.ts
@@ -542,297 +553,46 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
   - `toSourceOffset(alignment: TextAlignment, displayOffset: number, bias: "end" | "start"): number | undefined`
   - `toDisplayRange(alignment: TextAlignment, sourceStart: number, sourceEnd: number): { start: number; end: number } | undefined`
 
-- [ ] **Step 1: 失敗するテストを書く**
+**実装済み。** 実装中にユーザー裁定で 2 点、設計が変わった。以下は概要のみ。実際の
+API・実装は `src/core/viewer/text-alignment.ts` を、テストは
+`src/core/viewer/text-alignment.test.ts`（16 tests）を参照すること。
 
-`src/core/viewer/text-alignment.test.ts`:
+- `toSourceOffset` は `segments` が空（source と display に共通文字が皆無、または
+  文字数の積が `maxLcsCells` を超えて中間の LCS 計算を省略した）のとき `undefined` を
+  返す。呼び出し側は戻り値の `undefined` だけを見ればよく、
+  `alignment.segments.length === 0` を自分で判別する必要はない。
+  また、最後の一致区間より後ろの隙間は「仮想区間 `(sourceLength, displayLength)`」と
+  みなし、`bias: "end"` のときは中間の隙間と同じ規約で `sourceLength` へ寄せる
+  （`toDisplayRange` が末尾の置換を `displayLength` まで広げるのと表裏で、往復しても
+  置換語が落ちない）。
+- `toDisplayRange` は置換区間をまたぐ範囲を「置換区間全体を display 側で覆うように」
+  広げる。実装は始端用の `toDisplayStart`／終端用の `toDisplayEnd` を内部ヘルパーとして
+  分離しており、始端は手前の区間の display 末尾まで、終端は次の区間の display 先頭
+  （末尾の置換なら display 末尾）まで広げる。
 
-```ts
-import { describe, expect, it } from "vitest";
+- [x] **Step 1: 失敗するテストを書く**
 
-import { alignTexts, toDisplayRange, toSourceOffset } from "./text-alignment";
+`src/core/viewer/text-alignment.test.ts` に `alignTexts` / `toSourceOffset` /
+`toDisplayRange` のテーブルテストを書いた。
 
-describe("alignTexts", () => {
-  it("同一文字列なら全体が 1 区間になる", () => {
-    const alignment = alignTexts("あいうえお", "あいうえお");
-
-    expect(alignment.segments).toEqual([{ sourceStart: 0, displayStart: 0, length: 5 }]);
-  });
-
-  it("局所置換で文字数が縮んでも前後が対応する", () => {
-    // readable 変換: 「第三条」→「第3条」
-    const alignment = alignTexts("第三条の規定により", "第3条の規定により");
-
-    expect(toSourceOffset(alignment, 3, "start")).toBe(3);
-    expect(toSourceOffset(alignment, 8, "end")).toBe(9);
-  });
-
-  it("挿入（ルビ）があっても後続が対応する", () => {
-    const alignment = alignTexts("公布の日から", "公布こうふの日から");
-
-    expect(toSourceOffset(alignment, 5, "start")).toBe(2);
-    expect(toSourceOffset(alignment, 8, "end")).toBe(5);
-  });
-});
-
-describe("toSourceOffset", () => {
-  it("対応の切れ目では bias に従って外側へ寄せる", () => {
-    const alignment = alignTexts("第三条", "第3条");
-
-    // display の 1..2 は「3」の内側。start は手前の区間末尾、end は次の区間先頭へ寄る。
-    expect(toSourceOffset(alignment, 1, "start")).toBe(1);
-    expect(toSourceOffset(alignment, 1, "end")).toBe(2);
-  });
-
-  it("末尾を超えるオフセットは sourceLength に丸める", () => {
-    const alignment = alignTexts("あいう", "あいう");
-
-    expect(toSourceOffset(alignment, 99, "end")).toBe(3);
-  });
-});
-
-describe("toDisplayRange", () => {
-  it("source の範囲を display の範囲へ変換する", () => {
-    const alignment = alignTexts("第三条の規定", "第3条の規定");
-
-    expect(toDisplayRange(alignment, 3, 6)).toEqual({ start: 2, end: 5 });
-  });
-
-  it("置換された部分を含む範囲は置換全体を覆うように広げる", () => {
-    const alignment = alignTexts("第三条の規定", "第3条の規定");
-
-    expect(toDisplayRange(alignment, 0, 3)).toEqual({ start: 0, end: 2 });
-  });
-
-  it("対応する区間がまったく無ければ undefined", () => {
-    const alignment = alignTexts("あいう", "かきく");
-
-    expect(toDisplayRange(alignment, 0, 3)).toBeUndefined();
-  });
-});
-```
-
-- [ ] **Step 2: テストが失敗することを確認する**
+- [x] **Step 2: テストが失敗することを確認する**
 
 Run: `pnpm exec vitest run --dir src text-alignment`
-Expected: FAIL（`./text-alignment` が解決できない）
+Result: FAIL（`./text-alignment` が解決できない）
 
-- [ ] **Step 3: 実装する**
+- [x] **Step 3: 実装する**
 
-`src/core/viewer/text-alignment.ts`:
+`src/core/viewer/text-alignment.ts` に `commonPrefixLength` / `commonSuffixLength` /
+`alignTexts` / `toSourceOffset` / `toDisplayRange` を実装した。共通の接頭辞・接尾辞を
+剥がし、中間部分を LCS（`maxLcsCells` で計算量に上限）でアラインメントする方式は設計
+どおり。
 
-```ts
-export interface AlignmentSegment {
-  sourceStart: number;
-  displayStart: number;
-  length: number;
-}
-
-// source 側と display 側の対応区間の列。区間内は 1 対 1 対応（等長）で、
-// 区間の切れ目が挿入・削除・置換の境界になる。区間は開始位置の昇順。
-export interface TextAlignment {
-  segments: AlignmentSegment[];
-  sourceLength: number;
-  displayLength: number;
-}
-
-// 中間部の LCS が現実的な計算量に収まる上限。条文 1 ノードの本文は通常数百文字で、
-// 差分のある中間はそのごく一部にしかならない。超えた場合は対応なしとして扱い、
-// ハイライトを描かずに劣化させる。
-const maxLcsCells = 1_000_000;
-
-export const commonPrefixLength = (a: string, b: string): number => {
-  const limit = Math.min(a.length, b.length);
-  let index = 0;
-
-  while (index < limit && a[index] === b[index]) {
-    index += 1;
-  }
-
-  return index;
-};
-
-export const commonSuffixLength = (a: string, b: string): number => {
-  const limit = Math.min(a.length, b.length);
-  let index = 0;
-
-  while (index < limit && a[a.length - 1 - index] === b[b.length - 1 - index]) {
-    index += 1;
-  }
-
-  return index;
-};
-
-// 中間部の最長共通部分列を求め、連続する一致を 1 区間にまとめて返す。
-const lcsSegments = (
-  source: string,
-  display: string,
-  sourceOffset: number,
-  displayOffset: number,
-): AlignmentSegment[] => {
-  if (source === "" || display === "" || source.length * display.length > maxLcsCells) {
-    return [];
-  }
-
-  const width = display.length + 1;
-  const table = new Uint32Array((source.length + 1) * width);
-
-  for (let i = source.length - 1; i >= 0; i -= 1) {
-    for (let j = display.length - 1; j >= 0; j -= 1) {
-      table[i * width + j] =
-        source[i] === display[j]
-          ? table[(i + 1) * width + j + 1] + 1
-          : Math.max(table[(i + 1) * width + j], table[i * width + j + 1]);
-    }
-  }
-
-  const segments: AlignmentSegment[] = [];
-  let i = 0;
-  let j = 0;
-
-  while (i < source.length && j < display.length) {
-    if (source[i] === display[j]) {
-      const last = segments.at(-1);
-
-      if (
-        last !== undefined &&
-        last.sourceStart + last.length === sourceOffset + i &&
-        last.displayStart + last.length === displayOffset + j
-      ) {
-        last.length += 1;
-      } else {
-        segments.push({
-          sourceStart: sourceOffset + i,
-          displayStart: displayOffset + j,
-          length: 1,
-        });
-      }
-
-      i += 1;
-      j += 1;
-    } else if (table[(i + 1) * width + j] >= table[i * width + j + 1]) {
-      i += 1;
-    } else {
-      j += 1;
-    }
-  }
-
-  return segments;
-};
-
-// 末尾の区間に連続していれば伸ばし、そうでなければ新しい区間として足す。
-const pushSegment = (segments: AlignmentSegment[], segment: AlignmentSegment): void => {
-  const last = segments.at(-1);
-
-  if (
-    last !== undefined &&
-    last.sourceStart + last.length === segment.sourceStart &&
-    last.displayStart + last.length === segment.displayStart
-  ) {
-    last.length += segment.length;
-
-    return;
-  }
-
-  segments.push(segment);
-};
-
-export const alignTexts = (source: string, display: string): TextAlignment => {
-  const prefix = commonPrefixLength(source, display);
-  const suffix = Math.min(
-    commonSuffixLength(source, display),
-    Math.min(source.length, display.length) - prefix,
-  );
-  const segments: AlignmentSegment[] = [];
-
-  if (prefix > 0) {
-    segments.push({ sourceStart: 0, displayStart: 0, length: prefix });
-  }
-
-  const middle = lcsSegments(
-    source.slice(prefix, source.length - suffix),
-    display.slice(prefix, display.length - suffix),
-    prefix,
-    prefix,
-  );
-
-  for (const segment of middle) {
-    pushSegment(segments, segment);
-  }
-
-  if (suffix > 0) {
-    pushSegment(segments, {
-      sourceStart: source.length - suffix,
-      displayStart: display.length - suffix,
-      length: suffix,
-    });
-  }
-
-  return { segments, sourceLength: source.length, displayLength: display.length };
-};
-
-// display のオフセットを source のオフセットへ移す。
-// 対応の切れ目に落ちたときは bias に従って外側へ寄せ、置換された語をまるごと覆う。
-export const toSourceOffset = (
-  alignment: TextAlignment,
-  displayOffset: number,
-  bias: "end" | "start",
-): number => {
-  const clamped = Math.max(0, Math.min(displayOffset, alignment.displayLength));
-  let previousSourceEnd = 0;
-
-  for (const segment of alignment.segments) {
-    if (clamped < segment.displayStart) {
-      // 区間と区間の隙間。start は手前の区間末尾へ、end は次の区間先頭へ寄せる。
-      return bias === "start" ? previousSourceEnd : segment.sourceStart;
-    }
-
-    if (clamped <= segment.displayStart + segment.length) {
-      return segment.sourceStart + (clamped - segment.displayStart);
-    }
-
-    previousSourceEnd = segment.sourceStart + segment.length;
-  }
-
-  return Math.min(alignment.sourceLength, previousSourceEnd);
-};
-
-// source の範囲を display の範囲へ移す。置換をまたぐ場合は置換全体を覆うよう広げる。
-export const toDisplayRange = (
-  alignment: TextAlignment,
-  sourceStart: number,
-  sourceEnd: number,
-): { start: number; end: number } | undefined => {
-  let start: number | undefined;
-  let end: number | undefined;
-
-  for (const segment of alignment.segments) {
-    const segmentSourceEnd = segment.sourceStart + segment.length;
-
-    if (segmentSourceEnd <= sourceStart || segment.sourceStart >= sourceEnd) {
-      continue;
-    }
-
-    const overlapStart = Math.max(segment.sourceStart, sourceStart);
-    const overlapEnd = Math.min(segmentSourceEnd, sourceEnd);
-    const displayStart = segment.displayStart + (overlapStart - segment.sourceStart);
-    const displayEnd = segment.displayStart + (overlapEnd - segment.sourceStart);
-
-    start = start === undefined ? displayStart : Math.min(start, displayStart);
-    end = end === undefined ? displayEnd : Math.max(end, displayEnd);
-  }
-
-  return start === undefined || end === undefined || start >= end ? undefined : { start, end };
-};
-```
-
-- [ ] **Step 4: テストが通ることを確認する**
+- [x] **Step 4: テストが通ることを確認する**
 
 Run: `pnpm exec vitest run --dir src text-alignment`
-Expected: PASS（8 tests）
+Result: PASS（16 tests）
 
-期待値が実装と食い違ったら、まず**テストの期待値が正しいか**を手で数えて確かめる。実装を期待値に合わせて曲げない。
-
-- [ ] **Step 5: コミット**
+- [x] **Step 5: コミット**
 
 ```bash
 git add src/core/viewer/text-alignment.ts src/core/viewer/text-alignment.test.ts
@@ -858,170 +618,46 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Produces:
   - `createTextQuoteAnchor(plainText: string, start: number, end: number): { quote: string; prefix: string; suffix: string }`
   - `resolveTextQuoteAnchor(plainText: string, anchor: TextQuoteAnchor): { start: number; end: number } | undefined`
-  - `findAnchorNode(nodes: LawNode[], target: LawReferenceTarget): LawNode | undefined`
+  - `findAnchorNode<T extends Pick<LawNode, "id" | "path" | "type">>(nodes: T[], target: LawReferenceTarget): T | undefined`
 
-- [ ] **Step 1: 失敗するテストを書く**
+**実装済み。** 実装中にユーザー裁定で 1 点、設計が変わった。以下は概要のみ。実際の
+API・実装は `src/core/viewer/text-anchor.ts` を、テストは
+`src/core/viewer/text-anchor.test.ts`（13 tests）を参照すること。
 
-`src/core/viewer/text-anchor.test.ts`:
+- `resolveTextQuoteAnchor` は、引用文の出現が複数箇所あり、かつどの候補も前後の文脈が
+  一切一致しない（score 0）ときは `undefined` を返す。改正で周囲の文が入れ替わり
+  引用文だけが別の場所に生き残った状態を指し、根拠なく別の出現位置へハイライトを
+  復元しないための安全側の判断。一方、出現が 1 箇所だけなら score 0 でも解決する
+  （ノード全体が引用文のとき `createTextQuoteAnchor` は prefix/suffix を空文字列に
+  するため、正解でも score 0 になるケースがある）。出現が複数かつ正の score で同点
+  なら先頭が勝つ。
+- 副次的な差分として、`createTextQuoteAnchor` は `start`/`end` を
+  `0 <= start <= end <= plainText.length` にクランプしてから `slice` する（負の
+  `start` を渡すと `slice` が末尾相対として解釈し `quote` が非対称に壊れるため）。
+  `findAnchorNode` は `LawNode` 全体ではなく `id` / `path` / `type` だけを要求する
+  ジェネリックにして、テストダブルを軽くしている。
 
-```ts
-import type { LawNode, TextQuoteAnchor } from "@/core/domain";
-import { describe, expect, it } from "vitest";
+- [x] **Step 1: 失敗するテストを書く**
 
-import { createTextQuoteAnchor, findAnchorNode, resolveTextQuoteAnchor } from "./text-anchor";
+`src/core/viewer/text-anchor.test.ts` に `createTextQuoteAnchor` / `resolveTextQuoteAnchor`
+/ `findAnchorNode` のテストを書いた。
 
-const target = { lawId: "322AC0000000125", article: "1", path: "Article:1" };
-const anchorOf = (quote: string, prefix: string, suffix: string): TextQuoteAnchor => ({
-  target,
-  quote,
-  prefix,
-  suffix,
-});
-
-describe("createTextQuoteAnchor", () => {
-  it("引用文と前後の文脈を切り出す", () => {
-    expect(createTextQuoteAnchor("私権は、公共の福祉に適合する。", 4, 8)).toEqual({
-      quote: "公共の福",
-      prefix: "私権は、",
-      suffix: "祉に適合する。",
-    });
-  });
-
-  it("文頭・文末では文脈が空文字になる", () => {
-    expect(createTextQuoteAnchor("あいう", 0, 3)).toEqual({
-      quote: "あいう",
-      prefix: "",
-      suffix: "",
-    });
-  });
-});
-
-describe("resolveTextQuoteAnchor", () => {
-  it("引用文が 1 箇所ならその位置を返す", () => {
-    const plainText = "私権は、公共の福祉に適合する。";
-
-    expect(resolveTextQuoteAnchor(plainText, anchorOf("公共", "私権は、", "の福"))).toEqual({
-      start: 4,
-      end: 6,
-    });
-  });
-
-  it("引用文が複数箇所にあるとき前後の文脈が最も一致する候補を選ぶ", () => {
-    const plainText = "甲は乙とする。丙は乙とする。";
-
-    expect(resolveTextQuoteAnchor(plainText, anchorOf("乙", "丙は", "とする"))).toEqual({
-      start: 9,
-      end: 10,
-    });
-  });
-
-  it("引用文が消えていれば undefined", () => {
-    expect(resolveTextQuoteAnchor("まったく別の条文", anchorOf("公共", "", ""))).toBeUndefined();
-  });
-
-  it("空の引用文は undefined", () => {
-    expect(resolveTextQuoteAnchor("あいう", anchorOf("", "", ""))).toBeUndefined();
-  });
-});
-
-describe("findAnchorNode", () => {
-  const nodes = [
-    { id: "n1", path: "Article:1", type: "Article" },
-    { id: "n2", path: "Article:1/Paragraph:1", type: "Paragraph" },
-  ] as unknown as LawNode[];
-
-  it("path で対象ノードを引く", () => {
-    expect(findAnchorNode(nodes, { lawId: "x", path: "Article:1/Paragraph:1" })?.id).toBe("n2");
-  });
-
-  it("path が無い、または一致しなければ undefined", () => {
-    expect(findAnchorNode(nodes, { lawId: "x" })).toBeUndefined();
-    expect(findAnchorNode(nodes, { lawId: "x", path: "Article:9" })).toBeUndefined();
-  });
-});
-```
-
-- [ ] **Step 2: テストが失敗することを確認する**
+- [x] **Step 2: テストが失敗することを確認する**
 
 Run: `pnpm exec vitest run --dir src text-anchor`
-Expected: FAIL
+Result: FAIL（`./text-anchor` が解決できない）
 
-- [ ] **Step 3: 実装する**
+- [x] **Step 3: 実装する**
 
-`src/core/viewer/text-anchor.ts`:
+`src/core/viewer/text-anchor.ts` に上記の裁定を反映して実装した。`createTextQuoteAnchor`
+/ `resolveTextQuoteAnchor` / `findAnchorNode` を export する。
 
-```ts
-import type { LawNode, LawReferenceTarget, TextQuoteAnchor } from "@/core/domain";
-
-import { commonPrefixLength, commonSuffixLength } from "./text-alignment";
-
-// 前後の文脈として保持する文字数。条文は同じ語が何度も出るので、
-// 短すぎると候補を絞れず、長すぎると改正の影響を受けやすくなる。
-const contextLength = 32;
-
-export const createTextQuoteAnchor = (
-  plainText: string,
-  start: number,
-  end: number,
-): { quote: string; prefix: string; suffix: string } => ({
-  quote: plainText.slice(start, end),
-  prefix: plainText.slice(Math.max(0, start - contextLength), start),
-  suffix: plainText.slice(end, end + contextLength),
-});
-
-// 引用文が複数箇所に出るときは前後の文脈の一致長で最良候補を選ぶ。
-// 見つからなければ undefined（条文が改正で変わった）。
-export const resolveTextQuoteAnchor = (
-  plainText: string,
-  anchor: TextQuoteAnchor,
-): { start: number; end: number } | undefined => {
-  if (anchor.quote === "") {
-    return undefined;
-  }
-
-  let best: number | undefined;
-  let bestScore = -1;
-
-  for (
-    let index = plainText.indexOf(anchor.quote);
-    index !== -1;
-    index = plainText.indexOf(anchor.quote, index + 1)
-  ) {
-    const score =
-      commonSuffixLength(plainText.slice(0, index), anchor.prefix) +
-      commonPrefixLength(plainText.slice(index + anchor.quote.length), anchor.suffix);
-
-    if (score > bestScore) {
-      bestScore = score;
-      best = index;
-    }
-  }
-
-  return best === undefined ? undefined : { start: best, end: best + anchor.quote.length };
-};
-
-// アンカーの対象ノードを path で引く。path は改版をまたいで安定し、
-// node.id は revisionId を含むため保存キーには使えない。
-export const findAnchorNode = (
-  nodes: LawNode[],
-  target: LawReferenceTarget,
-): LawNode | undefined => {
-  const path = target.path;
-
-  if (path === undefined || path === null || path === "") {
-    return undefined;
-  }
-
-  return nodes.find((node) => node.path === path);
-};
-```
-
-- [ ] **Step 4: テストが通ることを確認する**
+- [x] **Step 4: テストが通ることを確認する**
 
 Run: `pnpm exec vitest run --dir src text-anchor`
-Expected: PASS（8 tests）
+Result: PASS（13 tests）
 
-- [ ] **Step 5: コミット**
+- [x] **Step 5: コミット**
 
 ```bash
 git add src/core/viewer/text-anchor.ts src/core/viewer/text-anchor.test.ts
@@ -1050,244 +686,43 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
   - `interface ApplyHighlightResult { created: CreatedHighlightRange[]; updated: HighlightRange[]; deleted: string[] }`
   - `applyHighlight(existing: HighlightRange[], next: { start: number; end: number; color: HighlightColor }): ApplyHighlightResult`
 
-- [ ] **Step 1: 失敗するテーブルテストを書く**
+**実装済み。** 実装中にユーザー裁定で 1 点、設計が変わった。以下は概要のみ。実際の
+API・実装は `src/core/viewer/highlight-merge.ts` を、テストは
+`src/core/viewer/highlight-merge.test.ts`（11 tests）を参照すること。
 
-`src/core/viewer/highlight-merge.test.ts`:
+- `applyHighlight` は `next.start >= next.end`（幅 0 の塗り、クリックのみの選択など）を
+  no-op として扱い、`{ created: [], updated: [], deleted: [] }` を返す。幅 0 の注釈は
+  不可視かつヒットテスト不能なうえ、trim ループの境界条件（`<=`）に引っかからず永久に
+  残ってしまうため。
+- 実装の前提として、`existing` は互いに重ならないこと、単一の本文ノード内の範囲
+  （`node.plainText` 空間の座標）のみであることを呼び出し側が保証する必要がある
+  （コード先頭のコメント参照）。
 
-```ts
-import { describe, expect, it } from "vitest";
+- [x] **Step 1: 失敗するテーブルテストを書く**
 
-import { applyHighlight, type HighlightRange } from "./highlight-merge";
+`src/core/viewer/highlight-merge.test.ts` に `applyHighlight` のテーブルテストを書いた。
+概要は以下の通り。区間演算はバグが出やすいため、当初のブリーフに無かった境界ケース
+（既存と完全に同じ範囲を塗る、同色の吸収が配列の並び順に関わらず連鎖する、幅 0 の塗りは
+no-op）をテストに追加してある。
 
-const range = (
-  annotationId: string,
-  start: number,
-  end: number,
-  color: HighlightRange["color"],
-): HighlightRange => ({ annotationId, start, end, color });
-
-describe("applyHighlight", () => {
-  it("既存が無ければ新規 1 件を作る", () => {
-    expect(applyHighlight([], { start: 2, end: 5, color: "yellow" })).toEqual({
-      created: [{ start: 2, end: 5, color: "yellow" }],
-      updated: [],
-      deleted: [],
-    });
-  });
-
-  it("離れた既存には触れない", () => {
-    const existing = [range("a", 10, 12, "pink")];
-
-    expect(applyHighlight(existing, { start: 2, end: 5, color: "yellow" })).toEqual({
-      created: [{ start: 2, end: 5, color: "yellow" }],
-      updated: [],
-      deleted: [],
-    });
-  });
-
-  const sameColorCases = [
-    { name: "重なる", existing: range("a", 3, 8, "yellow"), expected: { start: 2, end: 8 } },
-    { name: "隣接する", existing: range("a", 5, 9, "yellow"), expected: { start: 2, end: 9 } },
-    { name: "内包する", existing: range("a", 0, 9, "yellow"), expected: { start: 0, end: 9 } },
-  ];
-
-  for (const testCase of sameColorCases) {
-    it(`同色と${testCase.name}ときはマージして 1 本にする`, () => {
-      const result = applyHighlight([testCase.existing], { start: 2, end: 5, color: "yellow" });
-
-      expect(result.created).toEqual([]);
-      expect(result.updated).toEqual([
-        { annotationId: "a", color: "yellow", ...testCase.expected },
-      ]);
-      expect(result.deleted).toEqual([]);
-    });
-  }
-
-  it("同色が複数重なるときは先頭側を残して他を消す", () => {
-    const existing = [range("a", 0, 3, "yellow"), range("b", 7, 10, "yellow")];
-    const result = applyHighlight(existing, { start: 2, end: 8, color: "yellow" });
-
-    expect(result.created).toEqual([]);
-    expect(result.updated).toEqual([range("a", 0, 10, "yellow")]);
-    expect(result.deleted).toEqual(["b"]);
-  });
-
-  it("異色と部分的に重なるときは既存を削り取る", () => {
-    const existing = [range("a", 1, 4, "yellow")];
-    const result = applyHighlight(existing, { start: 3, end: 6, color: "pink" });
-
-    expect(result.created).toEqual([{ start: 3, end: 6, color: "pink" }]);
-    expect(result.updated).toEqual([range("a", 1, 3, "yellow")]);
-    expect(result.deleted).toEqual([]);
-  });
-
-  it("異色を完全に覆うときは既存を消す", () => {
-    const existing = [range("a", 3, 5, "yellow")];
-    const result = applyHighlight(existing, { start: 1, end: 8, color: "pink" });
-
-    expect(result.updated).toEqual([]);
-    expect(result.deleted).toEqual(["a"]);
-  });
-
-  it("異色の内側を塗るときは 2 本に分割する", () => {
-    const existing = [range("a", 1, 6, "yellow")];
-    const result = applyHighlight(existing, { start: 2, end: 4, color: "pink" });
-
-    expect(result.updated).toEqual([range("a", 1, 2, "yellow")]);
-    expect(result.created).toEqual([
-      { start: 2, end: 4, color: "pink" },
-      { start: 4, end: 6, color: "yellow", sourceAnnotationId: "a" },
-    ]);
-    expect(result.deleted).toEqual([]);
-  });
-
-  it("異色に接しているだけなら削らない", () => {
-    const existing = [range("a", 1, 3, "yellow")];
-    const result = applyHighlight(existing, { start: 3, end: 6, color: "pink" });
-
-    expect(result.updated).toEqual([]);
-    expect(result.deleted).toEqual([]);
-  });
-
-  it("同色マージで広がった範囲が別の異色に届く場合も削り取る", () => {
-    const existing = [range("a", 0, 3, "yellow"), range("b", 4, 8, "pink")];
-    const result = applyHighlight(existing, { start: 2, end: 5, color: "yellow" });
-
-    expect(result.updated).toEqual([range("a", 0, 5, "yellow"), range("b", 5, 8, "pink")]);
-    expect(result.created).toEqual([]);
-    expect(result.deleted).toEqual([]);
-  });
-});
-```
-
-- [ ] **Step 2: テストが失敗することを確認する**
+- [x] **Step 2: テストが失敗することを確認する**
 
 Run: `pnpm exec vitest run --dir src highlight-merge`
-Expected: FAIL
+Result: FAIL
 
-- [ ] **Step 3: 実装する**
+- [x] **Step 3: 実装する**
 
-`src/core/viewer/highlight-merge.ts`:
+`src/core/viewer/highlight-merge.ts` に `applyHighlight` を実装した。同色の吸収
+（`absorbSameColor`）は範囲が広がって別の同色に届く限り変化が止まるまで繰り返し、異色との
+重なりは削り・分割・全消しのいずれかで解決する。上記の注記どおり、幅 0 の塗りは冒頭で
+ガードして no-op にしている。
 
-```ts
-import type { HighlightColor } from "@/core/domain";
-
-export interface HighlightRange {
-  annotationId: string;
-  start: number;
-  end: number;
-  color: HighlightColor;
-}
-
-export interface CreatedHighlightRange {
-  start: number;
-  end: number;
-  color: HighlightColor;
-  // 異色分割で生じた断片のとき、元の注釈 id。createdAt やメモの複製元になる。
-  sourceAnnotationId?: string;
-}
-
-export interface ApplyHighlightResult {
-  created: CreatedHighlightRange[];
-  updated: HighlightRange[];
-  deleted: string[];
-}
-
-// 同色は隣接でも吸収する（継ぎ目を作らない）。吸収で範囲が広がると
-// さらに別の同色に届きうるので、変化が止まるまで繰り返す。
-const absorbSameColor = (
-  existing: HighlightRange[],
-  next: { start: number; end: number; color: HighlightColor },
-): { start: number; end: number; absorbed: HighlightRange[] } => {
-  let start = next.start;
-  let end = next.end;
-  const absorbed: HighlightRange[] = [];
-  let changed = true;
-
-  while (changed) {
-    changed = false;
-
-    for (const range of existing) {
-      if (range.color !== next.color || absorbed.includes(range)) {
-        continue;
-      }
-
-      if (range.end < start || range.start > end) {
-        continue;
-      }
-
-      absorbed.push(range);
-      start = Math.min(start, range.start);
-      end = Math.max(end, range.end);
-      changed = true;
-    }
-  }
-
-  return { start, end, absorbed };
-};
-
-// 塗った範囲が既存と重なるとき、新しい色が勝ち、既存は削られる。
-// 結果として「同一ノード内でハイライトは互いに重ならない」不変条件が保たれる。
-export const applyHighlight = (
-  existing: HighlightRange[],
-  next: { start: number; end: number; color: HighlightColor },
-): ApplyHighlightResult => {
-  const { start, end, absorbed } = absorbSameColor(existing, next);
-  const created: CreatedHighlightRange[] = [];
-  const updated: HighlightRange[] = [];
-  const deleted: string[] = [];
-  // 代表は最も先頭側。createdAt を保つため id を引き継ぐ。
-  const survivor = [...absorbed].sort((a, b) => a.start - b.start)[0];
-
-  if (survivor === undefined) {
-    created.push({ start, end, color: next.color });
-  } else {
-    updated.push({ ...survivor, start, end });
-
-    for (const range of absorbed) {
-      if (range !== survivor) {
-        deleted.push(range.annotationId);
-      }
-    }
-  }
-
-  for (const range of existing) {
-    if (absorbed.includes(range) || range.end <= start || range.start >= end) {
-      continue;
-    }
-
-    const hasLeft = range.start < start;
-    const hasRight = range.end > end;
-
-    if (hasLeft && hasRight) {
-      updated.push({ ...range, end: start });
-      created.push({
-        start: end,
-        end: range.end,
-        color: range.color,
-        sourceAnnotationId: range.annotationId,
-      });
-    } else if (hasLeft) {
-      updated.push({ ...range, end: start });
-    } else if (hasRight) {
-      updated.push({ ...range, start: end });
-    } else {
-      deleted.push(range.annotationId);
-    }
-  }
-
-  return { created, updated, deleted };
-};
-```
-
-- [ ] **Step 4: テストが通ることを確認する**
+- [x] **Step 4: テストが通ることを確認する**
 
 Run: `pnpm exec vitest run --dir src highlight-merge`
-Expected: PASS（11 tests）
+Result: PASS（11 tests）
 
-「異色の内側を塗るときは 2 本に分割する」で `created` の並び順が食い違ったら、実装の push 順に合わせてテストの期待値を並べ替える。順序自体に意味はないが、期待値は実装と一致させる。
-
-- [ ] **Step 5: コミット**
+- [x] **Step 5: コミット**
 
 ```bash
 git add src/core/viewer/highlight-merge.ts src/core/viewer/highlight-merge.test.ts
@@ -1316,7 +751,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
   - `isHighlightSupported(view?: { CSS?: unknown; Highlight?: unknown; document?: unknown }): boolean`
   - `caretPositionAt(document: Document, x: number, y: number): { node: Node; offset: number } | undefined`
 
-- [ ] **Step 1: 失敗するテストを書く**
+- [x] **Step 1: 失敗するテストを書く**
 
 `src/core/viewer/highlight-support.test.ts`:
 
@@ -1397,12 +832,12 @@ describe("caretPositionAt", () => {
 });
 ```
 
-- [ ] **Step 2: テストが失敗することを確認する**
+- [x] **Step 2: テストが失敗することを確認する**
 
 Run: `pnpm exec vitest run --dir src "highlight-support|caret-position"`
 Expected: FAIL
 
-- [ ] **Step 3: 実装する**
+- [x] **Step 3: 実装する**
 
 `src/core/viewer/highlight-support.ts`:
 
@@ -1479,12 +914,12 @@ export const caretPositionAt = (
 };
 ```
 
-- [ ] **Step 4: テストが通ることを確認する**
+- [x] **Step 4: テストが通ることを確認する**
 
 Run: `pnpm exec vitest run --dir src "highlight-support|caret-position"`
 Expected: PASS（9 tests）
 
-- [ ] **Step 5: コミット**
+- [x] **Step 5: コミット**
 
 ```bash
 git add src/core/viewer/highlight-support.ts src/core/viewer/highlight-support.test.ts src/core/viewer/caret-position.ts src/core/viewer/caret-position.test.ts
@@ -1510,7 +945,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 - Consumes: `normalizeAnnotation`（Task 2）
 - Produces: `StorageRepository.deleteAnnotation(annotationId: string): Promise<void>`
 
-- [ ] **Step 1: 失敗するテストを書く**
+- [x] **Step 1: 失敗するテストを書く**
 
 `src/core/storage/repository.test.ts` に追加する。既存の `createDatabaseName` / `fixedNow` / `openedRepositories` / `openedDatabaseNames` を使うこと。
 
@@ -1550,12 +985,12 @@ it("存在しない注釈の削除はエラーにしない", async () => {
 });
 ```
 
-- [ ] **Step 2: テストが失敗することを確認する**
+- [x] **Step 2: テストが失敗することを確認する**
 
 Run: `pnpm exec vitest run --dir src repository.test`
 Expected: FAIL（`deleteAnnotation is not a function`）
 
-- [ ] **Step 3: interface に追加する**
+- [x] **Step 3: interface に追加する**
 
 `src/core/storage/repository.ts` の `StorageRepository` で `listAnnotations` の直後に追加する。
 
@@ -1563,7 +998,7 @@ Expected: FAIL（`deleteAnnotation is not a function`）
   deleteAnnotation(annotationId: string): Promise<void>;
 ```
 
-- [ ] **Step 4: 実装する**
+- [x] **Step 4: 実装する**
 
 `listAnnotations` を正規化つきに置き換え、`deleteAnnotation` を足す。`normalizeAnnotation` と型 `Annotation` を `@/core/domain` から import する。
 
@@ -1589,7 +1024,7 @@ Expected: FAIL（`deleteAnnotation is not a function`）
     },
 ```
 
-- [ ] **Step 5: fixture の in-memory 実装に追加する**
+- [x] **Step 5: fixture の in-memory 実装に追加する**
 
 `src/test/fixtures/storage.ts` の `listAnnotations` の隣に追加する。
 
@@ -1601,12 +1036,12 @@ Expected: FAIL（`deleteAnnotation is not a function`）
       },
 ```
 
-- [ ] **Step 6: テストが通ることを確認する**
+- [x] **Step 6: テストが通ることを確認する**
 
 Run: `pnpm exec vitest run --dir src repository.test`
 Expected: PASS
 
-- [ ] **Step 7: 検証ゲートを通してコミット**
+- [x] **Step 7: 検証ゲートを通してコミット**
 
 ```bash
 pnpm run typecheck && pnpm run lint && pnpm run format:check && pnpm exec vitest run --dir src
