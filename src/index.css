@@ -99,6 +99,12 @@
   --sidebar-accent-foreground: #14532d;
   --sidebar-border: #e7e0d3;
   --sidebar-ring: #166534;
+
+  /* 条文ハイライトの 4 色。本文の文字色は変えず地の色だけを塗る。 */
+  --highlight-yellow: #fde68a;
+  --highlight-cyan: #67e8f9;
+  --highlight-pink: #f9a8d4;
+  --highlight-orange: #fb923c;
 }
 
 :root[data-font-size="large"] {
@@ -193,6 +199,11 @@
   --sidebar-accent-foreground: #dcfce7;
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: #4ade80;
+
+  --highlight-yellow: #725f14;
+  --highlight-cyan: #125a68;
+  --highlight-pink: #7d2b57;
+  --highlight-orange: #5e2b0c;
 }
 
 html {
@@ -230,4 +241,32 @@ input,
 textarea,
 select {
   font: inherit;
+}
+
+/* 本文の文字色は変えない。地の色だけを変え、フォント設定やテーマと衝突させない。 */
+::highlight(surasura-highlight-yellow) {
+  background-color: var(--highlight-yellow);
+}
+
+::highlight(surasura-highlight-cyan) {
+  background-color: var(--highlight-cyan);
+}
+
+::highlight(surasura-highlight-pink) {
+  background-color: var(--highlight-pink);
+}
+
+::highlight(surasura-highlight-orange) {
+  background-color: var(--highlight-orange);
+}
+
+/* 強制カラーモードでは 4 色をシステム色に集約する。色の区別は失われるが存在は残る。 */
+@media (forced-colors: active) {
+  ::highlight(surasura-highlight-yellow),
+  ::highlight(surasura-highlight-cyan),
+  ::highlight(surasura-highlight-pink),
+  ::highlight(surasura-highlight-orange) {
+    background-color: Mark;
+    color: MarkText;
+  }
 }
