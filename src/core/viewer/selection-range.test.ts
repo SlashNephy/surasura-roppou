@@ -54,6 +54,10 @@ const rangeOf = (start: [Node, number], end: [Node, number]): Range => {
   return range;
 };
 
+// 項番号の marker span が同居する本文。marker はマーク対象の兄弟である。
+const markerHtml =
+  '<p><span class="marker">２</span><span data-law-node-id="n1">あいうえお</span></p>';
+
 // 地の文だけの本文。
 const plainHtml = '<p><span data-law-node-id="n1">私権は、公共の福祉に適合する。</span></p>';
 
@@ -113,19 +117,53 @@ describe("resolveNodeTextRange", () => {
     expect(resolveNodeTextRange(range)).toBeUndefined();
   });
 
-  it("本文要素の外側から始まる選択は undefined", () => {
-    const host = setup(
-      '<p><span class="marker">２</span><span data-law-node-id="n1">あいうえお</span></p>',
-    );
+  it("項番号から本文へまたぐ選択は、始点を本文の先頭へ丸める", () => {
+    const host = setup(markerHtml);
     const marker = elementOf(host, ".marker");
     const owner = elementOf(host, "[data-law-node-id]");
 
     expect(
       resolveNodeTextRange(rangeOf([textNodeAt(marker, 0), 0], [textNodeAt(owner, 0), 3])),
-    ).toBeUndefined();
+    ).toEqual({ lawNodeId: "n1", start: 0, end: 3, text: "あいうえお" });
   });
 
-  it("2 つの本文要素にまたがる選択は undefined", () => {
+  it("行末を越えたドラッグは、終点を本文の末尾へ丸める", () => {
+    const host = setup(markerHtml);
+    const paragraph = elementOf(host, "p");
+    const owner = elementOf(host, "[data-law-node-id]");
+    // 終点は <p> の子 index 2、つまり本文 span より後ろ。
+    const range = rangeOf([textNodeAt(owner, 0), 2], [paragraph, 2]);
+
+    expect(resolveNodeTextRange(range)).toEqual({
+      lawNodeId: "n1",
+      start: 2,
+      end: 5,
+      text: "あいうえお",
+    });
+  });
+
+  it("本文要素そのものが段落のときは、段落全体の選択が全長になる", () => {
+    // 子を持たない条の本文は <p> 自身がマーク対象になる。トリプルクリックのように
+    // 端点が要素の子オフセットで来ても、両端が本文要素の内側なので丸めは要らない。
+    const host = setup('<p data-law-node-id="n1">あいうえお</p>');
+    const owner = elementOf(host, "[data-law-node-id]");
+
+    expect(resolveNodeTextRange(rangeOf([owner, 0], [owner, 1]))).toMatchObject({
+      start: 0,
+      end: 5,
+    });
+  });
+
+  it("両端点とも本文要素の外にある選択は undefined", () => {
+    // 本文が span のときの段落トリプルクリックがこれにあたる。どの本文要素を
+    // 指しているのか端点からは決まらないため、丸めずに扱わない。
+    const host = setup(markerHtml);
+    const paragraph = elementOf(host, "p");
+
+    expect(resolveNodeTextRange(rangeOf([paragraph, 0], [paragraph, 2]))).toBeUndefined();
+  });
+
+  it("2 つの本文要素にまたがる選択は undefined（丸めの対象にしない）", () => {
     const host = setup(
       '<p><span data-law-node-id="n1">あいう</span><span data-law-node-id="n2">かきく</span></p>',
     );

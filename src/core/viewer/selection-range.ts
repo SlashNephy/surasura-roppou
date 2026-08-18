@@ -1,3 +1,6 @@
+// LawNodeList.tsx が本文を描画する 4 箇所（子を持たない条の p / 条直下の項の span /
+// それ以外の項・号の span / 見出しノードの前文の p）に直書きしている属性名と同期している。
+// JSX の属性名に定数は使えないため、片方だけ変えないよう注意する。
 export const lawNodeIdAttribute = "data-law-node-id";
 
 export interface NodeTextRange {
@@ -17,10 +20,8 @@ export const collectDisplayTextNodes = (owner: Element): Text[] => {
   const texts: Text[] = [];
 
   for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
-    const text = node as Text;
-
-    if (findRubyTextElement(text, owner) === undefined) {
-      texts.push(text);
+    if (node instanceof Text && findRubyTextElement(node, owner) === undefined) {
+      texts.push(node);
     }
   }
 
@@ -28,9 +29,9 @@ export const collectDisplayTextNodes = (owner: Element): Text[] => {
 };
 
 export const displayTextOf = (owner: Element): string =>
-  collectDisplayTextNodes(owner)
-    .map((text) => text.data)
-    .join("");
+  joinTextData(collectDisplayTextNodes(owner));
+
+const joinTextData = (texts: Text[]): string => texts.map((text) => text.data).join("");
 
 export const findLawNodeElement = (
   root: ParentNode,
@@ -50,9 +51,9 @@ export const findLawNodeElement = (
 // 選択が単一の本文要素に収まるときだけ、表示文字列上の範囲を返す。
 // 項番号の marker span や複数の本文要素にまたがる選択は扱わない（v1 のスコープ）。
 export const resolveNodeTextRange = (range: Range): NodeTextRange | undefined => {
-  const owner = findOwner(range.startContainer);
+  const owner = findRangeOwner(range);
 
-  if (owner === undefined || owner !== findOwner(range.endContainer)) {
+  if (owner === undefined) {
     return undefined;
   }
 
@@ -76,7 +77,7 @@ export const resolveNodeTextRange = (range: Range): NodeTextRange | undefined =>
     lawNodeId,
     start,
     end,
-    text: texts.map((text) => text.data).join(""),
+    text: joinTextData(texts),
   };
 };
 
@@ -105,6 +106,25 @@ export const createNodeTextRange = (
   range.setEnd(endPoint.node, endPoint.offset);
 
   return range;
+};
+
+// 選択が属する本文要素を決める。
+// 片方の端点だけが本文要素の外に出る選択（行末を越えたドラッグ、項番号 span からの
+// ドラッグ開始）は、ブラウザが親 <p> の中に端点を作るため実際に頻出する。
+// これを捨てると選択が黙って無視されるので、内側にある端点の本文要素を採る。
+// 外に出た端点の丸めは toDisplayOffset の走査が兼ねる。走査は本文要素配下の
+// テキストノードしか見ないため、その前にある端点は 0、後ろにある端点は全長になる。
+// Range は始点が終点より前という不変条件を持つので、丸め先は端点の前後関係と一致する。
+// 両端が外、または別々の本文要素の内側にあるときは、どの本文を指すか決まらないので扱わない。
+const findRangeOwner = (range: Range): HTMLElement | undefined => {
+  const startOwner = findOwner(range.startContainer);
+  const endOwner = findOwner(range.endContainer);
+
+  if (startOwner !== undefined && endOwner !== undefined && startOwner !== endOwner) {
+    return undefined;
+  }
+
+  return startOwner ?? endOwner;
 };
 
 const findOwner = (node: Node | null): HTMLElement | undefined => {
