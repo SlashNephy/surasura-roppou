@@ -26,17 +26,18 @@ export interface ApplyHighlightResult {
 const absorbSameColor = (
   existing: HighlightRange[],
   next: { start: number; end: number; color: HighlightColor },
-): { start: number; end: number; absorbed: HighlightRange[] } => {
+): { start: number; end: number; absorbed: HighlightRange[]; absorbedSet: Set<HighlightRange> } => {
   let start = next.start;
   let end = next.end;
   const absorbed: HighlightRange[] = [];
+  const absorbedSet = new Set<HighlightRange>();
   let changed = true;
 
   while (changed) {
     changed = false;
 
     for (const range of existing) {
-      if (range.color !== next.color || absorbed.includes(range)) {
+      if (range.color !== next.color || absorbedSet.has(range)) {
         continue;
       }
 
@@ -45,22 +46,33 @@ const absorbSameColor = (
       }
 
       absorbed.push(range);
+      absorbedSet.add(range);
       start = Math.min(start, range.start);
       end = Math.max(end, range.end);
       changed = true;
     }
   }
 
-  return { start, end, absorbed };
+  return { start, end, absorbed, absorbedSet };
 };
 
 // 塗った範囲が既存と重なるとき、新しい色が勝ち、既存は削られる。
 // 結果として「同一ノード内でハイライトは互いに重ならない」不変条件が保たれる。
+//
+// 前提: existing は互いに重ならないこと（呼び出し側が保証する）。existing 同士が
+// 重なっていると、この関数の出力も重なりうる。
 export const applyHighlight = (
   existing: HighlightRange[],
   next: { start: number; end: number; color: HighlightColor },
 ): ApplyHighlightResult => {
-  const { start, end, absorbed } = absorbSameColor(existing, next);
+  // 幅 0 の塗り（クリックのみの選択など）は不可視かつヒットテスト不能な注釈を
+  // 生み出すうえ、後続の trim ループの境界条件（<=）に引っかからず永久に残る。
+  // 何もしない。
+  if (next.start >= next.end) {
+    return { created: [], updated: [], deleted: [] };
+  }
+
+  const { start, end, absorbed, absorbedSet } = absorbSameColor(existing, next);
   const created: CreatedHighlightRange[] = [];
   const updated: HighlightRange[] = [];
   const deleted: string[] = [];
@@ -81,7 +93,7 @@ export const applyHighlight = (
   }
 
   for (const range of existing) {
-    if (absorbed.includes(range) || range.end <= start || range.start >= end) {
+    if (absorbedSet.has(range) || range.end <= start || range.start >= end) {
       continue;
     }
 

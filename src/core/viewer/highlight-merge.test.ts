@@ -125,11 +125,11 @@ describe("applyHighlight", () => {
     expect(result.deleted).toEqual(["x"]);
   });
 
-  it("幅 0 の範囲を塗っても既存に接するだけなら削らない", () => {
+  it("幅 0 の塗りは何も生成せず、既存も変えない", () => {
     const existing = [range("a", 1, 3, "yellow")];
     const result = applyHighlight(existing, { start: 3, end: 3, color: "pink" });
 
-    expect(result.created).toEqual([{ start: 3, end: 3, color: "pink" }]);
+    expect(result.created).toEqual([]);
     expect(result.updated).toEqual([]);
     expect(result.deleted).toEqual([]);
   });
