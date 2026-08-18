@@ -43,6 +43,43 @@ describe("app router", () => {
     });
   });
 
+  // ページごとの document.title。フックを呼び忘れたページは前のタイトルが残るため、
+  // ここで全ルートを並べて取りこぼしを検出する。
+  it.each([
+    ["/", "すらすら六法"],
+    ["/laws", "法令を探す | すらすら六法"],
+    ["/laws/129AC0000000089", "民法 | すらすら六法"],
+    ["/laws/129AC0000000089/articles/1", "民法 | すらすら六法"],
+    ["/saved", "保存リスト | すらすら六法"],
+    // 未検出のコレクションは実タイトルが無いため、アプリ名だけになる。
+    ["/saved/collections/missing", "すらすら六法"],
+    ["/scanner", "撮る | すらすら六法"],
+    ["/study", "復習 | すらすら六法"],
+    ["/study/review", "今日の復習 | すらすら六法"],
+    ["/study/review?mode=new", "新しく覚える | すらすら六法"],
+    ["/study/cards", "条文カード | すらすら六法"],
+    ["/study/cards/missing-card", "条文カード | すらすら六法"],
+    ["/settings", "設定 | すらすら六法"],
+    ["/settings/data-transfer", "データのエクスポート / インポート | すらすら六法"],
+    ["/search", "検索 | すらすら六法"],
+    ["/search?q=%E6%B0%91%E6%B3%95", "「民法」の検索結果 | すらすら六法"],
+  ] as const)("sets the document title on %s", async (path, expected) => {
+    // 直前のテストが残したタイトルをそのまま見て通ってしまわないよう、毎回別の値から始める。
+    document.title = "未設定";
+    const history = createMemoryHistory({ initialEntries: [path] });
+    const { fetcher } = createJsonFetchStub(lawDataFixture);
+    const lawRepository = createEgovLawRepository({ fetcher, now });
+    const storageRepository = createMemoryStorageRepository().repository;
+
+    render(
+      <RouterProvider router={createAppRouter({ history, lawRepository, storageRepository })} />,
+    );
+
+    await waitFor(() => {
+      expect(document.title).toBe(expected);
+    });
+  });
+
   it("uses theme-aware text classes on route placeholder content", async () => {
     const history = createMemoryHistory({ initialEntries: ["/laws"] });
     const storageRepository = createMemoryStorageRepository().repository;

@@ -124,6 +124,30 @@ const pendingRepository = {
   getLawMetadata: (): Promise<LawMetadata> => Promise.reject(new Error("Not used in this test")),
 } satisfies LawRepository;
 
+// 「読み込み中はアプリ名だけ」を観測するため、getLaw の解決タイミングをテスト側から握る。
+const createDeferredRepository = () => {
+  const actual = createFixtureRepository().repository;
+  let release = () => {
+    // gate の Promise が作られるまでの一瞬だけ使う空実装。実体は下で差し替わる。
+  };
+  const gate = new Promise<void>((resolveGate) => {
+    release = resolveGate;
+  });
+
+  return {
+    repository: {
+      listLaws: (): Promise<LawListResult> => Promise.reject(new Error("Not used in this test")),
+      getLaw: (...args: Parameters<LawRepository["getLaw"]>): Promise<LawDocument> =>
+        gate.then(() => actual.getLaw(...args)),
+      getLawMetadata: (): Promise<LawMetadata> =>
+        Promise.reject(new Error("Not used in this test")),
+    } satisfies LawRepository,
+    resolve: () => {
+      release();
+    },
+  };
+};
+
 const renderLawViewerRoute = (
   path: string,
   repository = createFixtureRepository().repository,
@@ -354,6 +378,23 @@ describe("LawViewerPageContent", () => {
     renderLawViewerRoute("/laws/129AC0000000089", pendingRepository);
 
     expect(await screen.findByLabelText("法令本文を読み込み中")).toBeInTheDocument();
+  });
+
+  it("shows the app name alone while loading and the law title once ready", async () => {
+    document.title = "未設定";
+    const { repository, resolve } = createDeferredRepository();
+
+    renderLawViewerRoute("/laws/129AC0000000089", repository);
+
+    await waitFor(() => {
+      expect(document.title).toBe("すらすら六法");
+    });
+
+    resolve();
+
+    await waitFor(() => {
+      expect(document.title).toBe("民法 | すらすら六法");
+    });
   });
 
   it("loads the ready law through the repository as unsaved", async () => {

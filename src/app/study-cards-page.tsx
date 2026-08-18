@@ -12,6 +12,7 @@ import { Select } from "@/shared/ui/select";
 import { Skeleton } from "@/shared/ui/skeleton";
 import { formatIsoDateLabel } from "@/shared/utils/dates";
 
+import { useDocumentTitle } from "./document-title";
 import { studyCardTypeLabels } from "./study-card-form";
 
 const defaultStorageRepository = createStorageRepository();
@@ -28,6 +29,7 @@ interface StudyCardsPageProps {
 export const StudyCardsPage = ({
   storageRepository = defaultStorageRepository,
 }: StudyCardsPageProps = {}) => {
+  useDocumentTitle("条文カード");
   const { subject } = useSearch({ from: "/study/cards" });
   const navigate = useNavigate({ from: "/study/cards" });
   const [state, setState] = useState<StudyCardsState>({ status: "loading" });

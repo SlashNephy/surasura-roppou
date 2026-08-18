@@ -7,6 +7,7 @@ import type { SubjectId } from "@/core/study";
 import { Select } from "@/shared/ui/select";
 import { Skeleton } from "@/shared/ui/skeleton";
 
+import { useDocumentTitle } from "./document-title";
 import { defaultQuickSearch } from "./quick-search";
 import { navigateToCandidate, toNavigationTarget } from "./search-navigation";
 
@@ -39,6 +40,9 @@ const CandidateLink = ({ candidate }: { candidate: QuickSearchCandidate }) => {
 
 export const SearchPage = ({ quickSearch = defaultQuickSearch }: { quickSearch?: QuickSearch }) => {
   const { q } = useSearch({ from: "/search" });
+  const trimmedQuery = q.trim();
+  // 履歴やタブから検索語が分かるように、クエリがあればタイトルに載せる。
+  useDocumentTitle(trimmedQuery === "" ? "検索" : `「${trimmedQuery}」の検索結果`);
   const navigate = useNavigate();
   // クエリが空のときは "empty" を初期値とする。
   const [outcome, setOutcome] = useState<QuickSearchOutcome>({ status: "empty" });
@@ -108,7 +112,7 @@ export const SearchPage = ({ quickSearch = defaultQuickSearch }: { quickSearch?:
         )
       : [];
 
-  const trimmedQ = q.trim();
+  const trimmedQ = trimmedQuery;
   // settledQuery が現在の q に追いつくまでは検索中（通信待ち）とみなす。
   const isSearching = trimmedQ !== "" && settledQuery !== q;
 

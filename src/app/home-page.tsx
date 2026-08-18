@@ -13,6 +13,7 @@ import type { StorageRepository } from "@/core/storage";
 import { Button } from "@/shared/ui/button";
 import { formatByteSize } from "@/shared/utils/bytes";
 
+import { useDocumentTitle } from "./document-title";
 import { useSavedLaws } from "./use-saved-laws";
 import { useSearchPalette } from "./search-palette-context";
 import { useStudyDashboard } from "./use-study-dashboard";
@@ -31,6 +32,8 @@ export const HomePage = ({
 }: {
   storageRepository?: StorageRepository;
 }) => {
+  // トップはアプリそのものの入口なので、接尾辞を付けずアプリ名だけを出す。
+  useDocumentTitle();
   const { savedLaws, savedLawsError } = useSavedLaws(storageRepository);
   const { dashboard, error } = useStudyDashboard(storageRepository);
   const hasSavedLaws = savedLaws.length > 0;

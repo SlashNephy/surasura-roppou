@@ -18,6 +18,7 @@ import {
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 
+import { useDocumentTitle } from "./document-title";
 import { downloadTextFile } from "./download-text-file";
 
 const defaultStorageRepository = createStorageRepository();
@@ -82,6 +83,7 @@ interface DataTransferPageProps {
 export const DataTransferPage = ({
   storageRepository = defaultStorageRepository,
 }: DataTransferPageProps) => {
+  useDocumentTitle("データのエクスポート / インポート");
   const fileInputId = useId();
   const previewHeadingId = useId();
   const [busy, setBusy] = useState<BusyState>();
