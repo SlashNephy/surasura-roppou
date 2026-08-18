@@ -5,6 +5,12 @@ import { describe, expect, it, vi } from "vitest";
 import type { LawNode, LawNodeType } from "@/core/domain";
 
 import { LawNodeList } from "./LawNodeList";
+import {
+  createNodeTextRange,
+  displayTextOf,
+  findLawNodeElement,
+  resolveNodeTextRange,
+} from "./selection-range";
 
 const node = (overrides: Partial<LawNode> & Pick<LawNode, "id" | "path" | "type">): LawNode => ({
   lawId: "129AC0000000089",
@@ -871,5 +877,115 @@ describe("LawNodeList", () => {
     expect(container.querySelector("article")?.textContent).toContain(
       "運送品がその性質又は瑕疵かしによって滅失し",
     );
+  });
+
+  describe("法令ノード ID の付与", () => {
+    const markedIdsOf = (container: HTMLElement): string[] =>
+      [...container.querySelectorAll("[data-law-node-id]")].map(
+        (element) => element.getAttribute("data-law-node-id") ?? "",
+      );
+
+    it("項・号・見出しノードの本文に data-law-node-id を付ける", () => {
+      const { container } = render(<LawNodeList lawId="129AC0000000089" nodes={nodes} />);
+
+      // 本文を描画するのは、項・号の span と、見出しノードが自身の前文を持つときの p。
+      // 編（part:1）は本文が子の章と一致して空になるため本文要素を持たない。
+      // 章（chapter:1）は子に無い文が残るため前文として描画され、対象になる。
+      expect(markedIdsOf(container)).toEqual([
+        "chapter:1",
+        "paragraph:1",
+        "item:1",
+        "supplementary:1",
+        "appdx:1",
+      ]);
+    });
+
+    it("子を持たない条の本文にも data-law-node-id を付ける", () => {
+      const { container } = render(
+        <LawNodeList
+          lawId="129AC0000000089"
+          nodes={[
+            node({
+              id: "article:12-2",
+              type: "Article",
+              path: "article:12-2",
+              number: "12の2",
+              title: "第十二条の二",
+              plainText: "第十二条の二 原文の本文（括弧）。",
+            }),
+          ]}
+        />,
+      );
+
+      expect(markedIdsOf(container)).toEqual(["article:12-2"]);
+      expect(findLawNodeElement(container, "article:12-2")?.textContent).toBe(
+        "第12条の2 原文の本文（括弧）。",
+      );
+    });
+
+    it("ルビと参照リンクで分割された本文でも、表示文字列と選択位置が対応する", () => {
+      const { container } = render(
+        <LawNodeList
+          lawId="129AC0000000089"
+          nodes={[
+            node({
+              id: "article:15",
+              type: "Article",
+              path: "article:15",
+              number: "15",
+              title: "第十五条",
+              caption: "（補助開始の審判）",
+              plainText: "第十五条 家庭裁判所は、補助開始の審判をすることができる。",
+            }),
+            node({
+              id: "article:16",
+              type: "Article",
+              path: "article:16",
+              number: "16",
+              title: "第十六条",
+              children: ["article:16/paragraph:1"],
+            }),
+            node({
+              id: "article:16/paragraph:1",
+              type: "Paragraph",
+              path: "article:16/paragraph:1",
+              number: "1",
+              plainText: "第十五条の審判は、瑕疵があるときは、この限りでない。",
+              rubyAnnotations: [{ base: "瑕疵", text: "かし" }],
+              parentId: "article:16",
+            }),
+          ]}
+        />,
+      );
+
+      const owner = findLawNodeElement(container, "article:16/paragraph:1");
+
+      if (owner === undefined) {
+        throw new Error("body element is required");
+      }
+
+      // 参照リンクの <a> とルビの <ruby> で、本文の子は複数ノードに割れている。
+      expect(owner.childNodes.length).toBeGreaterThan(1);
+      // ルビの読みは表示文字列に含まれない。
+      expect(owner.textContent).toContain("瑕疵かし");
+      expect(displayTextOf(owner)).toBe(
+        "第15条〈補助開始の審判〉の審判は、瑕疵があるときは、この限りでない。",
+      );
+
+      // 「〈補助開始の審判〉」は表示文字列の 4..13。参照リンクの中にあり、
+      // 見出し注入の span でさらに分割されている位置である。
+      const range = createNodeTextRange(owner, 4, 13);
+
+      if (range === undefined) {
+        throw new Error("range is required");
+      }
+
+      expect(resolveNodeTextRange(range)).toMatchObject({
+        lawNodeId: "article:16/paragraph:1",
+        start: 4,
+        end: 13,
+      });
+      expect(displayTextOf(owner).slice(4, 13)).toBe("〈補助開始の審判〉");
+    });
   });
 });

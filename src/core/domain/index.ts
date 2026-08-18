@@ -5,6 +5,7 @@ export type {
   CardSchedule,
   Collection,
   DetectedLawReference,
+  HighlightColor,
   ISODateString,
   Law,
   LawNode,
@@ -19,11 +20,15 @@ export type {
   StudyCard,
   StudyCardType,
   StudySession,
+  TextQuoteAnchor,
 } from "./models";
+export { highlightColors } from "./models";
+export { normalizeAnnotation } from "./annotation";
 export type { ArticleReference, AnchoredArticleReference, LawReferenceTarget } from "./references";
 export {
   buildArticleReferenceKey,
   buildLawArticleUrl,
+  hasReferenceValue,
   parseArticleReferenceKey,
 } from "./references";
 export { computeArticleFingerprint } from "./article-fingerprint";

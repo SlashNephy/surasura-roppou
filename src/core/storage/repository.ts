@@ -1,6 +1,7 @@
 import { deleteDB, openDB } from "idb";
 import type { IDBPDatabase, IDBPTransaction, StoreNames } from "idb";
 
+import { normalizeAnnotation } from "@/core/domain";
 import { fixedIntervalScheduler } from "@/core/study";
 import { deleteRevisionNodes, demoteOtherCurrentRevisions } from "./current-revision-slot";
 import { migrateRecordsToVersion3, migrateSavedLawStores } from "./migrations";
@@ -116,6 +117,7 @@ export interface StorageRepository {
   listCollections(): Promise<Collection[]>;
   putAnnotation(annotation: Annotation): Promise<void>;
   listAnnotations(query?: LawScopedQuery): Promise<Annotation[]>;
+  deleteAnnotation(annotationId: string): Promise<void>;
   putStudyCard(card: StudyCard): Promise<void>;
   getStudyCard(cardId: string): Promise<StudyCard | undefined>;
   listStudyCards(query?: LawScopedQuery): Promise<StudyCard[]>;
@@ -511,7 +513,16 @@ export const createStorageRepository = (
             ? await db.getAll("annotations")
             : await db.getAllFromIndex("annotations", "by-law-id", query.lawId);
 
-        return records.map(stripTargetIndexes);
+        // 旧形式（anchors を持たない v2 由来）を吸収する。壊れた行は捨てて続行する。
+        return records
+          .map((record) => normalizeAnnotation(stripTargetIndexes(record)))
+          .filter((annotation): annotation is Annotation => annotation !== undefined);
+      });
+    },
+
+    async deleteAnnotation(annotationId) {
+      await withDatabase(async (db) => {
+        await db.delete("annotations", annotationId);
       });
     },
 

@@ -196,9 +196,14 @@ describe("domain model contracts", () => {
     const annotation = {
       id: "annotation-1",
       target: bookmark.target,
-      targetText: "他人の権利又は法律上保護される利益",
-      prefixText: "故意又は過失によって",
-      suffixText: "を侵害した者は",
+      anchors: [
+        {
+          target: bookmark.target,
+          quote: "他人の権利又は法律上保護される利益",
+          prefix: "故意又は過失によって",
+          suffix: "を侵害した者は",
+        },
+      ],
       note: "保護法益の範囲を確認する",
       tags: ["論点"],
       createdAt: "2026-07-05T00:00:00.000Z",

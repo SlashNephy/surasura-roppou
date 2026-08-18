@@ -324,6 +324,11 @@ export const createMemoryStorageRepository = (
 
         return Promise.resolve(filteredAnnotations);
       },
+      deleteAnnotation(annotationId) {
+        annotations = annotations.filter((annotation) => annotation.id !== annotationId);
+
+        return Promise.resolve();
+      },
       putStudyCard(card) {
         studyCards = [...studyCards.filter((existingCard) => existingCard.id !== card.id), card];
         return Promise.resolve();

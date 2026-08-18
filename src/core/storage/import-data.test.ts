@@ -353,6 +353,50 @@ describe("parseSavedDataImport", () => {
     expect(error.code).toBe("invalid-reference");
   });
 
+  it("accepts a v2 annotation that has neither note nor anchors", () => {
+    const data = {
+      ...createSavedDataExportFixture(),
+      annotations: [
+        {
+          id: "legacy-1",
+          target: { lawId: "322AC0000000125", article: "1" },
+          targetText: "私権",
+          prefixText: "",
+          suffixText: "",
+          tags: [],
+          createdAt: "2026-07-01T00:00:00.000Z",
+          updatedAt: "2026-07-01T00:00:00.000Z",
+        },
+      ],
+    };
+
+    const prepared = parseSavedDataImport(stringify(data));
+
+    expect(prepared.preview.counts.annotations).toBe(1);
+  });
+
+  it("accepts a new-format annotation with anchors and color", () => {
+    const target = { lawId: "322AC0000000125", article: "1", path: "Article:1" };
+    const data = {
+      ...createSavedDataExportFixture(),
+      annotations: [
+        {
+          id: "highlight-1",
+          target,
+          anchors: [{ target, quote: "私権", prefix: "", suffix: "は、" }],
+          color: "yellow",
+          tags: [],
+          createdAt: "2026-08-17T00:00:00.000Z",
+          updatedAt: "2026-08-17T00:00:00.000Z",
+        },
+      ],
+    };
+
+    const prepared = parseSavedDataImport(stringify(data));
+
+    expect(prepared.preview.counts.annotations).toBe(1);
+  });
+
   it("preserves dangling collection, review-session, and study-session references", () => {
     const data = createSavedDataExportFixture();
     const collection = data.collections[0];
