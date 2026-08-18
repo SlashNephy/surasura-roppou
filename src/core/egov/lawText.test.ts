@@ -410,4 +410,49 @@ describe("normalizeEgovLawText", () => {
 
     expect(findNode(nodes, "Article", "article:1")).not.toHaveProperty("caption");
   });
+  it("separates sibling columns with an ideographic space", () => {
+    const nodes = normalizeLawBody([
+      article("第二条", [
+        paragraph([
+          lawTextNode("ParagraphSentence", [lawTextNode("Sentence", ["この法律において…"])]),
+          lawTextNode("Item", [
+            lawTextNode("ItemTitle", ["四"]),
+            lawTextNode("ItemSentence", [
+              lawTextNode("Column", [lawTextNode("Sentence", ["不利益処分"])], { Num: 1 }),
+              lawTextNode("Column", [lawTextNode("Sentence", ["行政庁が、法令に基づき、…"])], {
+                Num: 2,
+              }),
+            ]),
+          ]),
+        ]),
+      ]),
+    ]);
+
+    expect(findNode(nodes, "Item", "article:2/paragraph:1/item:4")).toEqual(
+      expect.objectContaining({
+        rawText: "四不利益処分\u3000行政庁が、法令に基づき、…",
+        plainText: "四 不利益処分\u3000行政庁が、法令に基づき、…",
+        normalizedText: "四 不利益処分\u3000行政庁が、法令に基づき、…",
+      }),
+    );
+  });
+
+  it("does not add a separator when the sentence has a single column", () => {
+    const nodes = normalizeLawBody([
+      article("第一条", [
+        paragraph([
+          lawTextNode("ParagraphSentence", [
+            lawTextNode("Column", [lawTextNode("Sentence", ["単一の欄の本文。"])], { Num: 1 }),
+          ]),
+        ]),
+      ]),
+    ]);
+
+    expect(findNode(nodes, "Paragraph", "article:1/paragraph:1")).toEqual(
+      expect.objectContaining({
+        rawText: "単一の欄の本文。",
+        plainText: "単一の欄の本文。",
+      }),
+    );
+  });
 });

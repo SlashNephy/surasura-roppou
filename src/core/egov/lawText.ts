@@ -240,9 +240,38 @@ const rubyTextTag = "Rt";
 const collectRawText = (node: EgovLawTextNode): string =>
   node.tag === rubyTextTag
     ? ""
-    : node.children
-        .map((child) => (typeof child === "string" ? child : collectRawText(child)))
-        .join("");
+    : joinTextParts(
+        node.children.map((child) => ({
+          text: typeof child === "string" ? child : collectRawText(child),
+          isColumn: isColumnNode(child),
+        })),
+        "",
+      );
+
+// 欄（Column）に分かれた本文は、e-Gov の表示と同じく欄の境目を全角空白で区切る。
+// 区切らないと「不利益処分行政庁が、…」のように定義語と定義文の切れ目が失われる。
+const columnTag = "Column";
+const columnSeparator = "\u3000";
+
+const isColumnNode = (child: EgovLawTextNode | string): boolean =>
+  typeof child !== "string" && child.tag === columnTag;
+
+interface TextPart {
+  text: string;
+  isColumn: boolean;
+}
+
+// 空の断片は落としたうえで、欄に接する境目だけ全角空白、それ以外は既定の区切りで連結する。
+const joinTextParts = (parts: TextPart[], separator: string): string =>
+  parts
+    .filter((part) => part.text !== "")
+    .reduce(
+      (joined, part, index, presentParts) =>
+        index === 0
+          ? part.text
+          : `${joined}${part.isColumn || presentParts[index - 1].isColumn ? columnSeparator : separator}${part.text}`,
+      "",
+    );
 
 const collectRubyAnnotations = (node: EgovLawTextNode): RubyAnnotation[] => {
   const annotations = new Map<string, RubyAnnotation>();
@@ -285,11 +314,12 @@ const collectPlainText = (node: EgovLawTextNode): string => {
     return "";
   }
 
-  const parts = node.children
-    .map((child) => (typeof child === "string" ? child.trim() : collectPlainText(child)))
-    .filter((part) => part !== "");
+  const parts = node.children.map((child) => ({
+    text: typeof child === "string" ? child.trim() : collectPlainText(child),
+    isColumn: isColumnNode(child),
+  }));
 
-  return parts.join(plainTextBlockTags.has(node.tag) ? " " : "");
+  return joinTextParts(parts, plainTextBlockTags.has(node.tag) ? " " : "");
 };
 
 const plainTextBlockTags = new Set([
