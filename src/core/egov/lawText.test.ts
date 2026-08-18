@@ -39,7 +39,12 @@ const itemSentence = (text: string) =>
   lawTextNode("ItemSentence", [lawTextNode("Sentence", [text])]);
 
 // e-Gov 法令データの号の細分は Subitem1・Subitem2 のように階層番号付きのタグで表される。
-const subitem = (level: number, title: string, num: string, children: EgovLawTextNode[] = []) =>
+const subitem = (
+  level: number,
+  title: string,
+  num: string | undefined,
+  children: EgovLawTextNode[] = [],
+) =>
   lawTextNode(
     `Subitem${String(level)}`,
     [
@@ -49,7 +54,7 @@ const subitem = (level: number, title: string, num: string, children: EgovLawTex
       ]),
       ...children,
     ],
-    { Num: num },
+    num === undefined ? {} : { Num: num },
   );
 
 const appdxTable = (title: string) =>
@@ -203,6 +208,18 @@ describe("normalizeEgovLawText", () => {
       expected: [
         { type: "Subitem", number: "1", path: "article:1/paragraph:1/item:1/subitem:1" },
         { type: "Subitem", number: "2", path: "article:1/paragraph:1/item:1/subitem:2" },
+      ],
+    },
+    {
+      name: "kana subitem labels without Num attributes",
+      children: [
+        article("第一条", [
+          paragraph([item("第一号", [subitem(1, "イ", undefined), subitem(1, "ロ", undefined)])]),
+        ]),
+      ],
+      expected: [
+        { type: "Subitem", number: "イ", path: "article:1/paragraph:1/item:1/subitem:イ" },
+        { type: "Subitem", number: "ロ", path: "article:1/paragraph:1/item:1/subitem:ロ" },
       ],
     },
     {
