@@ -15,6 +15,7 @@ import type {
   StudyCard,
   StudySession,
 } from "@/core/domain";
+import { buildArticleReferenceKey } from "@/core/domain";
 import { createSavedDataExport, parseSavedDataImport } from "@/core/storage";
 import { createSavedDataExportFixture } from "@/test/fixtures/saved-data";
 
@@ -1399,6 +1400,107 @@ describe("StorageRepository", () => {
       { lawId: "132AC0000000048", pinnedAt: "2026-07-06T00:00:00.000Z" },
       { lawId: "129AC0000000089", pinnedAt: "2026-07-06T00:00:00.000Z" },
     ]);
+  });
+
+  it("注釈を保存して削除できる", async () => {
+    const databaseName = createDatabaseName();
+    const repository = createStorageRepository({ databaseName, now: fixedNow });
+
+    const target = { lawId: "322AC0000000125", article: "1", path: "Article:1" };
+
+    await repository.putAnnotation({
+      id: "h1",
+      target,
+      anchors: [{ target, quote: "私権", prefix: "", suffix: "は、" }],
+      color: "yellow",
+      tags: [],
+      createdAt: "2026-08-17T00:00:00.000Z",
+      updatedAt: "2026-08-17T00:00:00.000Z",
+    });
+
+    await expect(repository.listAnnotations({ lawId: target.lawId })).resolves.toHaveLength(1);
+
+    await repository.deleteAnnotation("h1");
+
+    await expect(repository.listAnnotations({ lawId: target.lawId })).resolves.toEqual([]);
+  });
+
+  it("存在しない注釈の削除はエラーにしない", async () => {
+    const databaseName = createDatabaseName();
+    const repository = createStorageRepository({ databaseName, now: fixedNow });
+
+    await expect(repository.deleteAnnotation("missing")).resolves.toBeUndefined();
+  });
+
+  it("旧形式(v2)の注釈レコードを anchors 付きの現行形式へ正規化して読み出す", async () => {
+    // v2 エクスポート由来のレコードは anchors を持たず、targetText/prefixText/suffixText で
+    // ハイライト範囲を表していた。IndexedDB に残った当時のレコードを模して直接書き込む。
+    const databaseName = createDatabaseName();
+    const repository = createStorageRepository({ databaseName, now: fixedNow });
+    const legacyTarget = { lawId: law.lawId, article: "1" };
+    const legacyRecord = {
+      id: "legacy-annotation-1",
+      target: legacyTarget,
+      targetText: "私権",
+      prefixText: "",
+      suffixText: "は、",
+      tags: [],
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-01T00:00:00.000Z",
+      lawId: legacyTarget.lawId,
+      targetKey: buildArticleReferenceKey(legacyTarget),
+    };
+
+    const database = await openSurasuraDatabase(databaseName);
+    try {
+      await database.put(
+        "annotations",
+        legacyRecord as unknown as Annotation & { lawId: string; targetKey: string },
+      );
+    } finally {
+      database.close();
+    }
+
+    await expect(repository.listAnnotations({ lawId: law.lawId })).resolves.toEqual([
+      {
+        id: "legacy-annotation-1",
+        target: legacyTarget,
+        anchors: [{ target: legacyTarget, quote: "私権", prefix: "", suffix: "は、" }],
+        tags: [],
+        createdAt: "2026-07-01T00:00:00.000Z",
+        updatedAt: "2026-07-01T00:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("正規化できない壊れた注釈レコードは黙って除外し、他の注釈は読み出せる", async () => {
+    // target を欠く等、新しい契約を満たせないレコード(想定外の破損)を模す。
+    // 1件の破損で法令全体のハイライトが読めなくなるのを避けるため、例外にせず除外する。
+    const databaseName = createDatabaseName();
+    const repository = createStorageRepository({ databaseName, now: fixedNow });
+
+    await repository.putAnnotation(annotation);
+
+    const brokenRecord = {
+      id: "broken-annotation-1",
+      tags: [],
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-01T00:00:00.000Z",
+      lawId: law.lawId,
+      targetKey: "broken",
+    };
+
+    const database = await openSurasuraDatabase(databaseName);
+    try {
+      await database.put(
+        "annotations",
+        brokenRecord as unknown as Annotation & { lawId: string; targetKey: string },
+      );
+    } finally {
+      database.close();
+    }
+
+    await expect(repository.listAnnotations({ lawId: law.lawId })).resolves.toEqual([annotation]);
   });
 
   it("closes the cached connection and can reopen on later operations", async () => {

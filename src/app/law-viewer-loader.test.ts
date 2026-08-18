@@ -313,6 +313,7 @@ const createStorageRepositoryStub = ({
   listCollections: vi.fn(),
   putAnnotation: vi.fn(),
   listAnnotations: vi.fn(),
+  deleteAnnotation: vi.fn(),
   putStudyCard: vi.fn(),
   getStudyCard: vi.fn(),
   listStudyCards: vi.fn(),
