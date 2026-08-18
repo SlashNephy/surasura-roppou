@@ -48,8 +48,17 @@ export const findLawNodeElement = (
   return undefined;
 };
 
-// 選択が単一の本文要素に収まるときだけ、表示文字列上の範囲を返す。
-// 項番号の marker span や複数の本文要素にまたがる選択は扱わない（v1 のスコープ）。
+// 選択を、ちょうど 1 つの本文要素の表示文字列上の範囲へ写す。
+// 端点は本文要素の外に出ることがある（項番号 marker span からのドラッグ開始、
+// 行末を越えたドラッグ、段落のトリプルクリック）ため、次の 3 通りを扱う。
+//
+// 1. 両端点が同じ本文要素の内側 … その範囲をそのまま返す。
+// 2. 一方の端点だけが内側 … もう一方を [0, 表示文字数] へ丸める。
+// 3. 両端点とも外側 … 丸ごと含む本文要素がちょうど 1 つならその全体を返す。
+//
+// 複数の本文要素にまたがる選択は扱わない。両端点が別々の本文要素の内側にあるとき、
+// 2 の丸めが他の本文要素を丸ごと巻き込むとき、3 で該当が 0 個または 2 つ以上のときは、
+// いずれも undefined を返す。長さ 0 に潰れる選択も undefined になる。
 export const resolveNodeTextRange = (range: Range): NodeTextRange | undefined => {
   const target = findRangeTarget(range);
 
@@ -135,17 +144,27 @@ const findRangeTarget = (range: Range): RangeTarget | undefined => {
   const owner = startOwner ?? endOwner;
 
   if (owner !== undefined) {
-    return { covered: false, owner };
+    // 丸めが他の本文要素を丸ごと巻き込むなら、複数の本文にまたがる選択である。
+    // 巻き込んだ先の本文の内側で離したときだけ undefined になる、という不連続を避ける。
+    return findCoveredElements(range, { excluded: owner, limit: 1 }).length === 0
+      ? { covered: false, owner }
+      : undefined;
   }
 
   // 両端が外側でも、段落のトリプルクリックのように本文要素を丸ごと包む選択は起きる。
   // 包んだ本文要素がちょうど 1 つに定まるときだけ、その全体を選択として扱う。
-  const covered = findCoveredElements(range);
+  const covered = findCoveredElements(range, { limit: 2 });
 
   return covered.length === 1 ? { covered: true, owner: covered[0] } : undefined;
 };
 
-const findCoveredElements = (range: Range): HTMLElement[] => {
+// Range が丸ごと含む本文要素を、結論が決まる個数（limit）まで集める。
+// 法令全体を選択したときは候補が全条文になるうえ、ドラッグ中は選択が変わるたびに
+// ここを通るため、判定に要る分を超えて走査しない。
+const findCoveredElements = (
+  range: Range,
+  { excluded, limit }: { excluded?: HTMLElement; limit: number },
+): HTMLElement[] => {
   const container = range.commonAncestorContainer;
   const scope = container instanceof Element ? container : container.parentElement;
 
@@ -156,8 +175,14 @@ const findCoveredElements = (range: Range): HTMLElement[] => {
   const covered: HTMLElement[] = [];
 
   for (const element of scope.querySelectorAll<HTMLElement>(`[${lawNodeIdAttribute}]`)) {
-    if (containsEntirely(range, element)) {
-      covered.push(element);
+    if (element === excluded || !containsEntirely(range, element)) {
+      continue;
+    }
+
+    covered.push(element);
+
+    if (covered.length >= limit) {
+      break;
     }
   }
 

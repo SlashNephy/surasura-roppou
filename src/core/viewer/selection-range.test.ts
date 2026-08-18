@@ -58,6 +58,10 @@ const rangeOf = (start: [Node, number], end: [Node, number]): Range => {
 const markerHtml =
   '<p><span class="marker">２</span><span data-law-node-id="n1">あいうえお</span></p>';
 
+// 項番号付きの本文が 2 つ並ぶ段落。項をまたぐドラッグの検証に使う。
+const twoParagraphsHtml =
+  '<div><p><span class="marker">１</span><span data-law-node-id="n1">あいうえお</span></p><p><span class="marker">２</span><span data-law-node-id="n2">かきくけこ</span></p></div>';
+
 // 地の文だけの本文。
 const plainHtml = '<p><span data-law-node-id="n1">私権は、公共の福祉に適合する。</span></p>';
 
@@ -175,6 +179,34 @@ describe("resolveNodeTextRange", () => {
     expect(resolveNodeTextRange(rangeOf([paragraph, 0], [paragraph, 1]))).toBeUndefined();
   });
 
+  it("丸めの対象でも、他の本文要素を丸ごと巻き込むなら undefined", () => {
+    // 項1 の本文から項2 を越えて離した選択。終点はどの本文要素の内側にもないが、
+    // 選択は項2 の本文を丸ごと覆っている。1px 内側で離したとき（別々の本文要素）と
+    // 結果が食い違わないよう、複数の本文にまたがる選択として扱わない。
+    const host = setup(twoParagraphsHtml);
+    const [, second] = [...host.querySelectorAll("p")];
+    const owner = elementOf(host, '[data-law-node-id="n1"]');
+    // 子 index 2 は項2 の本文 span より後ろ。
+    const range = rangeOf([textNodeAt(owner, 0), 2], [second, 2]);
+
+    expect(resolveNodeTextRange(range)).toBeUndefined();
+  });
+
+  it("他の本文要素の手前で終わる選択は、丸めたまま扱う", () => {
+    // 終点は項2 の項番号 span の直後、本文 span の手前。巻き込んだ本文要素は無い。
+    const host = setup(twoParagraphsHtml);
+    const [, second] = [...host.querySelectorAll("p")];
+    const owner = elementOf(host, '[data-law-node-id="n1"]');
+    const range = rangeOf([textNodeAt(owner, 0), 2], [second, 1]);
+
+    expect(resolveNodeTextRange(range)).toEqual({
+      lawNodeId: "n1",
+      start: 2,
+      end: 5,
+      text: "あいうえお",
+    });
+  });
+
   it("両端点とも外側で、本文要素を 2 つ以上包むなら undefined", () => {
     const host = setup(
       '<p><span data-law-node-id="n1">あいう</span><span data-law-node-id="n2">かきく</span></p>',
@@ -184,7 +216,7 @@ describe("resolveNodeTextRange", () => {
     expect(resolveNodeTextRange(rangeOf([paragraph, 0], [paragraph, 2]))).toBeUndefined();
   });
 
-  it("本文要素の一部しか包まない Range は、包んだことにしない", () => {
+  it("終点が本文要素の内側なら、始点だけが丸められる", () => {
     // 終点が本文 span の途中（内部の <a> の手前）にある。span 全体は包まれていない。
     const host = setup(
       '<p><span class="marker">２</span><span data-law-node-id="n1">あい<a href="#x">第15条</a></span></p>',
