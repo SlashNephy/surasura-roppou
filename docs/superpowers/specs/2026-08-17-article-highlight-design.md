@@ -31,7 +31,9 @@
 
 `CSS.highlights` + `Highlight` + `::highlight()` を使い、DOM を分割せずに着色する。Baseline Newly available (2025-06)。
 
-本文が単一の文字列 child として描かれている（`LawNodeList.tsx` の `<p>{bodyText}</p>` / `<span>{bodyText}</span>`）ため、本文 span の Text ノードは常に1個であり、表示文字列上のオフセットをそのまま `Range` の offset に使える。
+本文 span の Text ノードは 1 個とは限らない。`LawNodeList.tsx` の `renderLinkedText`（条文参照を `<a>` に分割）と `LawTextWithRuby.tsx`（ルビ語を `<ruby><rt>` に分割）により、本文 span の子は複数の Text ノードに分かれるのが実データ（民法など）で高頻度に発生する。そのため、表示文字列上の文字オフセットをそのまま単一 Text ノードの offset として使うことはできない。
+
+本文 span 配下の Text ノードを文書順に走査し、文字オフセット ↔ (Text ノード, ノード内オフセット) を相互変換する方式を採る。走査時、`<rt>`（ルビの読み）配下の Text ノードは表示文字列に含まれないため除外する。
 
 非対応ブラウザでは**機能ごと隠す**（後述の「機能検出とフォールバック」）。
 
@@ -344,13 +346,43 @@ jsdom には `CSS.highlights` も `caretPositionFromPoint` もない。そのた
 2. 表示モード切替でハイライトがずれない
 3. ダークモードでの見え方
 
-## 実装前に実機検証が必要な項目
+## 実機検証結果（Task 1）
 
-実装の最初のステップで確認し、結果に応じて設計を調整する。
+- 検証日: 2026-08-18
+- 検証環境: Chromium 151（Playwright `playwright-cli` 経由の headless Chromium, `HeadlessChrome/151.0.0.0`）
+- 検証方法: スクラッチディレクトリに置いた単体 HTML（`highlight-spike.html`、リポジトリ非管理）を `python3 -m http.server` で配信し、`playwright-cli` で開いて `#out` のログとスクリーンショットを確認した。`file://` は `playwright-cli` からブロックされるため HTTP 配信に切り替えた。
 
-1. `::highlight()` 内で `var()` が解決されるか。解決されなければテーマごとにリテラル値を直書きする。
-2. `caretPositionFromPoint` / `caretRangeFromPoint` の現行 Safari での対応状況。
-3. `@media (forced-colors: active)` 下での `::highlight()` の実挙動。
+### 1. `::highlight()` 内で `var()` が解決されるか
+
+- 結果: **解決される。** `::highlight(spike-var) { background-color: var(--highlight-yellow); }` を指定した 1 行目（`第三条 私権は、`）が `:root` の `--highlight-yellow: #fde68a` どおり黄色で着色された。
+- 生の観測値（`#out`）: `CSS.highlights: true`
+- スクリーンショット: `/tmp/claude-1000/-home-spica-ghq-github-com-SlashNephy-surasura-roppou/679d3af9-d086-470e-a00a-f35c0faebcbf/scratchpad/highlight-normal.png`（1 行目が黄色、2 行目がリテラル指定の水色で着色されていることを確認）
+- 設計への反映: `::highlight()` 内でテーマトークン（`--highlight-*`）を `var()` でそのまま使ってよい。リテラル値への直書きは不要。
+
+### 2. `caretPositionFromPoint` / `caretRangeFromPoint` の対応状況
+
+- 結果: 検証環境（Chromium 151）では両方とも存在する。
+- 生の観測値（`#out`）:
+  ```
+  caretPositionFromPoint: true
+  caretRangeFromPoint: true
+  caret hit offset: 4
+  ```
+  （ハイライト範囲 `[0, 8)` の矩形中心点に対する `caretPositionFromPoint` のヒット結果。範囲中央付近の offset 4 が返っており、ヒットテストは想定どおり機能している。）
+- Safari での対応状況: 本タスクの検証環境には Safari/WebKit が無く**未検証**。`caret-position.ts` は設計どおり `caretPositionFromPoint` を優先し、無ければ `caretRangeFromPoint` にフォールバックし、どちらも無ければ機能を隠す分岐を維持する（両対応の薄いラッパーは変更不要）。
+- 設計への反映: フォールバック分岐（`"caretPositionFromPoint" in target || "caretRangeFromPoint" in target` で対応判定）は現状のままでよい。Safari 実機での再確認は後続タスクでの宿題として残す。
+
+### 3. `@media (forced-colors: active)` 下での `::highlight()` の実挙動
+
+- 結果: **`playwright-cli` から直接 `forcedColors` を指定するコマンドは無い**が、`run-code` で Playwright の `page.emulateMedia({ forcedColors: "active" })` を実行することで検証できた。
+  - `@media (forced-colors: active)` で `Mark` / `MarkText` への上書きを指定した 1 行目（`spike-var`）は、上書きどおり紺地に白文字で描画された。
+  - 上書きを指定していない 2 行目（`spike-literal`）も、**同じ紺地に白文字**で描画された。Chromium は forced-colors モードでは `::highlight()` の author 指定色（`background-color: #67e8f9` 等）を明示的な `@media (forced-colors: active)` 上書きの有無に関わらずシステム色へ強制する。
+  - 色の区別は失われるが、ハイライトの存在自体（下線・背景）は両方とも保たれた。設計の想定（「色の区別は失われるがハイライトの存在は保たれる」）と一致する。
+- スクリーンショット:
+  - `/tmp/claude-1000/-home-spica-ghq-github-com-SlashNephy-surasura-roppou/679d3af9-d086-470e-a00a-f35c0faebcbf/scratchpad/highlight-forced-colors.png`（全体）
+  - `/tmp/claude-1000/-home-spica-ghq-github-com-SlashNephy-surasura-roppou/679d3af9-d086-470e-a00a-f35c0faebcbf/scratchpad/highlight-forced-line1.png`（1 行目拡大）
+  - `/tmp/claude-1000/-home-spica-ghq-github-com-SlashNephy-surasura-roppou/679d3af9-d086-470e-a00a-f35c0faebcbf/scratchpad/highlight-forced-line2.png`（2 行目拡大）
+- 設計への反映: `@media (forced-colors: active)` ブロックは設計どおり入れておく（4 色のうち少なくとも 1 色は `Mark`/`MarkText` に明示的に寄せておくことで意図を明示できる）。ただし Chromium では未指定でも強制されるため、このブロックが無くても致命的な破綻（着色そのものの消失）は起きない。Safari/Firefox の forced-colors 挙動は未検証。
 
 ## 変更ファイル
 
