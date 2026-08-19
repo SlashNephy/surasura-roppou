@@ -60,9 +60,14 @@ e-Gov API v2 の `law_data` は、`asof` 時点にその法令の版が存在し
 
 ## 保存時の版の扱い
 
-[src/app/law-viewer-page.tsx](../../../src/app/law-viewer-page.tsx) は保存メタに `isCurrent: asOf === undefined` を渡している。フォールバック時に取得しているのは現行法なので、`asOf === undefined || baseDateFallback === true` に改める。
+[src/app/law-viewer-page.tsx](../../../src/app/law-viewer-page.tsx) は保存メタの `isCurrent` を 2 か所で算出している。
 
-これを怠ると、保存リストで現行法が「基準日 2026/04/01 時点の版」として記録され、後の再取得判定や履歴版のエビクション（[2026-08-17-storage-eviction-design.md](2026-08-17-storage-eviction-design.md)）が誤った前提で動く。
+- 自動保存: `isCurrent: asOf === undefined`
+- ダウンロード（pin）: `isCurrent: state === baseState && baseState.requestedAsOf === undefined`
+
+フォールバック時に取得しているのは現行法なので、どちらも「基準日未指定、**または**フォールバック表示」を現行版とみなすよう改める。判断が 2 か所に散らないよう、`LawViewerDocument` を受け取る共有ヘルパーに寄せる。
+
+これを怠ると、保存リストで現行法が「基準日 2026/04/01 時点の版」として記録され、後の再取得判定や履歴版のエビクション（[2026-08-17-storage-eviction-design.md](2026-08-17-storage-eviction-design.md)）が誤った前提で動く。pin 側は過去に同種のバグ（過去版が現行版スロットを奪う）があり回帰テストが残っているため、両方を同時に直す。
 
 ## 波及
 
@@ -73,7 +78,7 @@ e-Gov API v2 の `law_data` は、`asof` 時点にその法令の版が存在し
 
 - ローダー: 上表の 3 分岐。フォールバック成功時に `baseDateFallback: true` と `requestedAsOf` が両方載ることを確認する。
 - ビューア: `baseDateFallback: true` の状態で基準日ラベルに「対象外」が出ること。
-- 保存: フォールバック時の保存メタが `isCurrent: true` になること。
+- 保存: フォールバック時の保存メタが `isCurrent: true` になること（自動保存・pin の両方）。
 
 ## 決定記録
 
