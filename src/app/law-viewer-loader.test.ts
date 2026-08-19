@@ -48,6 +48,7 @@ describe("loadLawViewerDocument", () => {
       },
       isPinned: false,
     });
+    expect(state).not.toHaveProperty("baseDateFallback");
 
     if (state.status !== "ready") {
       throw new Error("Expected ready state");
@@ -242,7 +243,7 @@ describe("loadLawViewerDocument", () => {
     });
   });
 
-  it("explains that the law is not in force at the base date when e-Gov returns 404 for the asof request", async () => {
+  it("falls back to the current law when the base date has no revision", async () => {
     const getLaw = vi
       .fn<LawRepository["getLaw"]>()
       .mockRejectedValueOnce(
@@ -260,17 +261,19 @@ describe("loadLawViewerDocument", () => {
         Promise.reject(new Error("Not used in this test")),
     } satisfies LawRepository;
 
-    await expect(
-      loadLawViewerDocument(
-        "508AC1000000069",
-        repository,
-        createStorageRepositoryStub(),
-        "2026-04-01",
-      ),
-    ).resolves.toEqual({
-      status: "error",
-      message:
-        "この法令は基準日 2026/04/01 の時点では施行されていません。設定で基準日を変更すると表示できます。",
+    const state = await loadLawViewerDocument(
+      "508AC1000000069",
+      repository,
+      createStorageRepositoryStub(),
+      "2026-04-01",
+    );
+
+    expect(state).toMatchObject({
+      status: "ready",
+      baseDateFallback: true,
+      requestedAsOf: "2026-04-01",
+      loadedFromStorage: false,
+      law: { title: "民法" },
     });
     expect(getLaw.mock.calls).toEqual([
       ["508AC1000000069", { asOf: "2026-04-01" }],

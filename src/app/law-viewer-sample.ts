@@ -9,6 +9,8 @@ export interface LawViewerDocument {
   loadedFromStorage: boolean;
   savedAt?: ISODateString;
   requestedAsOf?: string;
+  // 基準日を指定したが、その時点に版が無いため現行法を表示していることを示す。
+  baseDateFallback?: boolean;
 }
 
 export const sampleLawViewerLawId = "129AC0000000089";

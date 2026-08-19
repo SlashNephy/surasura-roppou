@@ -65,4 +65,6 @@ Proposed | Accepted | Superseded
 - [2026-07-06: IndexedDB schema version 1 を定義する](2026-07-06-indexeddb-storage-version-1.md)
 - [2026-07-06: PWA cache strategy を Workbox generateSW で構成する](2026-07-06-pwa-cache-strategy.md)
 - [2026-07-07: BFF の導入を M8 相当の要件が生じるまで先送りする](2026-07-07-defer-bff-introduction.md)
+- [2026-07-09: e-Gov API v2 の asof をサーバー側の版解決として利用する](2026-07-09-egov-asof-server-side-resolution.md)
 - [2026-07-09: IndexedDB schema version 2 に検索ストアを追加する](2026-07-09-indexeddb-storage-version-2-search.md)
+- [2026-08-19: 基準日時点に版がない法令は現行法へフォールバックする](2026-08-19-base-date-fallback-to-current-law.md)
