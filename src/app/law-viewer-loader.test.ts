@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createEgovLawRepository } from "@/core/egov";
+import { EgovApiError, createEgovLawRepository } from "@/core/egov";
 import type { LawDocument, LawListResult, LawMetadata, LawRepository } from "@/core/egov";
 import type { StorageRepository } from "@/core/storage";
 import { createJsonFetchStub, fixedTestNow as now, lawDataFixture } from "@/test/fixtures/egov";
@@ -239,6 +239,96 @@ describe("loadLawViewerDocument", () => {
     ).resolves.toEqual({
       status: "error",
       message: "指定した基準日にはこの法令の版が見つかりません。基準日を変更してください。",
+    });
+  });
+
+  it("explains that the law is not in force at the base date when e-Gov returns 404 for the asof request", async () => {
+    const getLaw = vi
+      .fn<LawRepository["getLaw"]>()
+      .mockRejectedValueOnce(
+        new EgovApiError(
+          404,
+          "404004",
+          "指定のパラメータで取得できる法令本文ファイルは存在しません。",
+        ),
+      )
+      .mockResolvedValueOnce({ law, revision, nodes, raw: undefined });
+    const repository = {
+      listLaws: (): Promise<LawListResult> => Promise.reject(new Error("Not used in this test")),
+      getLaw,
+      getLawMetadata: (): Promise<LawMetadata> =>
+        Promise.reject(new Error("Not used in this test")),
+    } satisfies LawRepository;
+
+    await expect(
+      loadLawViewerDocument(
+        "508AC1000000069",
+        repository,
+        createStorageRepositoryStub(),
+        "2026-04-01",
+      ),
+    ).resolves.toEqual({
+      status: "error",
+      message:
+        "この法令は基準日 2026/04/01 の時点では施行されていません。設定で基準日を変更すると表示できます。",
+    });
+    expect(getLaw.mock.calls).toEqual([
+      ["508AC1000000069", { asOf: "2026-04-01" }],
+      ["508AC1000000069", {}],
+    ]);
+  });
+
+  it("keeps the not-found error when the law is missing at the base date and as the current law", async () => {
+    const getLaw = vi
+      .fn<LawRepository["getLaw"]>()
+      .mockRejectedValue(new EgovApiError(404, "400001", "指定された法令IDが存在しません。"));
+    const repository = {
+      listLaws: (): Promise<LawListResult> => Promise.reject(new Error("Not used in this test")),
+      getLaw,
+      getLawMetadata: (): Promise<LawMetadata> =>
+        Promise.reject(new Error("Not used in this test")),
+    } satisfies LawRepository;
+
+    await expect(
+      loadLawViewerDocument("missing", repository, createStorageRepositoryStub(), "2026-04-01"),
+    ).resolves.toEqual({
+      status: "error",
+      message: "法令が見つかりません。",
+    });
+    expect(getLaw.mock.calls).toEqual([
+      ["missing", { asOf: "2026-04-01" }],
+      ["missing", {}],
+    ]);
+  });
+
+  it("reports a retrieval error when the current-law retry fails for a reason other than 404", async () => {
+    const getLaw = vi
+      .fn<LawRepository["getLaw"]>()
+      .mockRejectedValueOnce(
+        new EgovApiError(
+          404,
+          "404004",
+          "指定のパラメータで取得できる法令本文ファイルは存在しません。",
+        ),
+      )
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    const repository = {
+      listLaws: (): Promise<LawListResult> => Promise.reject(new Error("Not used in this test")),
+      getLaw,
+      getLawMetadata: (): Promise<LawMetadata> =>
+        Promise.reject(new Error("Not used in this test")),
+    } satisfies LawRepository;
+
+    await expect(
+      loadLawViewerDocument(
+        "508AC1000000069",
+        repository,
+        createStorageRepositoryStub(),
+        "2026-04-01",
+      ),
+    ).resolves.toEqual({
+      status: "error",
+      message: "法令を取得できませんでした。ネットワーク接続を確認してください。",
     });
   });
 
