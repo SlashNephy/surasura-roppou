@@ -168,8 +168,16 @@ describe("LawNodeList", () => {
       />,
     );
 
-    expect(screen.getByText("（施行期日）")).toBeInTheDocument();
-    expect(screen.getByText("この法律は、公布の日から施行する。")).toBeInTheDocument();
+    const caption = screen.getByText("（施行期日）");
+    const body = screen.getByText("この法律は、公布の日から施行する。").closest("p");
+
+    // 見出しは本文と別の段落で、本文より前に来る。
+    expect(caption.closest("p")).not.toBe(body);
+    expect(
+      caption.compareDocumentPosition(body as Node) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // 本文側に残る番号はマーカー欄の 1 つだけ（見出しを本文に残すと番号が二重になる）。
+    expect(body?.textContent).toBe("1この法律は、公布の日から施行する。");
   });
 
   it("renders the heading without a caption span when the article has no caption", () => {
