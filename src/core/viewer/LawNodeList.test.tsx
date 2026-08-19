@@ -139,6 +139,39 @@ describe("LawNodeList", () => {
     );
   });
 
+  // 附則直下の項は項見出しを持つ。見出しを本文に残すと項番号の除去が空振りし、
+  // 「1」がマーカー欄と本文の両方に出る（Issue #230）。
+  it("renders the paragraph caption above the body and keeps the number out of the body", () => {
+    render(
+      <LawNodeList
+        lawId="508AC1000000069"
+        nodes={[
+          node({
+            id: "suppl:1",
+            type: "SupplementaryProvision",
+            path: "supplementary-provision:1",
+            title: "附　則",
+            plainText: "附　則 （施行期日） １ この法律は、公布の日から施行する。",
+            children: ["suppl:paragraph:1"],
+          }),
+          node({
+            id: "suppl:paragraph:1",
+            type: "Paragraph",
+            path: "supplementary-provision:1/paragraph:1",
+            number: "1",
+            title: "１",
+            caption: "（施行期日）",
+            plainText: "（施行期日） １ この法律は、公布の日から施行する。",
+            parentId: "suppl:1",
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("（施行期日）")).toBeInTheDocument();
+    expect(screen.getByText("この法律は、公布の日から施行する。")).toBeInTheDocument();
+  });
+
   it("renders the heading without a caption span when the article has no caption", () => {
     render(
       <LawNodeList
