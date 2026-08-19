@@ -295,6 +295,41 @@ describe("loadLawViewerDocument", () => {
       status: "error",
       message: "法令が見つかりません。",
     });
+    expect(getLaw.mock.calls).toEqual([
+      ["missing", { asOf: "2026-04-01" }],
+      ["missing", {}],
+    ]);
+  });
+
+  it("reports a retrieval error when the current-law retry fails for a reason other than 404", async () => {
+    const getLaw = vi
+      .fn<LawRepository["getLaw"]>()
+      .mockRejectedValueOnce(
+        new EgovApiError(
+          404,
+          "404004",
+          "指定のパラメータで取得できる法令本文ファイルは存在しません。",
+        ),
+      )
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    const repository = {
+      listLaws: (): Promise<LawListResult> => Promise.reject(new Error("Not used in this test")),
+      getLaw,
+      getLawMetadata: (): Promise<LawMetadata> =>
+        Promise.reject(new Error("Not used in this test")),
+    } satisfies LawRepository;
+
+    await expect(
+      loadLawViewerDocument(
+        "508AC1000000069",
+        repository,
+        createStorageRepositoryStub(),
+        "2026-04-01",
+      ),
+    ).resolves.toEqual({
+      status: "error",
+      message: "法令を取得できませんでした。ネットワーク接続を確認してください。",
+    });
   });
 
   it("keeps the saved fallback and records the requested base date when offline", async () => {

@@ -73,28 +73,40 @@ export const loadLawViewerDocument = async (
 
     // 基準日時点で施行されていない法令は e-Gov が 404（404004）を返すため、法令 ID 自体が
     // 無い場合と区別が付かない。現行法として取得できるかどうかで切り分け、原因が分かる文言にする。
-    if (asOf !== undefined && (await isAvailableAsCurrentLaw(repository, lawId))) {
-      return {
-        status: "error",
-        message: `この法令は基準日 ${formatIsoDateLabel(asOf)} の時点では施行されていません。設定で基準日を変更すると表示できます。`,
-      };
+    if (asOf !== undefined) {
+      switch (await probeCurrentLaw(repository, lawId)) {
+        case "available":
+          return {
+            status: "error",
+            message: `この法令は基準日 ${formatIsoDateLabel(asOf)} の時点では施行されていません。設定で基準日を変更すると表示できます。`,
+          };
+        case "unavailable":
+          break;
+        // 切り分けに失敗した以上「見つからない」と断定できない。取得失敗として扱う。
+        case "failed":
+          return {
+            status: "error",
+            message: "法令を取得できませんでした。ネットワーク接続を確認してください。",
+          };
+      }
     }
 
     return { status: "error", message: "法令が見つかりません。" };
   }
 };
 
-// 基準日抜きで取得できるなら「基準日時点で未施行」、それでも 404 なら法令 ID が存在しない。
-const isAvailableAsCurrentLaw = async (
+// 基準日抜きで取得できるなら「基準日時点で未施行」、404 なら法令 ID が存在しない。
+// それ以外の失敗（通信断・5xx など）はどちらとも判定できない。
+const probeCurrentLaw = async (
   repository: LawRepository,
   lawId: string,
-): Promise<boolean> => {
+): Promise<"available" | "unavailable" | "failed"> => {
   try {
     await repository.getLaw(lawId, {});
 
-    return true;
-  } catch {
-    return false;
+    return "available";
+  } catch (error) {
+    return error instanceof EgovApiError && error.status === 404 ? "unavailable" : "failed";
   }
 };
 
