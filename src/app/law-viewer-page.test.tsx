@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { computeArticleFingerprint } from "@/core/domain";
 import type { Bookmark } from "@/core/domain";
-import { createEgovLawRepository } from "@/core/egov";
+import { EgovApiError, createEgovLawRepository } from "@/core/egov";
 import type { LawDocument, LawListResult, LawMetadata, LawRepository } from "@/core/egov";
 import {
   DISPLAY_PREFERENCES_STORAGE_KEYS,
@@ -645,6 +645,47 @@ describe("LawViewerPageContent", () => {
     await expect(
       storageRepository.getLawDocument(sampleLawViewerDocument.law.lawId),
     ).resolves.toMatchObject({ revision: sampleLawViewerDocument.revision });
+  });
+
+  it("saves the fallback document into the current revision slot", async () => {
+    act(() => {
+      setBaseDate("2026-04-01");
+    });
+
+    const { repository: storageRepository } = createMemoryStorageRepository();
+    const repository = {
+      listLaws: (): Promise<LawListResult> => Promise.reject(new Error("Not used in this test")),
+      getLaw: (_lawId: string, query: { asOf?: string } = {}): Promise<LawDocument> =>
+        query.asOf === undefined
+          ? Promise.resolve({
+              law: sampleLawViewerDocument.law,
+              revision: sampleLawViewerDocument.revision,
+              nodes: sampleLawViewerDocument.nodes,
+              raw: undefined,
+            })
+          : Promise.reject(
+              new EgovApiError(
+                404,
+                "404004",
+                "指定のパラメータで取得できる法令本文ファイルは存在しません。",
+              ),
+            ),
+      getLawMetadata: (): Promise<LawMetadata> =>
+        Promise.reject(new Error("Not used in this test")),
+    } satisfies LawRepository;
+
+    renderLawViewerRoute("/laws/129AC0000000089", repository, storageRepository);
+
+    expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+
+    // listSavedLaws() が返す SavedLawSummary は isCurrent を持たない（現行版スロットかどうかは
+    // 版単位の SavedLawRevisionSummary の情報）。ブリーフのサンプルコードは listSavedLaws() を
+    // 使っていたが、isCurrent の検証には listSavedRevisions() を使う必要があるため差し替える。
+    await waitFor(async () => {
+      await expect(
+        storageRepository.listSavedRevisions(sampleLawViewerDocument.law.lawId),
+      ).resolves.toEqual([expect.objectContaining({ isCurrent: true })]);
+    });
   });
 
   it("does not save again when the document came from storage", async () => {
