@@ -627,9 +627,7 @@ const LawViewerReadyState = ({
                 className="min-w-0 text-xs leading-display text-muted-foreground"
                 role="group"
               >
-                {state.requestedAsOf !== undefined
-                  ? `基準日 ${formatIsoDateLabel(state.requestedAsOf)} ・ `
-                  : ""}
+                {formatBaseDatePrefix(state)}
                 施行日 {formatEffectiveDateLabel(state.revision)}
               </div>
             </div>
@@ -955,9 +953,7 @@ const LawViewerReadyState = ({
             ) : null}
             {/* 基準日情報（未設定=現行法なら基準日は省く） */}
             <p className="text-sm leading-display text-muted-foreground">
-              {state.requestedAsOf !== undefined
-                ? `基準日 ${formatIsoDateLabel(state.requestedAsOf)} ・ `
-                : ""}
+              {formatBaseDatePrefix(state)}
               施行日 {formatEffectiveDateLabel(state.revision)}
             </p>
             <LawTableOfContents
@@ -1087,9 +1083,21 @@ const collectTocArticleNumbers = (items: LawTocItem[]): string[] =>
     ...collectTocArticleNumbers(item.children),
   ]);
 
-// 表示に使った基準日のラベル。未設定なら現行法である旨を示す。
-const formatBaseDateLabel = (state: Extract<LawViewerState, { status: "ready" }>): string =>
-  state.requestedAsOf === undefined ? "未設定（現行法）" : formatIsoDateLabel(state.requestedAsOf);
+// 表示に使った基準日のラベル。未設定なら現行法である旨を示し、基準日時点に版が無く
+// 現行法へ落ちたときは対象外である旨を添える。
+const formatBaseDateLabel = (state: Extract<LawViewerState, { status: "ready" }>): string => {
+  if (state.requestedAsOf === undefined) {
+    return "未設定（現行法）";
+  }
+
+  const label = formatIsoDateLabel(state.requestedAsOf);
+
+  return state.baseDateFallback === true ? `${label}（対象外・現行法を表示）` : label;
+};
+
+// 基準日が未設定のときは「基準日 未設定」を出さず施行日だけにする箇所で使う前置き。
+const formatBaseDatePrefix = (state: Extract<LawViewerState, { status: "ready" }>): string =>
+  state.requestedAsOf === undefined ? "" : `基準日 ${formatBaseDateLabel(state)} ・ `;
 
 // 解決版の施行日ラベル。未施行版など施行日が無い場合は「不明」にする。
 const formatEffectiveDateLabel = (revision: LawRevision): string =>

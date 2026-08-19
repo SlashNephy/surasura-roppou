@@ -1140,6 +1140,20 @@ describe("LawViewerPageContent", () => {
     expect(screen.getAllByText(/基準日 2020\/06\/01/).length).toBeGreaterThan(0);
   });
 
+  it("marks the base date as out of scope when the current law is shown as a fallback", async () => {
+    renderLawViewerContentRoute("/laws/129AC0000000089/articles/1", {
+      status: "ready",
+      ...sampleLawViewerDocument,
+      requestedAsOf: "2026-04-01",
+      baseDateFallback: true,
+    });
+
+    expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+    expect(screen.getByLabelText("基準日情報")).toHaveTextContent(
+      "基準日 2026/04/01（対象外・現行法を表示）",
+    );
+  });
+
   it("notes that the base date is not applied to an offline saved body", async () => {
     renderLawViewerContentRoute("/laws/129AC0000000089/articles/1", {
       status: "ready",
