@@ -679,11 +679,71 @@ describe("LawViewerPageContent", () => {
     expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
 
     // listSavedLaws() が返す SavedLawSummary は isCurrent を持たない（現行版スロットかどうかは
-    // 版単位の SavedLawRevisionSummary の情報）。ブリーフのサンプルコードは listSavedLaws() を
-    // 使っていたが、isCurrent の検証には listSavedRevisions() を使う必要があるため差し替える。
+    // 版単位の SavedLawRevisionSummary の情報）。isCurrent の検証には listSavedRevisions() を使う。
     await waitFor(async () => {
       await expect(
         storageRepository.listSavedRevisions(sampleLawViewerDocument.law.lawId),
+      ).resolves.toEqual([expect.objectContaining({ isCurrent: true })]);
+    });
+  });
+
+  it("pins the fallback document into the current revision slot", async () => {
+    // 自動保存と同じ isCurrent 判断（isCurrentRevisionDocument）が pin 経路
+    // （savedLawUseCase.pin）でも通ることの回帰テスト。自動保存を失敗させ、
+    // ダウンロード操作による pin の保存だけを見えるようにする。
+    act(() => {
+      setBaseDate("2026-04-01");
+    });
+
+    const { repository: baseStorageRepository } = createMemoryStorageRepository();
+    let saveCallCount = 0;
+    const storageRepository: StorageRepository = {
+      ...baseStorageRepository,
+      saveLawDocument: (document, options) => {
+        saveCallCount += 1;
+        if (saveCallCount === 1) {
+          return Promise.reject(new Error("auto save disabled for this test"));
+        }
+        return baseStorageRepository.saveLawDocument(document, options);
+      },
+    };
+    const repository = {
+      listLaws: (): Promise<LawListResult> => Promise.reject(new Error("Not used in this test")),
+      getLaw: (_lawId: string, query: { asOf?: string } = {}): Promise<LawDocument> =>
+        query.asOf === undefined
+          ? Promise.resolve({
+              law: sampleLawViewerDocument.law,
+              revision: sampleLawViewerDocument.revision,
+              nodes: sampleLawViewerDocument.nodes,
+              raw: undefined,
+            })
+          : Promise.reject(
+              new EgovApiError(
+                404,
+                "404004",
+                "指定のパラメータで取得できる法令本文ファイルは存在しません。",
+              ),
+            ),
+      getLawMetadata: (): Promise<LawMetadata> =>
+        Promise.reject(new Error("Not used in this test")),
+    } satisfies LawRepository;
+
+    const { user } = renderLawViewerRoute("/laws/129AC0000000089", repository, storageRepository);
+
+    expect(await screen.findByRole("article", { name: "民法" })).toBeInTheDocument();
+
+    // 自動保存(1 回目の saveLawDocument)は失敗させているため、この時点ではまだ保存されていない。
+    await expect(
+      baseStorageRepository.listSavedRevisions(sampleLawViewerDocument.law.lawId),
+    ).resolves.toEqual([]);
+
+    await user.click(screen.getByRole("button", { name: "ダウンロード" }));
+
+    expect(await screen.findByRole("button", { name: "ダウンロード済み" })).toBeInTheDocument();
+
+    await waitFor(async () => {
+      await expect(
+        baseStorageRepository.listSavedRevisions(sampleLawViewerDocument.law.lawId),
       ).resolves.toEqual([expect.objectContaining({ isCurrent: true })]);
     });
   });

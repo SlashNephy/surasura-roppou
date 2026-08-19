@@ -68,7 +68,16 @@ export const StudyReviewEvidencePanel = ({ card, loadDocument }: StudyReviewEvid
         setState({
           status: "ready",
           lawTitle: document.law.title,
-          baseDateLabel: document.requestedAsOf ?? "未設定（現行法）",
+          // ビューア(law-viewer-page.tsx の formatBaseDateLabel)と文言を揃える。フォールバック時に
+          // 実際に見せているのは現行法であり、要求した基準日時点の版ではないため、
+          // 対象外である旨を添える。日付書式はここでは ISO 文字列のまま維持する(ビューアの
+          // 2026/04/01 形式には変えない)。
+          baseDateLabel:
+            document.requestedAsOf === undefined
+              ? "未設定（現行法）"
+              : document.baseDateFallback === true
+                ? `${document.requestedAsOf}（対象外・現行法を表示）`
+                : document.requestedAsOf,
           node,
           anchorStatus,
         });

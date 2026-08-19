@@ -1,11 +1,13 @@
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import type { CardSchedule, ReviewLog, StudyCard } from "@/core/domain";
 import { computeArticleFingerprint } from "@/core/domain";
+import { EgovApiError } from "@/core/egov";
 import type { LawRepository } from "@/core/egov";
+import { setBaseDate } from "@/core/settings";
 import type { StorageRepository } from "@/core/storage";
 import { createMemoryStorageRepository } from "@/test/fixtures/storage";
 import { setupScrollMocks } from "@/test/scrollMocks";
@@ -14,6 +16,11 @@ import { sampleLawViewerDocument } from "./law-viewer-sample";
 import { createAppRouter } from "./router";
 
 setupScrollMocks();
+
+// setBaseDate は localStorage を書き換える。テスト間で基準日設定が漏れないようにする。
+afterEach(() => {
+  localStorage.clear();
+});
 
 const makeCard = (id: string, createdAt = "2026-07-01T00:00:00.000Z"): StudyCard => ({
   id,
@@ -334,6 +341,56 @@ describe("StudyReviewPage", () => {
     );
     // 指紋が一致しているので改正バッジは出ない。
     expect(screen.queryByText("改正の可能性")).not.toBeInTheDocument();
+  });
+
+  it("marks the base date as out of scope when the evidence panel falls back to current law", async () => {
+    const user = userEvent.setup();
+    // sampleLawViewerDocument の第 1 条と同じ本文から指紋を作ると verifyAnchor が match になる。
+    const fingerprint = await computeArticleFingerprint(
+      "第一条 私権は、公共の福祉（公共の利益を含む。）に適合しなければならない。",
+    );
+    const card = {
+      ...makeCard("card-1"),
+      target: { lawId: "129AC0000000089", revisionId: "rev-1", article: "1", fingerprint },
+    } satisfies StudyCard;
+    const storage = createMemoryStorageRepository({
+      studyCards: [card],
+      cardSchedules: [dueSchedule("card-1")],
+    });
+    // 基準日時点に版が無い法令。asOf 指定の取得は 404 になり、ローダーが現行法へフォールバックする。
+    const fallbackLawRepository: LawRepository = {
+      listLaws: () => Promise.reject(new Error("not used in tests")),
+      getLawMetadata: () => Promise.reject(new Error("not used in tests")),
+      getLaw: (_lawId, query = {}) =>
+        query.asOf === undefined
+          ? Promise.resolve({
+              law: sampleLawViewerDocument.law,
+              revision: sampleLawViewerDocument.revision,
+              nodes: sampleLawViewerDocument.nodes,
+              raw: {},
+            })
+          : Promise.reject(
+              new EgovApiError(
+                404,
+                "404004",
+                "指定のパラメータで取得できる法令本文ファイルは存在しません。",
+              ),
+            ),
+    };
+
+    act(() => {
+      setBaseDate("2026-04-01");
+    });
+
+    renderReviewPageWithLaw("/study/review", storage.repository, fallbackLawRepository);
+
+    await user.click(await screen.findByRole("button", { name: "答えを見る" }));
+
+    expect(await screen.findByText(/私権は、公共の福祉/)).toBeInTheDocument();
+    // 実際に見せているのは現行法なので、要求した基準日そのまま(誤って対象内であるかのよう)には
+    // 表示しない。日付書式は既存の baseDateLabel の ISO 文字列表記を維持しつつ、ビューアと同じ
+    // 「対象外・現行法を表示」を添える。
+    expect(screen.getByText("表示基準日: 2026-04-01（対象外・現行法を表示）")).toBeInTheDocument();
   });
 
   it("flags a possible revision and offers rebuilding when the fingerprint drifts", async () => {
