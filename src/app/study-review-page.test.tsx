@@ -393,6 +393,47 @@ describe("StudyReviewPage", () => {
     expect(screen.getByText("表示基準日: 2026-04-01（対象外・現行法を表示）")).toBeInTheDocument();
   });
 
+  it("shows the base date without a suffix when the as-of fetch succeeds", async () => {
+    const user = userEvent.setup();
+    // sampleLawViewerDocument の第 1 条と同じ本文から指紋を作ると verifyAnchor が match になる。
+    const fingerprint = await computeArticleFingerprint(
+      "第一条 私権は、公共の福祉（公共の利益を含む。）に適合しなければならない。",
+    );
+    const card = {
+      ...makeCard("card-1"),
+      target: { lawId: "129AC0000000089", revisionId: "rev-1", article: "1", fingerprint },
+    } satisfies StudyCard;
+    const storage = createMemoryStorageRepository({
+      studyCards: [card],
+      cardSchedules: [dueSchedule("card-1")],
+    });
+    // フォールバックテストとの違いは asOf 指定時も getLaw が成功する点のみ。
+    // 基準日時点の版が存在するケースなので、baseDateFallback は付かない。
+    const asOfLawRepository: LawRepository = {
+      listLaws: () => Promise.reject(new Error("not used in tests")),
+      getLawMetadata: () => Promise.reject(new Error("not used in tests")),
+      getLaw: () =>
+        Promise.resolve({
+          law: sampleLawViewerDocument.law,
+          revision: sampleLawViewerDocument.revision,
+          nodes: sampleLawViewerDocument.nodes,
+          raw: {},
+        }),
+    };
+
+    act(() => {
+      setBaseDate("2026-04-01");
+    });
+
+    renderReviewPageWithLaw("/study/review", storage.repository, asOfLawRepository);
+
+    await user.click(await screen.findByRole("button", { name: "答えを見る" }));
+
+    expect(await screen.findByText(/私権は、公共の福祉/)).toBeInTheDocument();
+    // asOf 指定の取得が成功しているので、「対象外・現行法を表示」の接尾辞は付かない。
+    expect(screen.getByText("表示基準日: 2026-04-01")).toBeInTheDocument();
+  });
+
   it("flags a possible revision and offers rebuilding when the fingerprint drifts", async () => {
     const user = userEvent.setup();
     const card = {
