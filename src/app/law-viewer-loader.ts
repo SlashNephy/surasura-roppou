@@ -1,8 +1,7 @@
 import { EgovApiError, createEgovLawRepository } from "@/core/egov";
-import type { LawRepository } from "@/core/egov";
+import type { LawDocument, LawRepository } from "@/core/egov";
 import { createStorageRepository } from "@/core/storage";
 import type { StorageRepository } from "@/core/storage";
-import { formatIsoDateLabel } from "@/shared/utils/dates";
 
 import { offlineDemoLawId, sampleLawViewerDocument } from "./law-viewer-sample";
 import type { LawViewerState } from "./law-viewer-page";
@@ -71,18 +70,27 @@ export const loadLawViewerDocument = async (
       };
     }
 
-    // 基準日時点で施行されていない法令は e-Gov が 404（404004）を返すため、法令 ID 自体が
-    // 無い場合と区別が付かない。現行法として取得できるかどうかで切り分け、原因が分かる文言にする。
+    // 基準日時点で施行されていない法令は e-Gov が 404（404004）を返す。基準日は既定の版を
+    // 選ぶ機能であり出題範囲の絞り込みではないため、版が無いときは現行法を表示する。
     if (asOf !== undefined) {
-      switch (await probeCurrentLaw(repository, lawId)) {
-        case "available":
+      const fallback = await fetchCurrentLaw(repository, lawId);
+
+      switch (fallback.status) {
+        case "fetched":
           return {
-            status: "error",
-            message: `この法令は基準日 ${formatIsoDateLabel(asOf)} の時点では施行されていません。設定で基準日を変更すると表示できます。`,
+            status: "ready",
+            law: fallback.document.law,
+            revision: fallback.document.revision,
+            nodes: fallback.document.nodes,
+            isPinned,
+            loadedFromStorage: false,
+            requestedAsOf: asOf,
+            baseDateFallback: true,
+            savedAt: savedDocument?.savedAt,
           };
-        case "unavailable":
+        case "not-found":
           break;
-        // 切り分けに失敗した以上「見つからない」と断定できない。取得失敗として扱う。
+        // 取得できなかった以上「見つからない」と断定できない。取得失敗として扱う。
         case "failed":
           return {
             status: "error",
@@ -95,18 +103,21 @@ export const loadLawViewerDocument = async (
   }
 };
 
-// 基準日抜きで取得できるなら「基準日時点で未施行」、404 なら法令 ID が存在しない。
+// 基準日抜きで取得できるなら現行法として表示する。404 なら法令 ID が存在しない。
 // それ以外の失敗（通信断・5xx など）はどちらとも判定できない。
-const probeCurrentLaw = async (
+type CurrentLawFetchResult =
+  { status: "fetched"; document: LawDocument } | { status: "not-found" } | { status: "failed" };
+
+const fetchCurrentLaw = async (
   repository: LawRepository,
   lawId: string,
-): Promise<"available" | "unavailable" | "failed"> => {
+): Promise<CurrentLawFetchResult> => {
   try {
-    await repository.getLaw(lawId, {});
-
-    return "available";
+    return { status: "fetched", document: await repository.getLaw(lawId, {}) };
   } catch (error) {
-    return error instanceof EgovApiError && error.status === 404 ? "unavailable" : "failed";
+    return error instanceof EgovApiError && error.status === 404
+      ? { status: "not-found" }
+      : { status: "failed" };
   }
 };
 
