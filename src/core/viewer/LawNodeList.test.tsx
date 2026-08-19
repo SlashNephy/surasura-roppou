@@ -139,6 +139,47 @@ describe("LawNodeList", () => {
     );
   });
 
+  // 附則直下の項は項見出しを持つ。見出しを本文に残すと項番号の除去が空振りし、
+  // 「1」がマーカー欄と本文の両方に出る（Issue #230）。
+  it("renders the paragraph caption above the body and keeps the number out of the body", () => {
+    render(
+      <LawNodeList
+        lawId="508AC1000000069"
+        nodes={[
+          node({
+            id: "suppl:1",
+            type: "SupplementaryProvision",
+            path: "supplementary-provision:1",
+            title: "附　則",
+            plainText: "附　則 （施行期日） １ この法律は、公布の日から施行する。",
+            children: ["suppl:paragraph:1"],
+          }),
+          node({
+            id: "suppl:paragraph:1",
+            type: "Paragraph",
+            path: "supplementary-provision:1/paragraph:1",
+            number: "1",
+            title: "１",
+            caption: "（施行期日）",
+            plainText: "（施行期日） １ この法律は、公布の日から施行する。",
+            parentId: "suppl:1",
+          }),
+        ]}
+      />,
+    );
+
+    const caption = screen.getByText("（施行期日）");
+    const body = screen.getByText("この法律は、公布の日から施行する。").closest("p");
+
+    // 見出しは本文と別の段落で、本文より前に来る。
+    expect(caption.closest("p")).not.toBe(body);
+    expect(
+      caption.compareDocumentPosition(body as Node) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // 本文側に残る番号はマーカー欄の 1 つだけ（見出しを本文に残すと番号が二重になる）。
+    expect(body?.textContent).toBe("1この法律は、公布の日から施行する。");
+  });
+
   it("renders the heading without a caption span when the article has no caption", () => {
     render(
       <LawNodeList

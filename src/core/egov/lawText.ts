@@ -58,9 +58,11 @@ const titleTagByType = {
 const getTitleTag = (apiNode: EgovLawTextNode, nodeType: LawNodeType): string =>
   nodeType === "Subitem" ? `${apiNode.tag}Title` : titleTagByType[nodeType];
 
-// 条見出しのかっこ書き（例: （基本原則））を持つノード種別だけ対象にする
+// 見出しのかっこ書き（例: （基本原則））を持つノード種別だけ対象にする。
+// 項見出しは附則直下の項に付くことが多く、拾わないと本文テキストに混ざる。
 const captionTagByType: Partial<Record<LawNodeType, string>> = {
   Article: "ArticleCaption",
+  Paragraph: "ParagraphCaption",
 };
 
 export const normalizeEgovLawText = (

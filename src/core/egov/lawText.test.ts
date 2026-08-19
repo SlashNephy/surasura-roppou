@@ -408,6 +408,32 @@ describe("normalizeEgovLawText", () => {
     );
   });
 
+  // 附則直下の項は項見出し（ParagraphCaption）を持つ。caption として抽出しないと
+  // 本文テキストに混ざり、項番号の除去（stripLeadingMarker）も空振りする。
+  it("extracts the paragraph caption into caption", () => {
+    const nodes = normalizeLawBody([
+      lawTextNode("SupplProvision", [
+        lawTextNode("SupplProvisionLabel", ["附　則"]),
+        lawTextNode("Paragraph", [
+          lawTextNode("ParagraphCaption", ["（施行期日）"]),
+          lawTextNode("ParagraphNum", ["１"]),
+          paragraphSentence("この法律は、公布の日から施行する。"),
+        ]),
+      ]),
+    ]);
+    const paragraphNode = findNode(nodes, "Paragraph", "supplementary-provision:1/paragraph:1");
+
+    expect(paragraphNode).toEqual(
+      expect.objectContaining({ title: "１", caption: "（施行期日）" }),
+    );
+  });
+
+  it("omits caption when the paragraph has no caption", () => {
+    const nodes = normalizeLawBody([article("第一条")]);
+
+    expect(findNode(nodes, "Paragraph", "article:1/paragraph:1")).not.toHaveProperty("caption");
+  });
+
   it("omits caption when the article has no caption", () => {
     const nodes = normalizeLawBody([article("第一条")]);
 

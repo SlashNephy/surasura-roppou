@@ -215,8 +215,14 @@ const LawNodeBlock = ({
           ? (node.title ?? getArticleParagraphMarker(node, nodeById))
           : (node.title ?? node.number);
       const displayMarker = getDisplayInlineText(marker, displayMode);
+      const displayCaption = getDisplayInlineText(node.caption, displayMode);
+      // 見出し → 項番号の順に本文の先頭から取り除く。plainText はこの順で連結されており、
+      // 見出しを残したままだと項番号の除去が空振りして番号が二重に出る。
       const bodyText = stripLeadingMarker(
-        stripTrailingChildPlainTexts(getDisplayText(node, displayMode), children, displayMode),
+        stripLeadingMarker(
+          stripTrailingChildPlainTexts(getDisplayText(node, displayMode), children, displayMode),
+          displayCaption,
+        ),
         displayMarker,
       );
       // 条直下の項は、1行目を字下げして第1項・第2項以降の本文頭を揃える。
@@ -239,6 +245,17 @@ const LawNodeBlock = ({
             node.type === "Subitem" && "pl-8",
           )}
         >
+          {/* 項見出しは本文の上に独立した行で示す。条見出しと違い、見出しを添える
+              条名の行が無いため（附則直下の項など）。 */}
+          {displayCaption === undefined ? null : (
+            <p className="font-law leading-display font-medium break-words text-secondary-foreground">
+              <LawTextWithRuby
+                displayMode={displayMode}
+                annotations={node.rubyAnnotations}
+                text={displayCaption}
+              />
+            </p>
+          )}
           {isArticleParagraph ? (
             <p
               className={cn(
