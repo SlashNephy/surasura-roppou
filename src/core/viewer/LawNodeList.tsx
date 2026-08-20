@@ -14,9 +14,16 @@ import {
   type LawTextDisplayMode,
 } from "./displayMode";
 import { LawTextWithRuby } from "./LawTextWithRuby";
-import { articleAnchorId, computeChildArticleContext, paragraphAnchorId } from "./lawToc";
+import {
+  articleAnchorId,
+  chapterAnchorId,
+  computeChildArticleContext,
+  paragraphAnchorId,
+  partAnchorId,
+} from "./lawToc";
 import {
   buildArticleLinkEntries,
+  buildHeadingLinkEntries,
   segmentReferenceLinks,
   type ArticleLinkContext,
   type ReferenceLinkSegment,
@@ -48,6 +55,14 @@ type HeadingTag = "h2" | "h3" | "h4" | "h5" | "h6";
 
 const headingTags: HeadingTag[] = ["h2", "h3", "h4", "h5", "h6"];
 
+// 本文中の参照を解決する基準となる現在位置。編・章は祖先をたどって伝播する。
+interface ReferencePosition {
+  partNumber?: string;
+  chapterNumber?: string;
+  articleNumber?: string;
+  paragraphNumber?: string;
+}
+
 export const LawNodeList = ({
   activeArticleNumber,
   displayMode = "readable",
@@ -59,9 +74,10 @@ export const LawNodeList = ({
   const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
   const topLevelNodes = useMemo(() => nodes.filter((node) => node.parentId === undefined), [nodes]);
   const articles = useMemo(() => buildArticleLinkEntries(nodes), [nodes]);
+  const headings = useMemo(() => buildHeadingLinkEntries(nodes), [nodes]);
   const linking = useMemo<LinkingOptions>(
-    () => ({ articles, displayMode, lawId, onSelectArticle }),
-    [articles, displayMode, lawId, onSelectArticle],
+    () => ({ articles, displayMode, headings, lawId, onSelectArticle }),
+    [articles, displayMode, headings, lawId, onSelectArticle],
   );
 
   return (
@@ -76,7 +92,7 @@ export const LawNodeList = ({
           linking={linking}
           node={node}
           nodeById={nodeById}
-          position={{ articleNumber: undefined }}
+          position={{}}
           renderArticleActions={renderArticleActions}
         />
       ))}
@@ -102,9 +118,9 @@ const LawNodeBlock = ({
   linking: LinkingOptions;
   node: LawNode;
   nodeById: Map<string, LawNode>;
-  // 本文中の相対参照（前条・前項）の基準となる、この節点を含む条・項の番号。
+  // 本文中の相対参照（前条・前項・前章）の基準となる、この節点を含む編・章・条・項の番号。
   // 附則・別表の中では条アンカーが無いため undefined のまま伝える。
-  position: { articleNumber?: string; paragraphNumber?: string };
+  position: ReferencePosition;
   renderArticleActions: ((article: LawNode) => ReactNode) | undefined;
 }) => {
   const childArticleContext = computeChildArticleContext(isUrlAddressableArticleContext, node.type);
@@ -126,8 +142,8 @@ const LawNodeBlock = ({
       const displayCaption = getDisplayInlineText(node.caption, displayMode);
       const displayText = getDisplayText(node, displayMode);
       const childPosition = isUrlAddressableArticle
-        ? { articleNumber: node.number }
-        : { articleNumber: undefined };
+        ? { ...position, articleNumber: node.number }
+        : { ...position, articleNumber: undefined };
 
       return (
         <article
@@ -187,7 +203,7 @@ const LawNodeBlock = ({
                 {renderLinkedText(
                   displayText,
                   linking,
-                  { articleNumber: node.number },
+                  childPosition,
                   isUrlAddressableArticleContext,
                   node.rubyAnnotations,
                 )}
@@ -230,7 +246,7 @@ const LawNodeBlock = ({
       // 条直下の項は、1行目を字下げして第1項・第2項以降の本文頭を揃える。
       const isArticleParagraph = node.type === "Paragraph" && parent?.type === "Article";
       const ownPosition = isArticleParagraph
-        ? { articleNumber: parent.number, paragraphNumber: node.number }
+        ? { ...position, articleNumber: parent.number, paragraphNumber: node.number }
         : position;
       const childPosition = isArticleParagraph
         ? { ...position, paragraphNumber: node.number }
@@ -319,6 +335,15 @@ const LawNodeBlock = ({
   }
 
   const headingClassName = headingClassNameByType[node.type];
+  // 編・章の見出しは、本文中の編・章参照のページ内リンクの着地先になる。
+  // 附則・別表の中は条アンカーと同様に URL 到達可能でないため付けない。
+  const headingPosition = computeHeadingPosition(node, position, isUrlAddressableArticleContext);
+  const headingId =
+    node.type === "Part" && headingPosition.partNumber !== undefined
+      ? partAnchorId(headingPosition.partNumber)
+      : node.type === "Chapter" && headingPosition.chapterNumber !== undefined
+        ? chapterAnchorId(headingPosition.partNumber, headingPosition.chapterNumber)
+        : undefined;
   const displayTitle = getDisplayHeadingInlineText(node.title, displayMode);
   const bodyText = stripLeadingMarker(
     applyLawHeadingTextDisplayMode(
@@ -329,7 +354,7 @@ const LawNodeBlock = ({
   );
 
   return (
-    <section className="grid gap-3">
+    <section id={headingId} className={cn("grid gap-3", headingId !== undefined && "scroll-mt-20")}>
       {displayTitle !== undefined ? (
         <Heading className={cn("font-law text-foreground break-words", headingClassName)}>
           <LawTextWithRuby
@@ -347,7 +372,7 @@ const LawNodeBlock = ({
           {renderLinkedText(
             bodyText,
             linking,
-            {},
+            headingPosition,
             isUrlAddressableArticleContext,
             node.rubyAnnotations,
           )}
@@ -361,11 +386,36 @@ const LawNodeBlock = ({
         isUrlAddressableArticleContext: childArticleContext,
         linking,
         nodeById,
-        position,
+        position: headingPosition,
         renderArticleActions,
       })}
     </section>
   );
+};
+
+// 編・章の見出しを通過するたびに、配下の参照解決の基準となる編・章番号を更新する。
+// 章に入るときは編の文脈を保ち、編に入るときは前の編の章番号を落とす。
+const computeHeadingPosition = (
+  node: LawNode,
+  position: ReferencePosition,
+  isUrlAddressableArticleContext: boolean,
+): ReferencePosition => {
+  if (!isUrlAddressableArticleContext || node.number === undefined) {
+    return position;
+  }
+
+  if (node.type === "Part") {
+    // 編が変われば章番号の文脈は切れる（章番号は編ごとにリセットするため）。
+    return {
+      ...(position.articleNumber === undefined ? {} : { articleNumber: position.articleNumber }),
+      ...(position.paragraphNumber === undefined
+        ? {}
+        : { paragraphNumber: position.paragraphNumber }),
+      partNumber: node.number,
+    };
+  }
+
+  return node.type === "Chapter" ? { ...position, chapterNumber: node.number } : position;
 };
 
 const renderChildBlocks = ({
@@ -386,9 +436,9 @@ const renderChildBlocks = ({
   isUrlAddressableArticleContext: boolean;
   linking: LinkingOptions;
   nodeById: Map<string, LawNode>;
-  // 本文中の相対参照（前条・前項）の基準となる、この節点を含む条・項の番号。
+  // 本文中の相対参照（前条・前項・前章）の基準となる、この節点を含む編・章・条・項の番号。
   // 附則・別表の中では条アンカーが無いため undefined のまま伝える。
-  position: { articleNumber?: string; paragraphNumber?: string };
+  position: ReferencePosition;
   renderArticleActions: ((article: LawNode) => ReactNode) | undefined;
 }) =>
   children.map((child) => (
@@ -480,6 +530,7 @@ const getDisplayHeadingInlineText = (
 interface LinkingOptions {
   articles: ArticleLinkContext["articles"];
   displayMode: LawTextDisplayMode;
+  headings: ArticleLinkContext["headings"];
   lawId: string;
   onSelectArticle: ((articleNumber: string) => void) | undefined;
 }
@@ -491,7 +542,7 @@ interface LinkingOptions {
 const renderLinkedText = (
   text: string,
   linking: LinkingOptions,
-  position: { articleNumber?: string; paragraphNumber?: string },
+  position: ReferencePosition,
   isUrlAddressableArticleContext: boolean,
   annotations: RubyAnnotation[] | undefined,
 ): ReactNode => {
@@ -506,6 +557,11 @@ const renderLinkedText = (
 
   const segments = segmentReferenceLinks(text, {
     articles: linking.articles,
+    headings: linking.headings,
+    ...(position.partNumber === undefined ? {} : { currentPartNumber: position.partNumber }),
+    ...(position.chapterNumber === undefined
+      ? {}
+      : { currentChapterNumber: position.chapterNumber }),
     ...(position.articleNumber === undefined
       ? {}
       : { currentArticleNumber: position.articleNumber }),
@@ -546,11 +602,14 @@ const ReferenceSegment = ({
   }
 
   const { caption, target, text } = segment;
-  // 同じ条の中の項へはページ内リンク。条をまたぐときは条ルートへ遷移する。
-  const isInPage = target.paragraphNumber !== undefined;
-  const href = isInPage
-    ? `#${paragraphAnchorId(target.articleNumber, target.paragraphNumber ?? "")}`
-    : buildLawArticleUrl({ lawId: linking.lawId, article: target.articleNumber });
+  // 編・章の見出しと、同じ条の中の項へはページ内リンク。条をまたぐときは条ルートへ遷移する。
+  const isInPage = target.kind === "heading" || target.paragraphNumber !== undefined;
+  const href =
+    target.kind === "heading"
+      ? `#${target.anchorId}`
+      : isInPage
+        ? `#${paragraphAnchorId(target.articleNumber, target.paragraphNumber ?? "")}`
+        : buildLawArticleUrl({ lawId: linking.lawId, article: target.articleNumber });
   // 見出しの注入は見やすい表示のときだけ。原文表示では原文にない文字を足さない。
   const showCaption = caption !== undefined && linking.displayMode === "readable";
 

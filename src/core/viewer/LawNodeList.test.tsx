@@ -1030,3 +1030,143 @@ describe("LawNodeList", () => {
     });
   });
 });
+
+describe("LawNodeList の編・章参照", () => {
+  const partedNodes: LawNode[] = [
+    node({
+      id: "part:1",
+      type: "Part",
+      path: "part:1",
+      number: "1",
+      title: "第一編　総則",
+      plainText: "第一編　総則",
+      children: ["part:1/chapter:1", "part:1/chapter:2"],
+    }),
+    node({
+      id: "part:1/chapter:1",
+      type: "Chapter",
+      path: "part:1/chapter:1",
+      number: "1",
+      title: "第一章　通則",
+      plainText: "第一章　通則",
+      parentId: "part:1",
+      children: ["article:6"],
+    }),
+    node({
+      id: "article:6",
+      type: "Article",
+      path: "part:1/chapter:1/article:6",
+      number: "6",
+      title: "第六条",
+      plainText: "第六条 第四編の規定に従い、第二章の例による。",
+      parentId: "part:1/chapter:1",
+      children: ["article:6/paragraph:1"],
+    }),
+    node({
+      id: "article:6/paragraph:1",
+      type: "Paragraph",
+      path: "part:1/chapter:1/article:6/paragraph:1",
+      number: "1",
+      plainText: "第四編の規定に従い、第二章の例による。",
+      parentId: "article:6",
+    }),
+    node({
+      id: "part:1/chapter:2",
+      type: "Chapter",
+      path: "part:1/chapter:2",
+      number: "2",
+      title: "第二章　人",
+      plainText: "第二章　人 第七条 前章の例による。",
+      parentId: "part:1",
+      children: ["article:7"],
+    }),
+    // 項を持たない葉の条。本文は条ノード自身が描画するため、編・章の文脈が
+    // そこまで伝わっているかを確かめる対象になる。
+    node({
+      id: "article:7",
+      type: "Article",
+      path: "part:1/chapter:2/article:7",
+      number: "7",
+      title: "第七条",
+      plainText: "第七条 前章の例による。",
+      parentId: "part:1/chapter:2",
+    }),
+    node({
+      id: "part:4",
+      type: "Part",
+      path: "part:4",
+      number: "4",
+      title: "第四編　親族",
+      plainText: "第四編　親族",
+      children: ["part:4/chapter:1"],
+    }),
+    node({
+      id: "part:4/chapter:1",
+      type: "Chapter",
+      path: "part:4/chapter:1",
+      number: "1",
+      title: "第一章　総則",
+      plainText: "第一章　総則",
+      parentId: "part:4",
+    }),
+    node({
+      id: "supplementary:1",
+      type: "SupplementaryProvision",
+      path: "supplementary-provision:1",
+      title: "附　則",
+      plainText: "附　則",
+      children: ["supplementary:1/chapter:1"],
+    }),
+    node({
+      id: "supplementary:1/chapter:1",
+      type: "Chapter",
+      path: "supplementary-provision:1/chapter:1",
+      number: "1",
+      title: "第一章　経過措置",
+      plainText: "第一章　経過措置",
+      parentId: "supplementary:1",
+    }),
+  ];
+
+  it("編・章の見出しにアンカー id を付ける", () => {
+    const { container } = render(<LawNodeList lawId="129AC0000000089" nodes={partedNodes} />);
+
+    expect(container.querySelector("#pt1")).not.toBeNull();
+    expect(container.querySelector("#pt1-ch1")).not.toBeNull();
+    expect(container.querySelector("#pt1-ch2")).not.toBeNull();
+    expect(container.querySelector("#pt4")).not.toBeNull();
+    expect(container.querySelector("#pt4-ch1")).not.toBeNull();
+  });
+
+  it("附則の中の章にはアンカー id を付けない", () => {
+    const { container } = render(<LawNodeList lawId="129AC0000000089" nodes={partedNodes} />);
+
+    expect(container.querySelectorAll("[id^='ch']")).toHaveLength(0);
+  });
+
+  it("項を持たない条の本文でも編・章の文脈を保って参照を解決する", () => {
+    const { container } = render(<LawNodeList lawId="129AC0000000089" nodes={partedNodes} />);
+
+    // 第七条は第一編第二章にあるため、前章は同じ編の第一章を指す。
+    const link = [...container.querySelectorAll("a")].find(
+      (anchor) => anchor.textContent === "前章",
+    );
+
+    expect(link).toHaveAttribute("href", "#pt1-ch1");
+  });
+
+  it("編・章参照のリンク先が実在する見出しアンカーを指す", () => {
+    const { container } = render(<LawNodeList lawId="129AC0000000089" nodes={partedNodes} />);
+
+    const hrefs = [...container.querySelectorAll("a[href^='#pt']")].map((link) =>
+      link.getAttribute("href"),
+    );
+
+    // 第四編 → 編そのもの、第二章 → 現在の編（第一編）の第二章。
+    expect(hrefs).toEqual(["#pt4", "#pt1-ch2", "#pt1-ch1"]);
+
+    for (const href of hrefs) {
+      expect(container.querySelector(href ?? "")).not.toBeNull();
+    }
+  });
+});

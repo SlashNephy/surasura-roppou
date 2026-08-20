@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import type { LawNode } from "@/core/domain";
 
-import { buildArticleLinkEntries, segmentReferenceLinks } from "./reference-links";
+import {
+  buildArticleLinkEntries,
+  buildHeadingLinkEntries,
+  segmentReferenceLinks,
+} from "./reference-links";
 import type { ArticleLinkContext } from "./reference-links";
 
 const node = (overrides: Partial<LawNode> & Pick<LawNode, "id" | "path" | "type">): LawNode => ({
@@ -187,9 +191,10 @@ describe("buildArticleLinkEntries", () => {
 
 describe("segmentReferenceLinks", () => {
   const articles = buildArticleLinkEntries(lawNodes);
+  const headings = buildHeadingLinkEntries(lawNodes);
 
   const linkTexts = (text: string, context: Partial<ArticleLinkContext> = {}) =>
-    segmentReferenceLinks(text, { articles, ...context })
+    segmentReferenceLinks(text, { articles, headings, ...context })
       .filter((segment) => segment.kind === "link")
       .map((segment) => segment.text);
 
@@ -314,12 +319,16 @@ describe("segmentReferenceLinks", () => {
 
   it("keeps the surrounding text as plain segments", () => {
     expect(
-      segmentReferenceLinks("前条の規定による。", { articles, currentArticleNumber: "16" }),
+      segmentReferenceLinks("前条の規定による。", {
+        articles,
+        headings,
+        currentArticleNumber: "16",
+      }),
     ).toEqual([
       {
         kind: "link",
         text: "前条",
-        target: { articleNumber: "15" },
+        target: { kind: "article", articleNumber: "15" },
         caption: { text: "補助開始の審判", offset: 2 },
       },
       { kind: "text", text: "の規定による。" },
@@ -330,26 +339,28 @@ describe("segmentReferenceLinks", () => {
     expect(
       segmentReferenceLinks("前項の請求", {
         articles,
+        headings,
         currentArticleNumber: "15",
         currentParagraphNumber: "2",
       })[0],
     ).toEqual({
       kind: "link",
       text: "前項",
-      target: { articleNumber: "15", paragraphNumber: "1" },
+      target: { kind: "article", articleNumber: "15", paragraphNumber: "1" },
     });
   });
 
   it("places the caption right after the article part of the link text", () => {
     const [segment] = segmentReferenceLinks("第15条第2項の審判", {
       articles,
+      headings,
       currentArticleNumber: "16",
     });
 
     expect(segment).toEqual({
       kind: "link",
       text: "第15条第2項",
-      target: { articleNumber: "15" },
+      target: { kind: "article", articleNumber: "15" },
       caption: { text: "補助開始の審判", offset: 4 },
     });
   });
@@ -357,17 +368,22 @@ describe("segmentReferenceLinks", () => {
   it("omits the paragraph from the target of a reference crossing articles", () => {
     const [segment] = segmentReferenceLinks("第15条第2項の審判", {
       articles,
+      headings,
       currentArticleNumber: "16",
       currentParagraphNumber: "1",
     });
 
-    expect(segment).toMatchObject({ kind: "link", target: { articleNumber: "15" } });
+    expect(segment).toMatchObject({
+      kind: "link",
+      target: { kind: "article", articleNumber: "15" },
+    });
     expect(segment).not.toHaveProperty("target.paragraphNumber");
   });
 
   it("keeps the paragraph in the target of a reference inside the current article", () => {
     const [segment] = segmentReferenceLinks("第2項の請求", {
       articles,
+      headings,
       currentArticleNumber: "15",
       currentParagraphNumber: "1",
     });
@@ -375,7 +391,7 @@ describe("segmentReferenceLinks", () => {
     expect(segment).toEqual({
       kind: "link",
       text: "第2項",
-      target: { articleNumber: "15", paragraphNumber: "2" },
+      target: { kind: "article", articleNumber: "15", paragraphNumber: "2" },
     });
   });
 });
@@ -422,10 +438,12 @@ const branchNumberLawNodes: LawNode[] = [
 
 describe("segmentReferenceLinks with branch article numbers", () => {
   const articles = buildArticleLinkEntries(branchNumberLawNodes);
+  const headings = buildHeadingLinkEntries(branchNumberLawNodes);
 
   it("resolves an absolute reference to an underscore-formatted branch article number", () => {
     const [segment] = segmentReferenceLinks("第876条の9第1項の審判", {
       articles,
+      headings,
       currentArticleNumber: "12-2",
     });
 
@@ -436,6 +454,7 @@ describe("segmentReferenceLinks with branch article numbers", () => {
   it("resolves a kanji formatted reference to an underscore-formatted branch article number", () => {
     const [segment] = segmentReferenceLinks("第八百七十六条の九の規定による。", {
       articles,
+      headings,
       currentArticleNumber: "12-2",
     });
 
@@ -446,6 +465,7 @@ describe("segmentReferenceLinks with branch article numbers", () => {
   it("still resolves a hyphen-formatted branch article number entry", () => {
     const [segment] = segmentReferenceLinks("第12条の2の規定による。", {
       articles,
+      headings,
       currentArticleNumber: "876_9",
     });
 
@@ -456,9 +476,10 @@ describe("segmentReferenceLinks with branch article numbers", () => {
 
 describe("segmentReferenceLinks with a multi paragraph article", () => {
   const articles = buildArticleLinkEntries(numberedLawNodes);
+  const headings = buildHeadingLinkEntries(numberedLawNodes);
 
   const linkTexts = (text: string, context: Partial<ArticleLinkContext> = {}) =>
-    segmentReferenceLinks(text, { articles, ...context })
+    segmentReferenceLinks(text, { articles, headings, ...context })
       .filter((segment) => segment.kind === "link")
       .map((segment) => segment.text);
 
@@ -583,10 +604,12 @@ describe("segmentReferenceLinks with a multi paragraph article", () => {
 
   it("resolves 前項 to the preceding paragraph of the current article when preceded by an article scoped reference", () => {
     const articles = buildArticleLinkEntries(numberedLawNodes);
+    const headings = buildHeadingLinkEntries(numberedLawNodes);
 
     expect(
       segmentReferenceLinks("第2条の規定は、前項の場合について準用する。", {
         articles,
+        headings,
         currentArticleNumber: "4",
         currentParagraphNumber: "2",
       }),
@@ -594,16 +617,252 @@ describe("segmentReferenceLinks with a multi paragraph article", () => {
       {
         kind: "link",
         text: "第2条",
-        target: { articleNumber: "2" },
+        target: { kind: "article", articleNumber: "2" },
         caption: { text: "定義", offset: 3 },
       },
       { kind: "text", text: "の規定は、" },
       {
         kind: "link",
         text: "前項",
-        target: { articleNumber: "4", paragraphNumber: "1" },
+        target: { kind: "article", articleNumber: "4", paragraphNumber: "1" },
       },
       { kind: "text", text: "の場合について準用する。" },
     ]);
+  });
+});
+
+const partedLawNodes: LawNode[] = [
+  node({
+    id: "part:1",
+    type: "Part",
+    path: "part:1",
+    number: "1",
+    title: "第一編　総則",
+    children: ["part:1/chapter:1", "part:1/chapter:2"],
+  }),
+  node({
+    id: "part:1/chapter:1",
+    type: "Chapter",
+    path: "part:1/chapter:1",
+    number: "1",
+    title: "第一章　通則",
+    parentId: "part:1",
+    children: ["article:1"],
+  }),
+  node({
+    id: "article:1",
+    type: "Article",
+    path: "part:1/chapter:1/article:1",
+    number: "1",
+    title: "第一条",
+    parentId: "part:1/chapter:1",
+  }),
+  node({
+    id: "part:1/chapter:2",
+    type: "Chapter",
+    path: "part:1/chapter:2",
+    number: "2",
+    title: "第二章　人",
+    parentId: "part:1",
+  }),
+  node({
+    id: "part:4",
+    type: "Part",
+    path: "part:4",
+    number: "4",
+    title: "第四編　親族",
+    children: ["part:4/chapter:1", "part:4/chapter:2"],
+  }),
+  node({
+    id: "part:4/chapter:1",
+    type: "Chapter",
+    path: "part:4/chapter:1",
+    number: "1",
+    title: "第一章　総則",
+    parentId: "part:4",
+  }),
+  node({
+    id: "part:4/chapter:2",
+    type: "Chapter",
+    path: "part:4/chapter:2",
+    number: "2",
+    title: "第二章　婚姻",
+    parentId: "part:4",
+  }),
+  node({
+    id: "supplementary:1",
+    type: "SupplementaryProvision",
+    path: "supplementary-provision:1",
+    title: "附　則",
+    children: ["supplementary:1/chapter:1"],
+  }),
+  node({
+    id: "supplementary:1/chapter:1",
+    type: "Chapter",
+    path: "supplementary-provision:1/chapter:1",
+    number: "1",
+    title: "第一章　経過措置",
+    parentId: "supplementary:1",
+  }),
+];
+
+// 編を持たない法令（日本国憲法など）。章番号だけで一意になる。
+const chapterOnlyLawNodes: LawNode[] = [
+  node({
+    id: "chapter:1",
+    type: "Chapter",
+    path: "chapter:1",
+    number: "1",
+    title: "第一章　天皇",
+  }),
+  node({
+    id: "chapter:3",
+    type: "Chapter",
+    path: "chapter:3",
+    number: "3",
+    title: "第三章　国民の権利及び義務",
+  }),
+];
+
+describe("buildHeadingLinkEntries", () => {
+  it("collects parts and chapters in document order", () => {
+    expect(buildHeadingLinkEntries(partedLawNodes)).toEqual([
+      { partNumber: "1", anchorId: "pt1" },
+      { partNumber: "1", chapterNumber: "1", anchorId: "pt1-ch1" },
+      { partNumber: "1", chapterNumber: "2", anchorId: "pt1-ch2" },
+      { partNumber: "4", anchorId: "pt4" },
+      { partNumber: "4", chapterNumber: "1", anchorId: "pt4-ch1" },
+      { partNumber: "4", chapterNumber: "2", anchorId: "pt4-ch2" },
+    ]);
+  });
+
+  it("omits chapters inside supplementary provisions", () => {
+    expect(buildHeadingLinkEntries(partedLawNodes).map((entry) => entry.anchorId)).not.toContain(
+      "ch1",
+    );
+  });
+
+  it("keeps the part number out of the anchor id for a law without parts", () => {
+    expect(buildHeadingLinkEntries(chapterOnlyLawNodes)).toEqual([
+      { chapterNumber: "1", anchorId: "ch1" },
+      { chapterNumber: "3", anchorId: "ch3" },
+    ]);
+  });
+});
+
+describe("segmentReferenceLinks for part and chapter references", () => {
+  const articles = buildArticleLinkEntries(partedLawNodes);
+  const headings = buildHeadingLinkEntries(partedLawNodes);
+
+  const firstSegment = (text: string, context: Partial<ArticleLinkContext> = {}) =>
+    segmentReferenceLinks(text, { articles, headings, ...context })[0];
+
+  it("links a part reference to the part heading anchor", () => {
+    expect(firstSegment("第4編（親族）の規定に従い", { currentPartNumber: "1" })).toEqual({
+      kind: "link",
+      text: "第4編",
+      target: { kind: "heading", anchorId: "pt4" },
+    });
+  });
+
+  it("resolves a bare chapter reference within the current part", () => {
+    expect(
+      firstSegment("第2章の規定", { currentPartNumber: "4", currentChapterNumber: "1" }),
+    ).toMatchObject({ target: { kind: "heading", anchorId: "pt4-ch2" } });
+  });
+
+  it("resolves a chapter reference qualified by a part as a single link", () => {
+    expect(firstSegment("第一編第二章の規定", { currentPartNumber: "4" })).toEqual({
+      kind: "link",
+      text: "第一編第二章",
+      target: { kind: "heading", anchorId: "pt1-ch2" },
+    });
+  });
+
+  it("resolves 前章 to the preceding chapter in document order", () => {
+    expect(
+      firstSegment("前章の規定", { currentPartNumber: "4", currentChapterNumber: "2" }),
+    ).toMatchObject({ target: { kind: "heading", anchorId: "pt4-ch1" } });
+  });
+
+  it("resolves 次編 to the following part", () => {
+    expect(firstSegment("次編の規定", { currentPartNumber: "1" })).toMatchObject({
+      target: { kind: "heading", anchorId: "pt4" },
+    });
+  });
+
+  it("does not link a chapter reference with no matching heading", () => {
+    expect(firstSegment("第9章の規定", { currentPartNumber: "4" })).toEqual({
+      kind: "text",
+      text: "第9章の規定",
+    });
+  });
+
+  it("does not link a chapter of another law named outside the alias dictionary", () => {
+    expect(
+      segmentReferenceLinks("国際連合憲章第7章の措置", { articles, headings }).every(
+        (segment) => segment.kind === "text",
+      ),
+    ).toBe(true);
+  });
+
+  it("lands on the article when a reference names a part, a chapter and an article", () => {
+    expect(firstSegment("第一編第一章第一条の規定", { currentArticleNumber: "2" })).toMatchObject({
+      text: "第一編第一章第一条",
+      target: { kind: "article", articleNumber: "1" },
+    });
+  });
+
+  it("keeps a bare paragraph reference scoped to the current article after a part reference", () => {
+    const links = segmentReferenceLinks("第4編の規定により、第2項の請求をする。", {
+      articles: [{ articleNumber: "1", paragraphNumbers: ["1", "2"] }],
+      headings,
+      currentArticleNumber: "1",
+      currentParagraphNumber: "1",
+    }).filter((segment) => segment.kind === "link");
+
+    expect(links).toEqual([
+      { kind: "link", text: "第4編", target: { kind: "heading", anchorId: "pt4" } },
+      {
+        kind: "link",
+        text: "第2項",
+        target: { kind: "article", articleNumber: "1", paragraphNumber: "2" },
+      },
+    ]);
+  });
+});
+
+describe("segmentReferenceLinks for a law without parts", () => {
+  const articles = buildArticleLinkEntries(chapterOnlyLawNodes);
+  const headings = buildHeadingLinkEntries(chapterOnlyLawNodes);
+
+  it("resolves a chapter reference without a part context", () => {
+    expect(segmentReferenceLinks("第3章の規定", { articles, headings })[0]).toEqual({
+      kind: "link",
+      text: "第3章",
+      target: { kind: "heading", anchorId: "ch3" },
+    });
+  });
+});
+
+describe("segmentReferenceLinks at the boundaries of the heading order", () => {
+  const articles = buildArticleLinkEntries(partedLawNodes);
+  const headings = buildHeadingLinkEntries(partedLawNodes);
+
+  it("does not link 前編 in the first part", () => {
+    expect(
+      segmentReferenceLinks("前編の規定", { articles, headings, currentPartNumber: "1" }),
+    ).toEqual([{ kind: "text", text: "前編の規定" }]);
+  });
+
+  it("does not link 次章 in the last chapter of the law", () => {
+    expect(
+      segmentReferenceLinks("次章の規定", {
+        articles,
+        headings,
+        currentPartNumber: "4",
+        currentChapterNumber: "2",
+      }),
+    ).toEqual([{ kind: "text", text: "次章の規定" }]);
   });
 });

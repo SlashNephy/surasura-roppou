@@ -2,7 +2,13 @@ export { LawDocumentView } from "./LawDocumentView";
 export { LawNodeList } from "./LawNodeList";
 export { LawTableOfContents } from "./LawTableOfContents";
 export { buildArticleCopyText } from "./article-copy";
-export { articleAnchorId, buildLawTableOfContents, paragraphAnchorId } from "./lawToc";
+export {
+  articleAnchorId,
+  buildLawTableOfContents,
+  chapterAnchorId,
+  paragraphAnchorId,
+  partAnchorId,
+} from "./lawToc";
 export { applyLawTextDisplayMode } from "./displayMode";
 export type { LawTextDisplayMode } from "./displayMode";
 export { formatLawTypeLabel } from "./lawType";
@@ -10,13 +16,20 @@ export type { LawTocItem } from "./lawToc";
 export { findArticleNode, verifyAnchor } from "./anchor-verification";
 export type { AnchorStatus } from "./anchor-verification";
 export { pinAnchor, repathAnchor } from "./anchor-repair";
-export { buildArticleLinkEntries, segmentReferenceLinks } from "./reference-links";
+export {
+  buildArticleLinkEntries,
+  buildHeadingLinkEntries,
+  segmentReferenceLinks,
+} from "./reference-links";
 export type {
   ArticleLinkContext,
   ArticleLinkEntry,
   ArticleLinkTarget,
+  HeadingLinkEntry,
+  HeadingLinkTarget,
   ReferenceLinkCaption,
   ReferenceLinkSegment,
+  ReferenceLinkTarget,
 } from "./reference-links";
 export { alignTexts, toDisplayRange, toSourceOffset } from "./text-alignment";
 export type { AlignmentSegment, TextAlignment } from "./text-alignment";

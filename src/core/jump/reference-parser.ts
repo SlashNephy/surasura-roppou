@@ -13,6 +13,8 @@ export interface ParsedReference {
   kind: ReferenceKind;
   lawNameCandidate?: string; // 正式名称っぽい原文（official 一致 or 辞書外の推定名）
   lawAlias?: string; // 略称の原文（alias 一致）
+  part?: string; // 編番号 "4" / "previous" / "next"
+  chapter?: string; // 章番号 "2" / "previous" / "next"。番号は編ごとにリセットする
   article?: string; // "1" / "242-2" / "previous" / "next"
   paragraph?: string; // "1" / "previous" / "next"
   item?: string; // "1"
@@ -36,7 +38,7 @@ const kanjiDigits = "一二三四五六七八九十百千";
 // 単字マーカー（本・別・前・次・同・た・但）が法令名（例: 日本国憲法 の「本」）へ
 // 誤反応しないよう、複数文字マーカーは語として並べる。
 const positionStartPattern = new RegExp(
-  `[0-9${kanjiDigits}]|第|前[条項]|次[条項]|同[法条項]|本文|別表|ただし書|但書`,
+  `[0-9${kanjiDigits}]|第|前[条項編章]|次[条項編章]|同[法条項編章]|本[編章]|本文|別表|ただし書|但書`,
 );
 
 interface NumberToken {
@@ -208,6 +210,8 @@ const readAppendix = (text: string): ParsePart | undefined => {
 interface ScoreInput {
   kind: ReferenceKind;
   lawMatchKind: "official" | "alias" | "unknown" | "none";
+  part?: string;
+  chapter?: string;
   article?: string;
   paragraph?: string;
   item?: string;
@@ -239,6 +243,14 @@ const scoreReference = (input: ScoreInput): number => {
     if (isConcrete(input.article)) {
       score += 0.1;
     }
+  }
+
+  if (input.part !== undefined) {
+    score += 0.05;
+  }
+
+  if (input.chapter !== undefined) {
+    score += 0.05;
   }
 
   if (isConcrete(input.paragraph)) {
@@ -308,12 +320,52 @@ export const parseReference = (
   const hasLaw = lawNameCandidate !== undefined || lawAlias !== undefined;
 
   // --- 位置部の解析 ---
+  let part: string | undefined;
+  let chapter: string | undefined;
   let article: string | undefined;
   let paragraph: string | undefined;
   let item: string | undefined;
   let sentence: ReferenceSentence | undefined;
   let appendix: string | undefined;
   let usedKanji = false;
+
+  // 編・章は条より前に現れる。相対マーカー（前編・次編）と具体番号（第四編）の両方を読む。
+  // 同編・本編 は現在位置そのもののためシフトを持たず、消費だけして後続の解析へ進む。
+  if (position.startsWith("前編")) {
+    part = "previous";
+    position = position.slice(2);
+  } else if (position.startsWith("次編")) {
+    part = "next";
+    position = position.slice(2);
+  } else if (position.startsWith("同編") || position.startsWith("本編")) {
+    position = position.slice(2);
+  } else {
+    const partPart = readSuffixNumber(position, "編");
+
+    if (partPart !== undefined) {
+      part = partPart.value;
+      usedKanji ||= partPart.kanji;
+      position = partPart.rest;
+    }
+  }
+
+  if (position.startsWith("前章")) {
+    chapter = "previous";
+    position = position.slice(2);
+  } else if (position.startsWith("次章")) {
+    chapter = "next";
+    position = position.slice(2);
+  } else if (position.startsWith("同章") || position.startsWith("本章")) {
+    position = position.slice(2);
+  } else {
+    const chapterPart = readSuffixNumber(position, "章");
+
+    if (chapterPart !== undefined) {
+      chapter = chapterPart.value;
+      usedKanji ||= chapterPart.kanji;
+      position = chapterPart.rest;
+    }
+  }
 
   // 相対の条マーカー。同法・同条 は「現在位置」= シフトなしで消費する。
   if (position.startsWith("前条")) {
@@ -402,6 +454,8 @@ export const parseReference = (
   }
 
   const hasPosition =
+    part !== undefined ||
+    chapter !== undefined ||
     article !== undefined ||
     paragraph !== undefined ||
     item !== undefined ||
@@ -418,6 +472,8 @@ export const parseReference = (
   const score = scoreReference({
     kind,
     lawMatchKind,
+    part,
+    chapter,
     article,
     paragraph,
     item,
@@ -430,6 +486,8 @@ export const parseReference = (
     kind,
     ...(lawNameCandidate === undefined ? {} : { lawNameCandidate }),
     ...(lawAlias === undefined ? {} : { lawAlias }),
+    ...(part === undefined ? {} : { part }),
+    ...(chapter === undefined ? {} : { chapter }),
     ...(article === undefined ? {} : { article }),
     ...(paragraph === undefined ? {} : { paragraph }),
     ...(item === undefined ? {} : { item }),
