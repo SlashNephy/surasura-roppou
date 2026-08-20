@@ -201,7 +201,7 @@ const LawNodeBlock = ({
                 {renderLinkedText(
                   displayText,
                   linking,
-                  { articleNumber: node.number },
+                  childPosition,
                   isUrlAddressableArticleContext,
                   node.rubyAnnotations,
                 )}

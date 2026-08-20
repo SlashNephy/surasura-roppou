@@ -1076,8 +1076,20 @@ describe("LawNodeList の編・章参照", () => {
       path: "part:1/chapter:2",
       number: "2",
       title: "第二章　人",
-      plainText: "第二章　人",
+      plainText: "第二章　人 第七条 前章の例による。",
       parentId: "part:1",
+      children: ["article:7"],
+    }),
+    // 項を持たない葉の条。本文は条ノード自身が描画するため、編・章の文脈が
+    // そこまで伝わっているかを確かめる対象になる。
+    node({
+      id: "article:7",
+      type: "Article",
+      path: "part:1/chapter:2/article:7",
+      number: "7",
+      title: "第七条",
+      plainText: "第七条 前章の例による。",
+      parentId: "part:1/chapter:2",
     }),
     node({
       id: "part:4",
@@ -1132,6 +1144,17 @@ describe("LawNodeList の編・章参照", () => {
     expect(container.querySelectorAll("[id^='ch']")).toHaveLength(0);
   });
 
+  it("項を持たない条の本文でも編・章の文脈を保って参照を解決する", () => {
+    const { container } = render(<LawNodeList lawId="129AC0000000089" nodes={partedNodes} />);
+
+    // 第七条は第一編第二章にあるため、前章は同じ編の第一章を指す。
+    const link = [...container.querySelectorAll("a")].find(
+      (anchor) => anchor.textContent === "前章",
+    );
+
+    expect(link).toHaveAttribute("href", "#pt1-ch1");
+  });
+
   it("編・章参照のリンク先が実在する見出しアンカーを指す", () => {
     const { container } = render(<LawNodeList lawId="129AC0000000089" nodes={partedNodes} />);
 
@@ -1140,7 +1163,7 @@ describe("LawNodeList の編・章参照", () => {
     );
 
     // 第四編 → 編そのもの、第二章 → 現在の編（第一編）の第二章。
-    expect(hrefs).toEqual(["#pt4", "#pt1-ch2"]);
+    expect(hrefs).toEqual(["#pt4", "#pt1-ch2", "#pt1-ch1"]);
 
     for (const href of hrefs) {
       expect(container.querySelector(href ?? "")).not.toBeNull();
