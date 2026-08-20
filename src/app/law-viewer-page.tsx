@@ -895,9 +895,11 @@ const LawViewerReadyState = ({
           </div>
         </aside>
 
-        {/* 中央は本文カラム。lg 以上では左右パディングを広げ、両サイドバー（と
-            アクティブ条の左端インジケーター）との間に余白を確保する。 */}
-        <div className="min-w-0 px-4 py-6 md:px-8 lg:px-14">
+        {/* 中央は本文カラム。アクティブ条の左端インジケーターは article の外側へ
+            はみ出して描かれる（LawNodeList.tsx）ため、このカラムの左パディングは
+            常にそのオフセットより広く取り、画面端やサイドバーへの密着を避ける。
+            各ブレークポイントでこの不変条件が崩れないよう、片方だけを変えない。 */}
+        <div className="min-w-0 px-6 py-6 md:px-8 lg:px-14">
           {/* モバイル用サブバー（lg 以上は左右レールがあるため非表示）。
               本文スクロール中も導線を保つため、ヘッダ直下に sticky で固定する。 */}
           <div className="sticky top-14 z-20 mb-4 flex flex-wrap items-center gap-2 bg-popover/95 py-2 backdrop-blur lg:hidden">

@@ -138,6 +138,8 @@ const LawNodeBlock = ({
           className="group relative scroll-mt-20 py-4 md:py-5"
         >
           {isActiveArticle ? (
+            // 左端インジケーターは article の外側へはみ出す。オフセットを変えるときは
+            // 本文カラムの左パディング（law-viewer-page.tsx）も併せて見直す。
             <span
               aria-hidden="true"
               className="absolute top-4 bottom-4 -left-4 w-2 rounded-l-xs border-y-2 border-l-2 border-primary md:-left-6"
