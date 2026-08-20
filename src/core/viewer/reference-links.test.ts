@@ -844,3 +844,25 @@ describe("segmentReferenceLinks for a law without parts", () => {
     });
   });
 });
+
+describe("segmentReferenceLinks at the boundaries of the heading order", () => {
+  const articles = buildArticleLinkEntries(partedLawNodes);
+  const headings = buildHeadingLinkEntries(partedLawNodes);
+
+  it("does not link 前編 in the first part", () => {
+    expect(
+      segmentReferenceLinks("前編の規定", { articles, headings, currentPartNumber: "1" }),
+    ).toEqual([{ kind: "text", text: "前編の規定" }]);
+  });
+
+  it("does not link 次章 in the last chapter of the law", () => {
+    expect(
+      segmentReferenceLinks("次章の規定", {
+        articles,
+        headings,
+        currentPartNumber: "4",
+        currentChapterNumber: "2",
+      }),
+    ).toEqual([{ kind: "text", text: "次章の規定" }]);
+  });
+});

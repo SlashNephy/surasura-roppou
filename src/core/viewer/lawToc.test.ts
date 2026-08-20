@@ -5,9 +5,11 @@ import type { LawNode } from "@/core/domain";
 import {
   allowsArticleUrlTargets,
   articleAnchorId,
+  chapterAnchorId,
   buildLawTableOfContents,
   computeChildArticleContext,
   paragraphAnchorId,
+  partAnchorId,
 } from "./lawToc";
 
 const node = (overrides: Partial<LawNode> & Pick<LawNode, "id" | "path" | "type">): LawNode => ({
@@ -265,6 +267,21 @@ describe("lawToc", () => {
       expect(paragraphAnchorId(articleNumber, paragraphNumber)).toBe(expected);
     },
   );
+
+  it.each([
+    ["1", "pt1"],
+    ["4", "pt4"],
+  ])("builds a part anchor id for part %s", (partNumber, expected) => {
+    expect(partAnchorId(partNumber)).toBe(expected);
+  });
+
+  it.each([
+    // 章番号は編ごとにリセットするため、編を持つ法令では編番号まで含めて一意にする。
+    ["4", "2", "pt4-ch2"],
+    [undefined, "2", "ch2"],
+  ])("builds a chapter anchor id for part %s chapter %s", (partNumber, chapterNumber, expected) => {
+    expect(chapterAnchorId(partNumber, chapterNumber)).toBe(expected);
+  });
 
   it.each([
     ["Part", true],
