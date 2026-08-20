@@ -35,6 +35,15 @@ export const articleAnchorId = (articleNumber: string): string => `a${articleNum
 export const paragraphAnchorId = (articleNumber: string, paragraphNumber: string): string =>
   `${articleAnchorId(articleNumber)}-p${paragraphNumber}`;
 
+// 編・章の見出しアンカー。章番号は編ごとにリセットするため、章の id には所属編を含める
+// （編を持たない法令では章番号だけで一意になる）。条の a15 / a15-p2 とは接頭辞が異なる。
+export const partAnchorId = (partNumber: string): string => `pt${partNumber}`;
+
+export const chapterAnchorId = (partNumber: string | undefined, chapterNumber: string): string =>
+  partNumber === undefined
+    ? `ch${chapterNumber}`
+    : `${partAnchorId(partNumber)}-ch${chapterNumber}`;
+
 export const allowsArticleUrlTargets = (nodeType: LawNodeType): boolean =>
   !nonUrlAddressableArticleContainerTypes.has(nodeType);
 

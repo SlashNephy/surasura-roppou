@@ -9,7 +9,7 @@ import {
 } from "@/core/jump";
 import { normalizeForSearch } from "@/core/search";
 
-import { computeChildArticleContext } from "./lawToc";
+import { chapterAnchorId, computeChildArticleContext, partAnchorId } from "./lawToc";
 
 // 本文の参照リンクを解決するために必要な、法令 1 件ぶんの条の一覧。
 // 文書順に並び、前条・次条の解決に使う。
@@ -76,11 +76,88 @@ const collectArticleLinkEntries = (
   );
 };
 
+// 本文の参照リンクを解決するために必要な、法令 1 件ぶんの編・章の一覧。
+// 文書順に並び、前編・次編・前章・次章の解決に使う。
+export interface HeadingLinkEntry {
+  // 所属する編の番号。編を持たない法令（日本国憲法など）の章では undefined。
+  partNumber?: string;
+  // 章番号。編そのものを指すエントリでは undefined。章番号は編ごとにリセットするため、
+  // partNumber と組でなければ一意にならない。
+  chapterNumber?: string;
+  anchorId: string;
+}
+
+export const buildHeadingLinkEntries = (nodes: LawNode[]): HeadingLinkEntry[] => {
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
+  const topLevelNodes = nodes.filter((node) => node.parentId === undefined);
+
+  return topLevelNodes.flatMap((node) =>
+    collectHeadingLinkEntries(node, nodeById, true, undefined),
+  );
+};
+
+const collectHeadingLinkEntries = (
+  node: LawNode,
+  nodeById: Map<string, LawNode>,
+  isUrlAddressableArticleContext: boolean,
+  partNumber: string | undefined,
+): HeadingLinkEntry[] => {
+  // 附則・別表の中の編・章は本則の編・章を指さないため、リンクの着地先にしない。
+  if (!isUrlAddressableArticleContext || node.type === "Article") {
+    return [];
+  }
+
+  const entry = buildHeadingLinkEntry(node, partNumber);
+  const children = node.children
+    .map((childId) => nodeById.get(childId))
+    .filter((child): child is LawNode => child !== undefined);
+  const childContext = computeChildArticleContext(isUrlAddressableArticleContext, node.type);
+  const childPartNumber = node.type === "Part" ? (node.number ?? partNumber) : partNumber;
+
+  return [
+    ...(entry === undefined ? [] : [entry]),
+    ...children.flatMap((child) =>
+      collectHeadingLinkEntries(child, nodeById, childContext, childPartNumber),
+    ),
+  ];
+};
+
+const buildHeadingLinkEntry = (
+  node: LawNode,
+  partNumber: string | undefined,
+): HeadingLinkEntry | undefined => {
+  if (node.number === undefined) {
+    return undefined;
+  }
+
+  if (node.type === "Part") {
+    return { partNumber: node.number, anchorId: partAnchorId(node.number) };
+  }
+
+  if (node.type === "Chapter") {
+    return {
+      ...(partNumber === undefined ? {} : { partNumber }),
+      chapterNumber: node.number,
+      anchorId: chapterAnchorId(partNumber, node.number),
+    };
+  }
+
+  return undefined;
+};
+
 // 参照リンクの着地先。項は同じ条の中を指すときだけ載る（条をまたぐ着地は v1 では条単位）。
 export interface ArticleLinkTarget {
   articleNumber: string;
   paragraphNumber?: string;
 }
+
+// 編・章の見出しへの着地先。URL は動かさず、ページ内アンカーへ飛ばす（#201 と兼ね合い）。
+export interface HeadingLinkTarget {
+  anchorId: string;
+}
+
+export type ReferenceLinkTarget =
+  ({ kind: "article" } & ArticleLinkTarget) | ({ kind: "heading" } & HeadingLinkTarget);
 
 // リンク文字列に差し込む見出し。offset は text 内の挿入位置。
 // 「第15条第2項」なら「第15条」の直後に入れて 第15条〈補助開始の審判〉第2項 とする。
@@ -91,14 +168,19 @@ export interface ReferenceLinkCaption {
 
 export interface ArticleLinkContext {
   articles: ArticleLinkEntry[];
+  headings: HeadingLinkEntry[];
   // 前条・次条・前項の基準となる現在位置。
   currentArticleNumber?: string;
   currentParagraphNumber?: string;
+  // 編を伴わない「第2章」を現在の編の中で解決するための祖先文脈。
+  // 前編・次編・前章・次章の基準にもなる。
+  currentPartNumber?: string;
+  currentChapterNumber?: string;
 }
 
 export type ReferenceLinkSegment =
   | { kind: "text"; text: string }
-  | { kind: "link"; text: string; target: ArticleLinkTarget; caption?: ReferenceLinkCaption };
+  | { kind: "link"; text: string; target: ReferenceLinkTarget; caption?: ReferenceLinkCaption };
 
 // 法令名の判定専用の resolver。組込辞書のみで十分（本文リンク化は候補解決までは行わない）。
 const defaultResolver = createAliasResolver();
@@ -131,7 +213,9 @@ const hasPrecedingLawName = (text: string, matchStart: number): boolean => {
 // 直前 1 文字が法令名・附則・条例の末尾、または既に別の条を指す語（「同条」「当該条」）で
 // 終わる場合も抑止する。トレードオフとして「本法第15条」のような正しい自法令参照も
 // 抑止されるが、無リンクに倒す。
-const precedingGuardChars = new Set(["法", "令", "則", "例", "条"]);
+// 「章」は「国連憲章第7章」のような辞書外の法令名を、「編」は編を名指しする他法令参照を
+// 抑止するために含める。
+const precedingGuardChars = new Set(["法", "令", "則", "例", "条", "編", "章"]);
 
 const hasPrecedingGuardChar = (text: string, matchStart: number): boolean =>
   matchStart > 0 && precedingGuardChars.has(text[matchStart - 1]);
@@ -248,9 +332,15 @@ export const segmentReferenceLinks = (
 // 現在の条自身への参照（前項など）には付けない。同じ条の見出しを繰り返しても情報がない。
 const buildCaption = (
   rawText: string,
-  target: ArticleLinkTarget,
+  target: ReferenceLinkTarget,
   context: ArticleLinkContext,
 ): ReferenceLinkCaption | undefined => {
+  // 編・章の見出しは「第四編（親族）」のように番号と名称が一体で、本文側も
+  // 「第4編（親族）」と名称を伴うことが多い。差し込むと重複するため付けない。
+  if (target.kind === "heading") {
+    return undefined;
+  }
+
   if (target.articleNumber === context.currentArticleNumber) {
     return undefined;
   }
@@ -271,10 +361,16 @@ const buildCaption = (
 const resolveTarget = (
   parsed: ParsedReference,
   context: ArticleLinkContext,
-): ArticleLinkTarget | undefined => {
+): ReferenceLinkTarget | undefined => {
   // 法令名を伴う参照は他法令を指すため、同一法令内リンクの対象外。
   if (parsed.kind === "absolute") {
     return undefined;
+  }
+
+  // 「第四編第二章第七百二十五条」のように条まで名指しする参照は、編・章を絞り込みの
+  // 文脈として使うだけで着地先は条になる。編・章だけの参照のときに見出しへ着地させる。
+  if (parsed.article === undefined && (parsed.part !== undefined || parsed.chapter !== undefined)) {
+    return resolveHeadingTarget(parsed, context);
   }
 
   const articleNumber = resolveArticleNumber(parsed, context);
@@ -294,7 +390,7 @@ const resolveTarget = (
     // 着地先が現在位置と同じになり動かないリンクが残るためリンク化しない。
     return parsed.article === undefined || articleNumber === context.currentArticleNumber
       ? undefined
-      : { articleNumber };
+      : { kind: "article", articleNumber };
   }
 
   // 存在しない項への着地を避けるため、項番号は条をまたぐ場合も必ず検証する。
@@ -307,13 +403,97 @@ const resolveTarget = (
   // v1 では条をまたぐ着地は条単位とし、項アンカーは同一条内のページ内リンクにだけ載せる。
   // 他の条の項を項アンカーで返すと、ページ内リンクになって URL も現在位置も動かない。
   if (articleNumber !== context.currentArticleNumber) {
-    return { articleNumber };
+    return { kind: "article", articleNumber };
   }
 
   // 着地先が現在位置そのものになるリンクは、押しても動かないため作らない。
   return paragraphNumber === context.currentParagraphNumber
     ? undefined
-    : { articleNumber, paragraphNumber };
+    : { kind: "article", articleNumber, paragraphNumber };
+};
+
+// 編・章の参照を見出しアンカーへ解決する。該当する見出しが無ければリンク化しない。
+const resolveHeadingTarget = (
+  parsed: ParsedReference,
+  context: ArticleLinkContext,
+): ReferenceLinkTarget | undefined => {
+  const entry =
+    parsed.chapter === undefined
+      ? resolvePartEntry(parsed.part, context)
+      : resolveChapterEntry(parsed, context);
+
+  return entry === undefined ? undefined : { kind: "heading", anchorId: entry.anchorId };
+};
+
+const partEntries = (context: ArticleLinkContext): HeadingLinkEntry[] =>
+  context.headings.filter((entry) => entry.chapterNumber === undefined);
+
+const chapterEntries = (context: ArticleLinkContext): HeadingLinkEntry[] =>
+  context.headings.filter((entry) => entry.chapterNumber !== undefined);
+
+const resolvePartEntry = (
+  part: string | undefined,
+  context: ArticleLinkContext,
+): HeadingLinkEntry | undefined => {
+  if (part === undefined) {
+    return undefined;
+  }
+
+  const entries = partEntries(context);
+
+  if (part !== "previous" && part !== "next") {
+    return entries.find((entry) => entry.partNumber === part);
+  }
+
+  return shiftEntry(entries, (entry) => entry.partNumber === context.currentPartNumber, part);
+};
+
+const resolveChapterEntry = (
+  parsed: ParsedReference,
+  context: ArticleLinkContext,
+): HeadingLinkEntry | undefined => {
+  const entries = chapterEntries(context);
+
+  if (parsed.chapter === "previous" || parsed.chapter === "next") {
+    // 前章・次章は文書順で隣接する章を指す。編の境界をまたぐ場合も文書順で自然に繋がる。
+    return shiftEntry(
+      entries,
+      (entry) =>
+        entry.partNumber === context.currentPartNumber &&
+        entry.chapterNumber === context.currentChapterNumber,
+      parsed.chapter,
+    );
+  }
+
+  // 編を名指ししていればその編の章、していなければ現在の編の章を指す。
+  // 編を持たない法令ではどちらも undefined で一致する。
+  const partNumber =
+    parsed.part === undefined
+      ? context.currentPartNumber
+      : resolvePartEntry(parsed.part, context)?.partNumber;
+
+  if (parsed.part !== undefined && partNumber === undefined) {
+    return undefined; // 名指しされた編が存在しない
+  }
+
+  return entries.find(
+    (entry) => entry.partNumber === partNumber && entry.chapterNumber === parsed.chapter,
+  );
+};
+
+// 文書順の見出し配列で、現在位置の前後の見出しを返す。
+const shiftEntry = (
+  entries: HeadingLinkEntry[],
+  isCurrent: (entry: HeadingLinkEntry) => boolean,
+  shift: "previous" | "next",
+): HeadingLinkEntry | undefined => {
+  const index = entries.findIndex(isCurrent);
+
+  if (index < 0) {
+    return undefined;
+  }
+
+  return entries[index + (shift === "previous" ? -1 : 1)];
 };
 
 // 条番号の枝番区切りは、由来によって表記が割れる。e-Gov API の Num 属性は

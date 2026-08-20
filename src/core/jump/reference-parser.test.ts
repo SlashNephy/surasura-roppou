@@ -99,6 +99,52 @@ describe("parseReference", () => {
       input: "民法709条の2項",
       expected: { kind: "absolute", lawNameCandidate: "民法", article: "709", paragraph: "2" },
     },
+    {
+      name: "編",
+      input: "第4編",
+      expected: { kind: "relative", part: "4" },
+    },
+    {
+      name: "漢数字の編",
+      input: "第四編",
+      expected: { kind: "relative", part: "4" },
+    },
+    {
+      name: "章",
+      input: "第2章",
+      expected: { kind: "relative", chapter: "2" },
+    },
+    {
+      name: "編 + 章",
+      input: "第四編第二章",
+      expected: { kind: "relative", part: "4", chapter: "2" },
+    },
+    {
+      name: "相対 前章",
+      input: "前章",
+      expected: { kind: "relative", chapter: "previous" },
+    },
+    {
+      name: "相対 次編",
+      input: "次編",
+      expected: { kind: "relative", part: "next" },
+    },
+    {
+      // 同章・本章は現在位置そのものなので、シフトを持たず条・項の解析だけを進める。
+      name: "同章 + 第一項",
+      input: "同章第一項",
+      expected: { kind: "relative", paragraph: "1" },
+    },
+    {
+      name: "編 + 章 + 条",
+      input: "第四編第二章第七百二十五条",
+      expected: { kind: "relative", part: "4", chapter: "2", article: "725" },
+    },
+    {
+      name: "法令名 + 章",
+      input: "商法第2編",
+      expected: { kind: "absolute", lawNameCandidate: "商法", part: "2" },
+    },
   ])("$name を構造化する", ({ input, expected }) => {
     const result = parseReference(input);
 
