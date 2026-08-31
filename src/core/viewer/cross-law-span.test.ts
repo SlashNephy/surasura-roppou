@@ -82,11 +82,11 @@ describe("detectCrossLawSpan", () => {
     {
       name: "stops the left scan at a positional expression suffix even without a leading coordination token",
       // 「項」で止まり、start は「に」の位置（「前項」を飲み込まなくなる）。
-      // ただし直前の文字「項」は漢字であるため、「旧民法」用の既存ガードが働き
-      // 宛先は伏せられる。無リンクは誤リンクより安全なため、これは許容する。
+      // 直前の文字「項」は漢字だが、これは別の参照の終わりであって「旧民法」のような
+      // 接頭辞ではないため、漢字ガードの対象から外れる。
       text: "前項に規定する労働基準法施行令（昭和二十二年政令第二十一号）第5条",
       marker: "第5条",
-      expected: { startIndex: 2 },
+      expected: { startIndex: 2, lawId: "322CO0000000021" },
     },
   ])("$name", ({ expected, marker, minIndex, text }) => {
     expect(detect(text, marker, minIndex)).toEqual(expected);
@@ -122,6 +122,19 @@ describe("detectCrossLawSpan with resolved law numbers", () => {
     expect(
       detect("原子力災害対策特別措置法（平成11年法律第156号）第2条", "第2条", 0, lawIdByLawNumber),
     ).toEqual({ startIndex: 0, lawId: "411AC0000000156" });
+  });
+
+  it("resolves an act that directly follows another reference", () => {
+    // 直前の参照の末尾「号」は法令名に付いた接頭辞ではない。「旧民法」を弾く漢字ガードが
+    // ここで発火すると、解決できるはずのリンクを潰してしまう。
+    expect(
+      detect(
+        "災害対策基本法第3条第7号に規定する防災計画及び原子力災害対策特別措置法（平成11年法律第156号）第2条",
+        "第2条",
+        0,
+        lawIdByLawNumber,
+      )?.lawId,
+    ).toBe("411AC0000000156");
   });
 
   it("keeps an act unresolved when the map has no entry", () => {
