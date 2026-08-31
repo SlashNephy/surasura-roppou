@@ -284,6 +284,12 @@ describe("segmentReferenceLinks", () => {
       expected: [],
     },
     {
+      name: "does not link a reference carrying a law name ending in に関する法律",
+      text: "行政機関の保有する情報の公開に関する法律第15条の規定",
+      context: { currentArticleNumber: "16" },
+      expected: [],
+    },
+    {
       name: "does not link a reference immediately after 附則",
       text: "附則第15条の規定",
       context: { currentArticleNumber: "16" },

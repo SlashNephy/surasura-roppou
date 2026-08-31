@@ -191,8 +191,9 @@ export type ReferenceLinkSegment =
 // 終わる場合も抑止する。トレードオフとして「本法第15条」のような正しい自法令参照も
 // 抑止されるが、無リンクに倒す。
 // 「章」は「国連憲章第7章」のような辞書外の法令名を、「編」は編を名指しする他法令参照を
-// 抑止するために含める。
-const precedingGuardChars = new Set(["法", "令", "則", "例", "条", "編", "章"]);
+// 抑止するために含める。「律」は「…に関する法律」のように「法律」で終わる辞書外の法令名
+// （例:「行政機関の保有する情報の公開に関する法律」）を抑止するために含める。
+const precedingGuardChars = new Set(["法", "令", "則", "例", "条", "編", "章", "律"]);
 
 const hasPrecedingGuardChar = (text: string, matchStart: number): boolean =>
   matchStart > 0 && precedingGuardChars.has(text[matchStart - 1]);
