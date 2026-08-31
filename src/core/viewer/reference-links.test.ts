@@ -266,12 +266,6 @@ describe("segmentReferenceLinks", () => {
       expected: [],
     },
     {
-      name: "does not link a reference carrying a law name",
-      text: "商法第15条の規定",
-      context: { currentArticleNumber: "16" },
-      expected: [],
-    },
-    {
       name: "does not link a self reference without a paragraph",
       text: "第15条の規定",
       context: { currentArticleNumber: "15" },
@@ -304,12 +298,6 @@ describe("segmentReferenceLinks", () => {
     {
       name: "does not link a reference carrying a single-character law abbreviation",
       text: "商第15条の規定",
-      context: { currentArticleNumber: "16" },
-      expected: [],
-    },
-    {
-      name: "does not link a reference carrying a multi-character law abbreviation",
-      text: "民訴第15条の規定",
       context: { currentArticleNumber: "16" },
       expected: [],
     },
@@ -593,10 +581,10 @@ describe("segmentReferenceLinks with a multi paragraph article", () => {
       expected: [],
     },
     {
-      name: "does not link a bare paragraph following an article and paragraph suppressed by a law name",
+      name: "does not link a bare paragraph following a cross law article and paragraph reference",
       text: "商法第15条第1項及び第2項の規定による。",
       context: { currentArticleNumber: "4", currentParagraphNumber: "1" },
-      expected: [],
+      expected: ["商法第15条第1項"],
     },
   ])("$name", ({ context, expected, text }) => {
     expect(linkTexts(text, context)).toEqual(expected);
@@ -864,5 +852,106 @@ describe("segmentReferenceLinks at the boundaries of the heading order", () => {
         currentChapterNumber: "2",
       }),
     ).toEqual([{ kind: "text", text: "次章の規定" }]);
+  });
+});
+
+describe("segmentReferenceLinks for cross law references", () => {
+  const articles = buildArticleLinkEntries(lawNodes);
+  const headings = buildHeadingLinkEntries(lawNodes);
+
+  const links = (text: string, context: Partial<ArticleLinkContext> = {}) =>
+    segmentReferenceLinks(text, { articles, headings, ...context }).filter(
+      (segment) => segment.kind === "link",
+    );
+
+  it.each([
+    {
+      name: "links a reference carrying an official law name",
+      text: "商法第15条の規定",
+      expected: [
+        {
+          text: "商法第15条",
+          target: { kind: "article", lawId: "132AC0000000048", articleNumber: "15" },
+        },
+      ],
+    },
+    {
+      name: "keeps the paragraph and the item on a cross law target",
+      text: "商法第15条第2項第3号の規定",
+      expected: [
+        {
+          text: "商法第15条第2項第3号",
+          target: {
+            kind: "article",
+            lawId: "132AC0000000048",
+            articleNumber: "15",
+            paragraphNumber: "2",
+            itemNumber: "3",
+          },
+        },
+      ],
+    },
+    {
+      name: "links a cabinet order outside the dictionary through its law number",
+      text: "労働基準法施行令（昭和二十二年政令第二十一号）第1条の規定",
+      expected: [
+        {
+          text: "労働基準法施行令（昭和二十二年政令第二十一号）第1条",
+          target: { kind: "article", lawId: "322CO0000000021", articleNumber: "1" },
+        },
+      ],
+    },
+  ])("$name", ({ expected, text }) => {
+    expect(links(text, { currentArticleNumber: "16" })).toEqual(
+      expected.map((link) => ({ kind: "link", ...link })),
+    );
+  });
+
+  const noLinkTexts = (text: string, context: Partial<ArticleLinkContext> = {}) =>
+    segmentReferenceLinks(text, { articles, headings, ...context })
+      .filter((segment) => segment.kind === "link")
+      .map((segment) => segment.text);
+
+  it.each([
+    {
+      name: "does not link the current law article when an act outside the dictionary carries a law number",
+      text: "原子力災害対策特別措置法（平成11年法律第156号）第15条の規定",
+    },
+    {
+      name: "does not link an act outside the dictionary without a law number",
+      text: "不正競争防止法第15条の規定",
+    },
+    {
+      name: "does not link a law name matched only by an abbreviation",
+      text: "民訴第15条の規定",
+    },
+    {
+      name: "does not link a law name prefixed by a kanji",
+      text: "旧商法第15条の規定",
+    },
+    {
+      name: "does not link a relative reference carrying a law name",
+      text: "商法前条の規定",
+    },
+    {
+      name: "does not link a branch article of another law",
+      text: "商法第15条の2の規定",
+    },
+  ])("$name", ({ text }) => {
+    expect(noLinkTexts(text, { currentArticleNumber: "16" })).toEqual([]);
+  });
+
+  it("keeps a bare paragraph reference out of the current article after a cross law reference", () => {
+    expect(noLinkTexts("商法第15条第1項及び第2項の規定", { currentArticleNumber: "16" })).toEqual([
+      "商法第15条第1項",
+    ]);
+  });
+
+  it("does not extend the cross law span over the preceding link", () => {
+    expect(
+      noLinkTexts("第15条及び労働基準法施行令（昭和二十二年政令第二十一号）第1条", {
+        currentArticleNumber: "16",
+      }),
+    ).toEqual(["第15条", "労働基準法施行令（昭和二十二年政令第二十一号）第1条"]);
   });
 });
