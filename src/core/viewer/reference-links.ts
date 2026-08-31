@@ -232,6 +232,11 @@ const sameReferenceLevels = new Map<string, SameReferenceLevel>([
 
 const sameMarkerLength = 2;
 
+// 同参照の階層の粗さ順。sameLevel の解決に失敗したとき、その階層より細かい階層の
+// 先行詞も道連れで無効化するために使う（例: 同条が解決できなければ、それより
+// 細かい項・号の先行詞も同時に失効させる）。
+const sameReferenceLevelOrder: SameReferenceLevel[] = ["law", "article", "paragraph", "item"];
+
 // 同参照の先行詞。リンクにならなかった参照も記録するため resolved を持つ。
 // 記録しないと、辞書外の法令を指す「同項」が、同じ文の前方にある自法令の項へ
 // 誤って結び付く。
@@ -257,6 +262,25 @@ const recordAntecedents = (
   ...(antecedent.paragraphNumber === undefined ? {} : { paragraph: antecedent }),
   ...(antecedent.itemNumber === undefined ? {} : { item: antecedent }),
 });
+
+// 同参照が指そうとした階層とそれより細かい階層の先行詞を無効化する。
+// 「同条第3項」が解決できなかった場合、古い項の先行詞を残すと後続の「同項」が
+// 無関係な項に誤って結び付くため、条だけでなく項・号もまとめて塗りつぶす。
+const invalidateAntecedentsFrom = (
+  antecedents: ReferenceAntecedents,
+  level: SameReferenceLevel,
+): ReferenceAntecedents => {
+  const startIndex = sameReferenceLevelOrder.indexOf(level);
+
+  return {
+    ...antecedents,
+    ...Object.fromEntries(
+      sameReferenceLevelOrder
+        .slice(startIndex)
+        .map((invalidatedLevel) => [invalidatedLevel, { resolved: false }]),
+    ),
+  };
+};
 
 export const segmentReferenceLinks = (
   text: string,
@@ -327,6 +351,9 @@ export const segmentReferenceLinks = (
       }
 
       if (sameTarget === undefined) {
+        // 解決できなかった同参照は、指そうとした階層以下の先行詞を無効化する。
+        // 塗らずに残すと、古い先行詞に後続の同参照が誤って結び付く。
+        antecedents = invalidateAntecedentsFrom(antecedents, sameLevel);
         continue;
       }
 
@@ -448,12 +475,37 @@ export const segmentReferenceLinks = (
       // そうしないと「第2条第1項、第2項及び第3項」の3つ目が、間に挟まった
       // 「第2項」のせいで列挙と判定されず、現在の条へ誤ってリンクしてしまう。
       articleScopeEndIndex = scannedIndex;
+
+      // ここで記録しないと、列挙の一部として抑止された条（他法令の条の並び等）が
+      // 先行詞にならず、後続の同参照が直前の無関係な条へ誤って結び付く。
+      antecedents = recordAntecedents(antecedents, {
+        resolved: false,
+        ...(parsed.article === undefined || isRelativeShift(parsed.article)
+          ? {}
+          : { articleNumber: parsed.article }),
+        ...(parsed.paragraph === undefined || isRelativeShift(parsed.paragraph)
+          ? {}
+          : { paragraphNumber: parsed.paragraph }),
+        ...(parsed.item === undefined ? {} : { itemNumber: parsed.item }),
+      });
       continue;
     }
 
     const target = resolveTarget(parsed, context);
 
     if (target === undefined) {
+      // 解決に失敗した自法令参照（存在しない条・項、現在位置そのものへの参照など）も、
+      // 記録しないと後続の同参照が前方の無関係な条・項へ誤って結び付く。
+      antecedents = recordAntecedents(antecedents, {
+        resolved: false,
+        ...(parsed.article === undefined || isRelativeShift(parsed.article)
+          ? {}
+          : { articleNumber: parsed.article }),
+        ...(parsed.paragraph === undefined || isRelativeShift(parsed.paragraph)
+          ? {}
+          : { paragraphNumber: parsed.paragraph }),
+        ...(parsed.item === undefined ? {} : { itemNumber: parsed.item }),
+      });
       continue;
     }
 

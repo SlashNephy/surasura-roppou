@@ -1142,6 +1142,27 @@ describe("segmentReferenceLinks for 同 references", () => {
       text: "第2条第1項の規定による。同項に規定する者は",
       expected: ["第2条第1項"],
     },
+    {
+      name: "does not link 同条 to an article suppressed as part of a cross-law enumeration",
+      // 「第15条」は商法の列挙として抑止される。記録しないと、同条が
+      // 抑止された第15条ではなく先行の第798条へ誤って結び付いてしまう。
+      text: "商法第798条及び第15条の規定に基づき同条の規定を準用する",
+      expected: ["商法第798条"],
+    },
+    {
+      name: "does not let an unresolved self-law reference leave a stale antecedent",
+      // 「第2条第99項」は存在しない項のため解決できない。記録しないと、同項が
+      // 前方の第2条第1項へ誤って結び付いてしまう。
+      text: "第2条第1項の規定による許可（第2条第99項の規定により読み替えて適用される同項の承認を含む。）",
+      expected: ["第2条第1項"],
+    },
+    {
+      name: "does not let an unresolved 同条 reference leave a stale paragraph antecedent",
+      // 「同条第99項」は存在しない項のため解決できない。無効化しないと、同項が
+      // 前方の第2条第1項へ誤って結び付いてしまう。
+      text: "第2条第1項の規定による許可（同条第99項の規定により読み替えて適用される同項の承認を含む。）",
+      expected: ["第2条第1項"],
+    },
   ])("$name", ({ expected, text }) => {
     expect(linkTexts(text, { currentArticleNumber: "4" })).toEqual(expected);
   });
