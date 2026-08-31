@@ -796,6 +796,33 @@ describe("LawNodeList", () => {
       ).toHaveAttribute("href", "/laws/411AC0000000156/articles/2");
     });
 
+    it("underlines a cross-law reference from the official title, not the preceding phrase", () => {
+      // 「中」は改正条文の言い回しで法令名の一部ではない。正式名称が無いと下線に入る。
+      const actNodes: LawNode[] = referenceNodes.map((existing) =>
+        existing.id === "article:16/paragraph:1"
+          ? {
+              ...existing,
+              plainText: "附則第九条中農業協同組合法（昭和22年法律第132号）第十一条の規定による。",
+              rawText: "",
+            }
+          : existing,
+      );
+
+      render(
+        <LawNodeList
+          lawByLawNumber={
+            new Map([["Showa/22/法律/132", { lawId: "322AC0000000132", title: "農業協同組合法" }]])
+          }
+          lawId="129AC0000000089"
+          nodes={actNodes}
+        />,
+      );
+
+      expect(
+        screen.getByRole("link", { name: "農業協同組合法（昭和22年法律第132号）第11条" }),
+      ).toHaveAttribute("href", "/laws/322AC0000000132/articles/11");
+    });
+
     it("renders a same article paragraph reference as an in-page link", () => {
       render(<LawNodeList lawId="129AC0000000089" nodes={referenceNodes} />);
 
