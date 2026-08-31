@@ -150,4 +150,32 @@ describe("useCrossLawNumbers", () => {
     expect(result.current.get("Showa/25/法律/131")).toBe("325AC0000000131");
     expect(result.current.size).toBe(1);
   });
+
+  it("does not re-render endlessly when the caller passes a new nodes array on every render", async () => {
+    const { resolver } = resolverOf({ "Heisei/11/法律/156": "411AC0000000156" });
+    let renderCount = 0;
+
+    // renderHook の描画コールバックの中で nodes 配列リテラルを作る。呼び出し側の
+    // state.nodes が安定参照でなくても輪にならないことを確かめるため、毎描画で
+    // 新しい参照になるようにする。
+    const { result } = renderHook(() => {
+      renderCount += 1;
+      const nodes = [
+        node("p1", "原子力災害対策特別措置法（平成11年法律第156号）第2条の規定による。"),
+      ];
+
+      return useCrossLawNumbers(nodes, resolver);
+    });
+
+    await waitFor(() => {
+      expect(result.current.get("Heisei/11/法律/156")).toBe("411AC0000000156");
+    });
+
+    // 輪になっていれば、対応表が埋まった後もここで際限なく描画が積み増される。
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+
+    expect(renderCount).toBeLessThan(20);
+  });
 });

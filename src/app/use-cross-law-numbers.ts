@@ -52,7 +52,24 @@ export const useCrossLawNumbers = (
   resolver: LawNumberResolver,
 ): ReadonlyMap<string, string> => {
   const [resolved, setResolved] = useState<ResolvedLawIds | undefined>(undefined);
-  const lawNumbers = useMemo(() => collectLawNumbers(nodes), [nodes]);
+  const collected = useMemo(() => collectLawNumbers(nodes), [nodes]);
+  // 走査結果の内容キー。呼び出し側が毎描画で新しい nodes 配列を渡しても、中身が
+  // 同じなら同じ参照を返し、effect の再実行を防ぐ（さもないと解決 → 再描画 →
+  // 新しい nodes → 新しい lawNumbers → effect 再実行、で輪になる）。
+  // ref ではなく state で覚える。ref への書き込みは描画中には行えないため、
+  // React 公式が挙げる「描画中に state を調整する」形にしている。
+  const signature = [...collected.keys()].sort().join("|");
+  const [cachedLawNumbers, setCachedLawNumbers] = useState<{
+    signature: string;
+    lawNumbers: ReadonlyMap<string, ParsedLawNumber>;
+  }>(() => ({ signature, lawNumbers: collected }));
+
+  if (cachedLawNumbers.signature !== signature) {
+    setCachedLawNumbers({ signature, lawNumbers: collected });
+  }
+
+  const lawNumbers =
+    cachedLawNumbers.signature === signature ? cachedLawNumbers.lawNumbers : collected;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -77,15 +94,20 @@ export const useCrossLawNumbers = (
 
         setResolved((previous) => {
           // 前の法令の対応表には積み増さない。走査結果と解決器が同じときだけ引き継ぐ。
-          const base =
-            previous?.lawNumbers === lawNumbers && previous.resolver === resolver
-              ? previous.lawIdByLawNumber
-              : emptyLawIdByLawNumber;
+          const matches = previous?.lawNumbers === lawNumbers && previous.resolver === resolver;
+          const base = matches ? previous.lawIdByLawNumber : emptyLawIdByLawNumber;
+          const key = lawNumberKey(parsed);
+
+          // 既に同じ結果が入っていれば、新しいオブジェクトを作らない。作ると
+          // 再描画が走り、nodes を作り直す呼び出し側では輪になる。
+          if (matches && base.get(key) === lawId) {
+            return previous;
+          }
 
           return {
             lawNumbers,
             resolver,
-            lawIdByLawNumber: new Map(base).set(lawNumberKey(parsed), lawId),
+            lawIdByLawNumber: new Map(base).set(key, lawId),
           };
         });
       }
