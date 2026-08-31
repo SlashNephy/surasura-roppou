@@ -6,7 +6,13 @@ MODEL="${ANTIGRAVITY_MODEL:-}"
 PRINT_TIMEOUT="${ANTIGRAVITY_PRINT_TIMEOUT:-5m}"
 SKIP_PERMISSIONS="${ANTIGRAVITY_SKIP_PERMISSIONS:-0}"
 
-if ! command -v agy >/dev/null 2>&1; then
+# agy は mise で管理しているため、PATH に無ければ mise 経由で起動する。
+AGY_RUNNER=()
+if command -v agy >/dev/null 2>&1; then
+  AGY_RUNNER=(agy)
+elif command -v mise >/dev/null 2>&1 && mise which agy >/dev/null 2>&1; then
+  AGY_RUNNER=(mise exec -- agy)
+else
   echo "Antigravity CLI 'agy' is not available; skipping review." >&2
   exit 0
 fi
@@ -166,7 +172,7 @@ run_agy() {
     args+=(--model "$MODEL")
   fi
 
-  agy "${args[@]}" -p "$PROMPT"
+  "${AGY_RUNNER[@]}" "${args[@]}" -p "$PROMPT"
 }
 
 if ! run_agy; then
