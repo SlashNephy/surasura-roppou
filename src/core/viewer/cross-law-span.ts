@@ -136,7 +136,8 @@ const readTitledLawName = (
   minIndex: number,
   title: string | undefined,
 ): number | undefined => {
-  if (title === undefined) {
+  // 空文字列だと slice 比較が常に一致し、開き括弧の位置に境界が潰れてしまう。
+  if (title === undefined || title === "") {
     return undefined;
   }
 
@@ -187,12 +188,14 @@ export const detectCrossLawSpan = (
 
   // 「旧民法」「新会社法」のように法令名の直前が漢字なら、現行法とは別の法令を
   // 指している可能性が高い。宛先を伏せて無リンクにする。
-  // 法令番号が併記されている参照は対象外。宛先は名称ではなく番号が決めるため、
-  // 接頭辞を疑う理由が無い。境界を正式名称で決めると「附則第九条中農業協同組合法（…）」の
+  // ガードを外せるのは、法令番号そのものが宛先を決めたときだけ。括弧があっても
+  // deriveLawIdFromLawNumber が扱わない種別（太政官布告など）で対応表にも無ければ
+  // parenthesis.lawId は付かず、宛先は結局辞書（名称）から来るため、その場合は
+  // ガードを外してはならない。境界を正式名称で決めると「附則第九条中農業協同組合法（…）」の
   // ような改正条文で直前が漢字になり、限定しないとリンクを大量に失う。
   // ただし直前が位置表現の末尾なら、それは別の参照の終わりであって接頭辞ではない。
   if (
-    parenthesis === undefined &&
+    parenthesis?.lawId === undefined &&
     startIndex > 0 &&
     !positionTerminators.has(text[startIndex - 1]) &&
     hanPattern.test(text[startIndex - 1])
