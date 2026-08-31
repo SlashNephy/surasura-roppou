@@ -1183,4 +1183,26 @@ describe("segmentReferenceLinks for 同 references", () => {
       },
     ]);
   });
+
+  it("resolves 同号 to the article and paragraph named earlier (item is not tracked for self-law targets)", () => {
+    // 自法令経路では itemNumber が resolveTarget に渡らないため、同号は項レベルで
+    // 着地する（第1号と第2号を区別しない）。挙動を変えず、現状を固定するテスト。
+    expect(
+      links("第2条第1項第1号の規定（同号の要件を満たすとき）", {
+        currentArticleNumber: "2",
+        currentParagraphNumber: "2",
+      }),
+    ).toEqual([
+      {
+        kind: "link",
+        text: "第2条第1項第1号",
+        target: { kind: "article", articleNumber: "2", paragraphNumber: "1" },
+      },
+      {
+        kind: "link",
+        text: "同号",
+        target: { kind: "article", articleNumber: "2", paragraphNumber: "1" },
+      },
+    ]);
+  });
 });
