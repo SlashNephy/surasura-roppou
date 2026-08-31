@@ -28,8 +28,14 @@ const maxLawNameLength = Math.max(
 const openingBrackets = new Set(["（", "("]);
 const closingBrackets = new Set(["）", ")"]);
 
-// 辞書に無い法令名の左境界。句読点・括弧・引用符・空白で切る。
-const lawNameBoundaryPattern = /[\s、。，．・（）()「」『』〔〕［］[\]｛｝{}"']/;
+// 辞書に無い法令名の左境界。句読点・括弧・引用符・空白に加え、位置表現の末尾になる
+// 「条」「項」「号」「編」「章」「第」でも切る。位置表現（第n条・前項など）は必ず
+// これらのいずれかで終わるため、左スキャンが直前の別参照を越えて飲み込まなくなる。
+// 副作用として、法令名自体にこれらの文字を含む場合（「…条約」「国連憲章」等）は
+// スキャンがその手前で止まり下線が短くなるが、リンク先は法令番号から決まるため
+// 誤リンクにはならない（失敗方向は安全側）。
+const lawNameBoundaryPattern =
+  /[\s、。，．・（）()「」『』〔〕［］[\]｛｝{}"'条項号編章第]/;
 
 // スパンの先頭に残る列挙の接続語。reference-links の coordinationGapPattern と同じ語彙。
 const leadingCoordinationPattern = /^(?:及び|並びに|又は|若しくは|、|・)+/;

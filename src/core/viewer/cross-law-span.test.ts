@@ -66,6 +66,24 @@ describe("detectCrossLawSpan", () => {
       minIndex: 6,
       expected: { startIndex: 8, lawId: "322CO0000000021" },
     },
+    {
+      name: "does not swallow a reference that failed to link even without a preceding link's minIndex",
+      // 「不正競争防止法第15条」はリンクにならない参照（辞書外・法令番号なし）で、
+      // minIndex は前進しない（0 のまま）。左境界パターンに「条」が無いと、
+      // 左スキャンがこの参照ごと飲み込んで政令のリンクに誤って含めてしまう。
+      text: "不正競争防止法第15条及び労働基準法施行令（昭和二十二年政令第二十一号）第1条",
+      marker: "第1条",
+      expected: { startIndex: 13, lawId: "322CO0000000021" },
+    },
+    {
+      name: "stops the left scan at a positional expression suffix even without a leading coordination token",
+      // 「項」で止まり、start は「に」の位置（「前項」を飲み込まなくなる）。
+      // ただし直前の文字「項」は漢字であるため、「旧民法」用の既存ガードが働き
+      // 宛先は伏せられる。無リンクは誤リンクより安全なため、これは許容する。
+      text: "前項に規定する労働基準法施行令（昭和二十二年政令第二十一号）第5条",
+      marker: "第5条",
+      expected: { startIndex: 2 },
+    },
   ])("$name", ({ expected, marker, minIndex, text }) => {
     expect(detect(text, marker, minIndex)).toEqual(expected);
   });

@@ -960,4 +960,15 @@ describe("segmentReferenceLinks for cross law references", () => {
       }),
     ).toEqual(["第15条", "労働基準法施行令（昭和二十二年政令第二十一号）第1条"]);
   });
+
+  it("does not swallow a reference that failed to link into a following cross law link", () => {
+    // 「不正競争防止法第15条」は辞書外かつ法令番号を伴わないためリンクにならない。
+    // このリンク化されなかった参照を、後続の政令へのリンクが飲み込んではならない。
+    expect(
+      noLinkTexts(
+        "不正競争防止法第15条及び労働基準法施行令（昭和二十二年政令第二十一号）第1条",
+        { currentArticleNumber: "16" },
+      ),
+    ).toEqual(["労働基準法施行令（昭和二十二年政令第二十一号）第1条"]);
+  });
 });
