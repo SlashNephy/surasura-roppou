@@ -55,9 +55,19 @@ export const createLawNumberResolver = ({
   // 起動から一度だけカタログを読む。法令を切り替えるたびに読み直さない。
   let cachedCatalog: Promise<Map<string, string>> | undefined;
 
+  // キャッシュの読み込みは best-effort。IndexedDB はプライベートウィンドウや容量超過で
+  // 読めないことがあり、そこで解決そのものを止めるとリンクが一切出なくなる。
   const loadCatalogIndex = async (): Promise<Map<string, string>> => {
-    const entries = await indexRepository.listCatalog();
     const index = new Map<string, string>();
+    let entries;
+
+    try {
+      entries = await indexRepository.listCatalog();
+    } catch (error) {
+      console.warn("[jump] failed to read the cached law catalog", error);
+
+      return index;
+    }
 
     for (const entry of entries) {
       if (entry.lawNumber === undefined) {

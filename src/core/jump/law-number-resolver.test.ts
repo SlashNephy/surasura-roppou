@@ -235,6 +235,26 @@ describe("createLawNumberResolver", () => {
     expect(callCount).toBe(2);
   });
 
+  it("still resolves when the cached catalog cannot be read", async () => {
+    // IndexedDB はプライベートウィンドウや容量超過で読めないことがある。
+    // 読めないだけで解決そのものが止まると、リンクが一切出なくなる。
+    const upsertCatalogEntries = vi.fn<SearchIndexRepository["upsertCatalogEntries"]>(() =>
+      Promise.resolve(),
+    );
+    const resolver = createLawNumberResolver({
+      lawRepository: {
+        listLaws: () =>
+          Promise.resolve(lawResult("332AC1000000166", "昭和三十二年法律第百六十六号")),
+      } as unknown as LawRepository,
+      indexRepository: {
+        listCatalog: () => Promise.reject(new Error("indexeddb unavailable")),
+        upsertCatalogEntries,
+      } as unknown as SearchIndexRepository,
+    });
+
+    await expect(resolver.resolve(parse("昭和32年法律第166号"))).resolves.toBe("332AC1000000166");
+  });
+
   it("does not remember an abort as a failure", async () => {
     const abortError = new DOMException("aborted", "AbortError");
     let attempts = 0;
