@@ -6,9 +6,17 @@ MODEL="${ANTIGRAVITY_MODEL:-}"
 PRINT_TIMEOUT="${ANTIGRAVITY_PRINT_TIMEOUT:-5m}"
 SKIP_PERMISSIONS="${ANTIGRAVITY_SKIP_PERMISSIONS:-0}"
 
-if ! command -v agy >/dev/null 2>&1; then
-  echo "Antigravity CLI 'agy' is not available; skipping review." >&2
-  exit 0
+# agy は mise で管理しているため、PATH に無ければ mise 経由で起動する。
+# レビューを実行できなかったことを成功として扱うと、レビュー無しで PR が作られる。
+AGY_RUNNER=()
+if command -v agy >/dev/null 2>&1; then
+  AGY_RUNNER=(agy)
+elif command -v mise >/dev/null 2>&1 && mise which agy >/dev/null 2>&1; then
+  AGY_RUNNER=(mise exec -- agy)
+else
+  echo "Antigravity CLI 'agy' is not available." >&2
+  echo "It is pinned in mise.toml; install it with 'mise install'." >&2
+  exit 1
 fi
 
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -166,9 +174,14 @@ run_agy() {
     args+=(--model "$MODEL")
   fi
 
-  agy "${args[@]}" -p "$PROMPT"
+  "${AGY_RUNNER[@]}" "${args[@]}" -p "$PROMPT"
 }
 
-if ! run_agy; then
-  echo "Antigravity review failed; continuing without blocking the workflow." >&2
+# ! run_agy の中では $? が 0 になるため、終了コードは || で受ける。
+status=0
+run_agy || status=$?
+
+if [[ "$status" -ne 0 ]]; then
+  echo "Antigravity review failed with exit code $status." >&2
+  exit "$status"
 fi
