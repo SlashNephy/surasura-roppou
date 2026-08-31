@@ -220,6 +220,18 @@ const isRelativeShift = (value: string): boolean => value === "previous" || valu
 // 第1項の期間内に」のように地の文を挟むと、裸の項は現在の条の項へ戻る（issue #204）。
 const coordinationGapPattern = /^(?:及び|並びに|又は|若しくは|から|まで|[、・\s])*$/;
 
+// 同参照が指す先の階層。マーカーを増やすときはこの表と本文パターンに足す。
+type SameReferenceLevel = "law" | "article" | "paragraph" | "item";
+
+const sameReferenceLevels = new Map<string, SameReferenceLevel>([
+  ["同法", "law"],
+  ["同条", "article"],
+  ["同項", "paragraph"],
+  ["同号", "item"],
+]);
+
+const sameMarkerLength = 2;
+
 export const segmentReferenceLinks = (
   text: string,
   context: ArticleLinkContext,
@@ -254,6 +266,22 @@ export const segmentReferenceLinks = (
     }
 
     scannedIndex = match.index + match[0].length;
+
+    // 同参照（同法・同条・同項・同号）は先行詞から解決する必要があるため、まだリンクに
+    // しない。ここで抑止しないと parseReference が同X を読み飛ばし、「同条第2項」が
+    // 現在の条の第2項として誤解決される。
+    const sameLevel = sameReferenceLevels.get(match[0].slice(0, sameMarkerLength));
+
+    if (sameLevel !== undefined) {
+      // 条を名指しする同参照は、後続の裸の項参照の基準になる。
+      // 「同条第1項、第2項」の第2項が現在の条の項へ誤解決しないようスコープを立てる。
+      if (sameLevel === "law" || sameLevel === "article") {
+        articleScopeEndIndex = scannedIndex;
+        isArticleScopeCrossLaw = false;
+      }
+
+      continue;
+    }
 
     const parsed = parseReference(match[0]);
 
