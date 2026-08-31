@@ -971,3 +971,53 @@ describe("segmentReferenceLinks for cross law references", () => {
     ).toEqual(["労働基準法施行令（昭和二十二年政令第二十一号）第1条"]);
   });
 });
+
+describe("segmentReferenceLinks for bare articles enumerated after a cross law reference", () => {
+  const articles = buildArticleLinkEntries(numberedLawNodes);
+  const headings = buildHeadingLinkEntries(numberedLawNodes);
+
+  const linkTexts = (text: string, context: Partial<ArticleLinkContext> = {}) =>
+    segmentReferenceLinks(text, { articles, headings, ...context })
+      .filter((segment) => segment.kind === "link")
+      .map((segment) => segment.text);
+
+  it.each([
+    {
+      name: "does not link a bare article enumerated after a cross law reference",
+      text: "商法第798条及び第2条の規定",
+      expected: ["商法第798条"],
+    },
+    {
+      name: "does not link any bare article in a list opened by a cross law reference",
+      text: "商法第798条、第2条及び第3条の規定",
+      expected: ["商法第798条"],
+    },
+    {
+      name: "does not link a bare article enumerated after a law name outside the dictionary",
+      text: "不正競争防止法第798条及び第2条の規定",
+      expected: [],
+    },
+    {
+      name: "still links bare articles enumerated without a law name",
+      text: "第2条及び第3条の規定",
+      expected: ["第2条", "第3条"],
+    },
+    {
+      name: "still links a bare article separated from a cross law reference by prose",
+      text: "商法第798条の規定により、第2条の規定は適用しない。",
+      expected: ["商法第798条", "第2条"],
+    },
+    {
+      name: "still links a bare article enumerated after 同条",
+      text: "同条及び第2条の規定",
+      expected: ["第2条"],
+    },
+    {
+      name: "starts a new sentence scope after a cross law reference",
+      text: "商法第798条の規定。第2条及び第3条の規定",
+      expected: ["商法第798条", "第2条", "第3条"],
+    },
+  ])("$name", ({ expected, text }) => {
+    expect(linkTexts(text, { currentArticleNumber: "4" })).toEqual(expected);
+  });
+});
