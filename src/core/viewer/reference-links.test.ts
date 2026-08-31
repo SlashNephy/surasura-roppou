@@ -1046,72 +1046,131 @@ describe("segmentReferenceLinks for 同 references", () => {
   const linkTexts = (text: string, context: Partial<ArticleLinkContext> = {}) =>
     links(text, context).map((segment) => segment.text);
 
-  it("resolves 同条 to the article named earlier in the sentence", () => {
-    expect(
-      links("第2条第1項の規定による宣言があった時から同条第2項の規定による解除まで", {
-        currentArticleNumber: "4",
-      }),
-    ).toEqual([
-      {
-        kind: "link",
-        text: "第2条第1項",
-        target: { kind: "article", articleNumber: "2" },
-        caption: { text: "定義", offset: 3 },
-      },
-      { kind: "link", text: "同条第2項", target: { kind: "article", articleNumber: "2" } },
-    ]);
-  });
-
-  it("resolves 同項 to the paragraph named earlier, not to the nearest article", () => {
-    // 「第3条」は項を名指ししていないため先行詞にならない。同項は第2条第1項を指す。
-    expect(
-      linkTexts("第2条第1項の許可（第3条の規定により読み替えて適用される同項の承認を含む。）", {
-        currentArticleNumber: "4",
-      }),
-    ).toEqual(["第2条第1項", "第3条", "同項"]);
-  });
-
-  it("resolves 同項 through a relative article reference", () => {
-    expect(
-      links("前条第1項の計画に従い、同項に規定する業務を行う", {
-        currentArticleNumber: "3",
-      }),
-    ).toEqual([
-      {
-        kind: "link",
-        text: "前条第1項",
-        target: { kind: "article", articleNumber: "2" },
-        caption: { text: "定義", offset: 2 },
-      },
-      { kind: "link", text: "同項", target: { kind: "article", articleNumber: "2" } },
-    ]);
-  });
-
-  it("resolves 同項 to the other law named earlier in the sentence", () => {
-    expect(
-      links("商法第798条第1項の規定により、同項に規定する者は", { currentArticleNumber: "4" }),
-    ).toEqual([
-      {
-        kind: "link",
-        text: "商法第798条第1項",
-        target: {
-          kind: "article",
-          lawId: "132AC0000000048",
-          articleNumber: "798",
-          paragraphNumber: "1",
+  it.each([
+    {
+      name: "resolves 同条 to the article named earlier in the sentence",
+      text: "第2条第1項の規定による宣言があった時から同条第2項の規定による解除まで",
+      context: { currentArticleNumber: "4" },
+      expected: [
+        {
+          kind: "link",
+          text: "第2条第1項",
+          target: { kind: "article", articleNumber: "2" },
+          caption: { text: "定義", offset: 3 },
         },
-      },
-      {
-        kind: "link",
-        text: "同項",
-        target: {
-          kind: "article",
-          lawId: "132AC0000000048",
-          articleNumber: "798",
-          paragraphNumber: "1",
+        { kind: "link", text: "同条第2項", target: { kind: "article", articleNumber: "2" } },
+      ],
+    },
+    {
+      name: "resolves 同項 to the paragraph named earlier, not to the nearest article",
+      // 「第3条」は項を名指ししていないため先行詞にならない。同項は第2条第1項を指す。
+      text: "第2条第1項の許可（第3条の規定により読み替えて適用される同項の承認を含む。）",
+      context: { currentArticleNumber: "4" },
+      expected: [
+        {
+          kind: "link",
+          text: "第2条第1項",
+          target: { kind: "article", articleNumber: "2" },
+          caption: { text: "定義", offset: 3 },
         },
-      },
-    ]);
+        { kind: "link", text: "第3条", target: { kind: "article", articleNumber: "3" } },
+        { kind: "link", text: "同項", target: { kind: "article", articleNumber: "2" } },
+      ],
+    },
+    {
+      name: "resolves 同項 through a relative article reference",
+      text: "前条第1項の計画に従い、同項に規定する業務を行う",
+      context: { currentArticleNumber: "3" },
+      expected: [
+        {
+          kind: "link",
+          text: "前条第1項",
+          target: { kind: "article", articleNumber: "2" },
+          caption: { text: "定義", offset: 2 },
+        },
+        { kind: "link", text: "同項", target: { kind: "article", articleNumber: "2" } },
+      ],
+    },
+    {
+      name: "resolves 同項 to the other law named earlier in the sentence",
+      text: "商法第798条第1項の規定により、同項に規定する者は",
+      context: { currentArticleNumber: "4" },
+      expected: [
+        {
+          kind: "link",
+          text: "商法第798条第1項",
+          target: {
+            kind: "article",
+            lawId: "132AC0000000048",
+            articleNumber: "798",
+            paragraphNumber: "1",
+          },
+        },
+        {
+          kind: "link",
+          text: "同項",
+          target: {
+            kind: "article",
+            lawId: "132AC0000000048",
+            articleNumber: "798",
+            paragraphNumber: "1",
+          },
+        },
+      ],
+    },
+    {
+      name: "resolves 同法 with an article to the law named earlier in the sentence",
+      text: "商法第798条の規定に基づき同法第15条に規定する",
+      context: { currentArticleNumber: "4" },
+      expected: [
+        {
+          kind: "link",
+          text: "商法第798条",
+          target: { kind: "article", lawId: "132AC0000000048", articleNumber: "798" },
+        },
+        {
+          kind: "link",
+          text: "同法第15条",
+          target: { kind: "article", lawId: "132AC0000000048", articleNumber: "15" },
+        },
+      ],
+    },
+    {
+      name: "resolves 同号 to the article and paragraph named earlier (item is not tracked for self-law targets)",
+      // 自法令経路では itemNumber が resolveTarget に渡らないため、同号は項レベルで
+      // 着地する（第1号と第2号を区別しない）。挙動を変えず、現状を固定するテスト。
+      text: "第2条第1項第1号の規定（同号の要件を満たすとき）",
+      context: { currentArticleNumber: "2", currentParagraphNumber: "2" },
+      expected: [
+        {
+          kind: "link",
+          text: "第2条第1項第1号",
+          target: { kind: "article", articleNumber: "2", paragraphNumber: "1" },
+        },
+        {
+          kind: "link",
+          text: "同号",
+          target: { kind: "article", articleNumber: "2", paragraphNumber: "1" },
+        },
+      ],
+    },
+    {
+      name: "resolves 同条第2項 to a paragraph in the current article, whose bare article reference lands on the current position",
+      // 「第2条」は現在位置（第2条第1項）そのものへ着地するためリンクにならないが、
+      // 条自体は実在するため先行詞としては有効。同条第2項は同じ条の別の項なので
+      // ページ内アンカーへ着地できる（#278 finding 1 の回帰）。
+      text: "第2条の規定により同条第2項の規定を適用する",
+      context: { currentArticleNumber: "2", currentParagraphNumber: "1" },
+      expected: [
+        {
+          kind: "link",
+          text: "同条第2項",
+          target: { kind: "article", articleNumber: "2", paragraphNumber: "2" },
+        },
+      ],
+    },
+  ])("$name", ({ context, expected, text }) => {
+    expect(links(text, context)).toEqual(expected);
   });
 
   it.each([
@@ -1171,56 +1230,5 @@ describe("segmentReferenceLinks for 同 references", () => {
     },
   ])("$name", ({ expected, text }) => {
     expect(linkTexts(text, { currentArticleNumber: "4" })).toEqual(expected);
-  });
-
-  it("resolves 同条第2項 to a paragraph in the current article, whose bare article reference lands on the current position", () => {
-    // 「第2条」は現在位置（第2条第1項）そのものへ着地するためリンクにならないが、
-    // 条自体は実在するため先行詞としては有効。同条第2項は同じ条の別の項なので
-    // ページ内アンカーへ着地できる（#278 finding 1 の回帰）。
-    expect(
-      linkTexts("第2条の規定により同条第2項の規定を適用する", {
-        currentArticleNumber: "2",
-        currentParagraphNumber: "1",
-      }),
-    ).toEqual(["同条第2項"]);
-  });
-
-  it("resolves 同法 with an article to the law named earlier in the sentence", () => {
-    expect(
-      links("商法第798条の規定に基づき同法第15条に規定する", { currentArticleNumber: "4" }),
-    ).toEqual([
-      {
-        kind: "link",
-        text: "商法第798条",
-        target: { kind: "article", lawId: "132AC0000000048", articleNumber: "798" },
-      },
-      {
-        kind: "link",
-        text: "同法第15条",
-        target: { kind: "article", lawId: "132AC0000000048", articleNumber: "15" },
-      },
-    ]);
-  });
-
-  it("resolves 同号 to the article and paragraph named earlier (item is not tracked for self-law targets)", () => {
-    // 自法令経路では itemNumber が resolveTarget に渡らないため、同号は項レベルで
-    // 着地する（第1号と第2号を区別しない）。挙動を変えず、現状を固定するテスト。
-    expect(
-      links("第2条第1項第1号の規定（同号の要件を満たすとき）", {
-        currentArticleNumber: "2",
-        currentParagraphNumber: "2",
-      }),
-    ).toEqual([
-      {
-        kind: "link",
-        text: "第2条第1項第1号",
-        target: { kind: "article", articleNumber: "2", paragraphNumber: "1" },
-      },
-      {
-        kind: "link",
-        text: "同号",
-        target: { kind: "article", articleNumber: "2", paragraphNumber: "1" },
-      },
-    ]);
   });
 });
