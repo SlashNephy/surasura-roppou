@@ -43,3 +43,5 @@ export {
   parseLawNumber,
 } from "./law-number";
 export type { LawNumberEra, ParsedLawNumber } from "./law-number";
+export { createLawNumberResolver } from "./law-number-resolver";
+export type { LawNumberResolver, LawNumberResolverDependencies } from "./law-number-resolver";
