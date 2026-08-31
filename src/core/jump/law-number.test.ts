@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { deriveLawIdFromLawNumber, parseLawNumber } from "./law-number";
+import {
+  deriveLawIdFromLawNumber,
+  lawNumberKey,
+  lawNumberTypeCode,
+  parseLawNumber,
+} from "./law-number";
 
 describe("parseLawNumber", () => {
   it.each([
@@ -111,5 +116,44 @@ describe("deriveLawIdFromLawNumber", () => {
     },
   ] as const)("$name", ({ parsed }) => {
     expect(deriveLawIdFromLawNumber(parsed)).toBeUndefined();
+  });
+});
+
+describe("lawNumberKey", () => {
+  it("builds the same key from kanji and arabic notations", () => {
+    const kanji = parseLawNumber("平成十一年法律第百五十六号");
+    const arabic = parseLawNumber("平成11年法律第156号");
+
+    if (kanji === undefined || arabic === undefined) {
+      throw new Error("parseLawNumber は両表記とも解決できるはず");
+    }
+
+    expect(lawNumberKey(kanji)).toBe(lawNumberKey(arabic));
+  });
+
+  it.each([
+    {
+      name: "keys an act by era, year, type and number",
+      parsed: { era: "Heisei", year: 11, type: "法律", number: 156 },
+      expected: "Heisei/11/法律/156",
+    },
+    {
+      name: "keys a cabinet order distinctly from an act of the same number",
+      parsed: { era: "Heisei", year: 11, type: "政令", number: 156 },
+      expected: "Heisei/11/政令/156",
+    },
+  ] as const)("$name", ({ expected, parsed }) => {
+    expect(lawNumberKey(parsed)).toBe(expected);
+  });
+});
+
+describe("lawNumberTypeCode", () => {
+  it.each([
+    { name: "maps 法律 to Act", type: "法律", expected: "Act" },
+    { name: "maps 政令 to CabinetOrder", type: "政令", expected: "CabinetOrder" },
+    { name: "does not map a ministerial ordinance", type: "大蔵省令", expected: undefined },
+    { name: "does not map a dajokan proclamation", type: "太政官布告", expected: undefined },
+  ])("$name", ({ expected, type }) => {
+    expect(lawNumberTypeCode(type)).toBe(expected);
   });
 });

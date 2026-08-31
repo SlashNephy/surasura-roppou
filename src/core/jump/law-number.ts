@@ -104,3 +104,17 @@ export const deriveLawIdFromLawNumber = (parsed: ParsedLawNumber): string | unde
 
   return `${eraCodes[parsed.era]}${year}${typeCode}${number}`;
 };
+
+// 法令番号の突き合わせキー。表記が漢数字と算用数字で割れるため、パース結果から作る。
+// e-Gov が返す law_num（常に漢数字）も parseLawNumber を通して同じキーにする。
+export const lawNumberKey = (parsed: ParsedLawNumber): string =>
+  `${parsed.era}/${String(parsed.year)}/${parsed.type}/${String(parsed.number)}`;
+
+// 種別語から e-Gov の law_num_type へ。対応の無い種別（府令・省令・太政官布告など）は
+// 問い合わせても引けないため undefined を返し、解決を試みない。
+const lawNumberTypeCodes = new Map([
+  ["法律", "Act"],
+  ["政令", "CabinetOrder"],
+]);
+
+export const lawNumberTypeCode = (type: string): string | undefined => lawNumberTypeCodes.get(type);
