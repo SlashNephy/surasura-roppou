@@ -898,6 +898,16 @@ describe("segmentReferenceLinks for cross law references", () => {
       ],
     },
     {
+      name: "links a branch article of another law",
+      text: "商法第15条の2の規定",
+      expected: [
+        {
+          text: "商法第15条の2",
+          target: { kind: "article", lawId: "132AC0000000048", articleNumber: "15-2" },
+        },
+      ],
+    },
+    {
       name: "links a cabinet order outside the dictionary through its law number",
       text: "労働基準法施行令（昭和二十二年政令第二十一号）第1条の規定",
       expected: [
@@ -938,10 +948,6 @@ describe("segmentReferenceLinks for cross law references", () => {
     {
       name: "does not link a relative reference carrying a law name",
       text: "商法前条の規定",
-    },
-    {
-      name: "does not link a branch article of another law",
-      text: "商法第15条の2の規定",
     },
   ])("$name", ({ text }) => {
     expect(noLinkTexts(text, { currentArticleNumber: "16" })).toEqual([]);

@@ -1,4 +1,4 @@
-import type { LawNode } from "@/core/domain";
+import { normalizeArticleNumberForLookup, type LawNode } from "@/core/domain";
 import {
   bodyReferencePositionPatternSource,
   parseReference,
@@ -419,13 +419,6 @@ const resolveCrossLawTarget = (
     return undefined;
   }
 
-  // 枝番の条番号は、アプリ正準表記が e-Gov の Num 由来で "876_9"、パーサーの出力が
-  // "876-9" と割れる。他法令のノードを持たない以上どちらが正しいか確かめられないため、
-  // 着地しないリンクを作らないよう見送る。
-  if (parsed.article.includes("-")) {
-    return undefined;
-  }
-
   return {
     kind: "article",
     lawId,
@@ -573,15 +566,6 @@ const shiftEntry = (
   return entries[index + (shift === "previous" ? -1 : 1)];
 };
 
-// 条番号の枝番区切りは、由来によって表記が割れる。e-Gov API の Num 属性は
-// 枝番を "_" で表記する（876_9）が、Num 属性を持たない条は title から
-// フォールバックで抽出され "-" 連結になる（12-2）。一方 reference-parser の
-// readBranches は本文中の「第876条の9」のような参照を常に "-" で連結する。
-// LawNode.number（アプリ正準表記）はアンカー id・URL・保存済みブックマークの
-// 基準になっているため変更できない。したがって比較時にここで正規化する。
-const normalizeArticleNumberForMatch = (articleNumber: string): string =>
-  articleNumber.replaceAll("_", "-");
-
 const resolveArticleNumber = (
   parsed: ParsedReference,
   context: ArticleLinkContext,
@@ -596,9 +580,9 @@ const resolveArticleNumber = (
     // アンダースコアでも一致するよう正規化して突き合わせ、見つかった場合は
     // articles 側のエントリが持つアプリ正準表記を返す（parsed.article をそのまま
     // 返すと、アンダースコア表記の条でアンカー id・URL が着地しなくなる）。
-    const normalizedTarget = normalizeArticleNumberForMatch(parsed.article);
+    const normalizedTarget = normalizeArticleNumberForLookup(parsed.article);
     const entry = context.articles.find(
-      (candidate) => normalizeArticleNumberForMatch(candidate.articleNumber) === normalizedTarget,
+      (candidate) => normalizeArticleNumberForLookup(candidate.articleNumber) === normalizedTarget,
     );
 
     return entry?.articleNumber;

@@ -29,6 +29,7 @@ export {
   buildArticleReferenceKey,
   buildLawArticleUrl,
   hasReferenceValue,
+  normalizeArticleNumberForLookup,
   parseArticleReferenceKey,
 } from "./references";
 export { computeArticleFingerprint } from "./article-fingerprint";

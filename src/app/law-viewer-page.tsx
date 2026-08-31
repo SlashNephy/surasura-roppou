@@ -11,7 +11,11 @@ import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router"
 import { CircleCheck, Clipboard, Download, LinkIcon, ListTree } from "lucide-react";
 
 import type { HighlightColor, LawNode, LawRevision } from "@/core/domain";
-import { buildLawArticleUrl, computeArticleFingerprint } from "@/core/domain";
+import {
+  buildLawArticleUrl,
+  computeArticleFingerprint,
+  normalizeArticleNumberForLookup,
+} from "@/core/domain";
 import { createEgovLawRepository } from "@/core/egov";
 import type { LawRepository } from "@/core/egov";
 import { resolveAsOf } from "@/core/settings";
@@ -527,20 +531,24 @@ const LawViewerReadyState = ({
   );
 
   const tocItems = useMemo(() => buildLawTableOfContents(state.nodes), [state.nodes]);
-  const articleNumbers = useMemo(() => new Set(collectTocArticleNumbers(tocItems)), [tocItems]);
   const articleNumberByNormalizedInput = useMemo(
     () =>
       new Map(
         collectTocArticleNumbers(tocItems).map((articleNumber) => [
-          normalizeArticleNumberInput(articleNumber),
+          normalizeArticleNumberForLookup(articleNumber),
           articleNumber,
         ]),
       ),
     [tocItems],
   );
-  const isRouteArticleKnown =
-    routeArticleNumber === undefined || articleNumbers.has(routeArticleNumber);
-  const activeArticleNumber = isRouteArticleKnown ? routeArticleNumber : undefined;
+  // ルートの条番号は枝番の区切りが法令側の正準表記と割れることがある（他法令からの
+  // リンクは参照パーサーの表記でハイフン連結になる）。正規化して引き当て、以降は
+  // 法令側の正準表記だけを使う。アンカー id・スクロール・保存の基準が揃う。
+  const activeArticleNumber =
+    routeArticleNumber === undefined
+      ? undefined
+      : articleNumberByNormalizedInput.get(normalizeArticleNumberForLookup(routeArticleNumber));
+  const isRouteArticleKnown = routeArticleNumber === undefined || activeArticleNumber !== undefined;
 
   // 選択条が変わったらモバイルの「この条文」シートを閉じる。条→条の直接遷移でも、
   // 前の条のつもりで開いたシートが別の条の操作に化けたまま残るのを防ぐ（誤操作回避）。
@@ -742,7 +750,7 @@ const LawViewerReadyState = ({
   const handleJumpSubmit = (event: SyntheticEvent<HTMLFormElement, SubmitEvent>) => {
     event.preventDefault();
 
-    const normalizedArticleNumber = normalizeArticleNumberInput(jumpArticleNumber);
+    const normalizedArticleNumber = normalizeArticleNumberForLookup(jumpArticleNumber);
     if (normalizedArticleNumber === "") {
       return;
     }
@@ -1340,9 +1348,6 @@ const formatBaseDatePrefix = (state: Extract<LawViewerState, { status: "ready" }
 // 解決版の施行日ラベル。未施行版など施行日が無い場合は「不明」にする。
 const formatEffectiveDateLabel = (revision: LawRevision): string =>
   !revision.effectiveDate ? "不明" : `${formatIsoDateLabel(revision.effectiveDate)} 版`;
-
-const normalizeArticleNumberInput = (articleNumber: string): string =>
-  articleNumber.normalize("NFKC").replace(/\s+/g, "");
 
 const getClipboard = (): Pick<Clipboard, "writeText"> | undefined =>
   (navigator as Navigator & { clipboard?: Pick<Clipboard, "writeText"> }).clipboard;
