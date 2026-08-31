@@ -2,6 +2,7 @@ import {
   createAliasResolver,
   deriveLawIdFromLawNumber,
   initialAliasDictionary,
+  lawNumberKey,
   parseLawNumber,
 } from "@/core/jump";
 import { normalizeForSearch } from "@/core/search";
@@ -52,6 +53,7 @@ const readLawNumberParenthesis = (
   text: string,
   matchStart: number,
   minIndex: number,
+  lawIdByLawNumber: ReadonlyMap<string, string> | undefined,
 ): LawNumberParenthesis | undefined => {
   if (matchStart <= minIndex || !closingBrackets.has(text[matchStart - 1])) {
     return undefined;
@@ -74,7 +76,7 @@ const readLawNumberParenthesis = (
       return undefined;
     }
 
-    const lawId = deriveLawIdFromLawNumber(parsed);
+    const lawId = deriveLawIdFromLawNumber(parsed) ?? lawIdByLawNumber?.get(lawNumberKey(parsed));
 
     return { startIndex: index, ...(lawId === undefined ? {} : { lawId }) };
   }
@@ -133,8 +135,9 @@ export const detectCrossLawSpan = (
   text: string,
   matchStart: number,
   minIndex: number,
+  lawIdByLawNumber?: ReadonlyMap<string, string>,
 ): CrossLawSpan | undefined => {
-  const parenthesis = readLawNumberParenthesis(text, matchStart, minIndex);
+  const parenthesis = readLawNumberParenthesis(text, matchStart, minIndex, lawIdByLawNumber);
   const nameEnd = parenthesis?.startIndex ?? matchStart;
   const dictionary = readDictionaryLawName(text, nameEnd, minIndex);
 

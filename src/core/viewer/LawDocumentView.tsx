@@ -17,6 +17,9 @@ interface LawDocumentViewProps {
   nodes: LawNode[];
   activeArticleNumber?: string;
   displayMode?: LawTextDisplayMode;
+  // 法令番号キー → lawId。法律の lawId は法令番号から導出できないため、
+  // 前段で非同期に解決した結果をここから引く。
+  lawIdByLawNumber?: ReadonlyMap<string, string>;
   onSelectArticle?: (articleNumber: string) => void;
   onSelectCrossLawArticle?: (target: CrossLawArticleTarget) => void;
   renderArticleActions?: (article: LawNode) => ReactNode;
@@ -25,6 +28,7 @@ interface LawDocumentViewProps {
 export const LawDocumentView = ({
   activeArticleNumber,
   displayMode = "readable",
+  lawIdByLawNumber,
   onSelectArticle,
   onSelectCrossLawArticle,
   renderArticleActions,
@@ -79,6 +83,7 @@ export const LawDocumentView = ({
         activeArticleNumber={activeArticleNumber}
         displayMode={displayMode}
         lawId={law.lawId}
+        lawIdByLawNumber={lawIdByLawNumber}
         nodes={nodes}
         onSelectArticle={onSelectArticle}
         onSelectCrossLawArticle={onSelectCrossLawArticle}

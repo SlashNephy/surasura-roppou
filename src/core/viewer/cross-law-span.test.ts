@@ -4,8 +4,12 @@ import { detectCrossLawSpan } from "./cross-law-span";
 
 // 位置表現の開始位置を目印の文字列から求めるヘルパー。
 // テストの意図（どの位置表現の直前を見ているか）を読みやすくする。
-const detect = (text: string, marker: string, minIndex = 0) =>
-  detectCrossLawSpan(text, text.indexOf(marker), minIndex);
+const detect = (
+  text: string,
+  marker: string,
+  minIndex = 0,
+  lawIdByLawNumber?: ReadonlyMap<string, string>,
+) => detectCrossLawSpan(text, text.indexOf(marker), minIndex, lawIdByLawNumber);
 
 describe("detectCrossLawSpan", () => {
   it.each([
@@ -107,5 +111,22 @@ describe("detectCrossLawSpan", () => {
     },
   ])("$name", ({ marker, text }) => {
     expect(detect(text, marker)).toBeUndefined();
+  });
+});
+
+describe("detectCrossLawSpan with resolved law numbers", () => {
+  // 法律の lawId は提出区分を含むため法令番号から導出できない。解決済みの対応表から引く。
+  const lawIdByLawNumber = new Map([["Heisei/11/法律/156", "411AC0000000156"]]);
+
+  it("resolves an act through the resolved law number map", () => {
+    expect(
+      detect("原子力災害対策特別措置法（平成11年法律第156号）第2条", "第2条", 0, lawIdByLawNumber),
+    ).toEqual({ startIndex: 0, lawId: "411AC0000000156" });
+  });
+
+  it("keeps an act unresolved when the map has no entry", () => {
+    expect(
+      detect("不正競争防止法（平成5年法律第47号）第2条", "第2条", 0, lawIdByLawNumber),
+    ).toEqual({ startIndex: 0 });
   });
 });
