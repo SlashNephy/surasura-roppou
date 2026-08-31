@@ -325,7 +325,7 @@ export const segmentReferenceLinks = (
     const sameLevel = sameReferenceLevels.get(match[0].slice(0, sameMarkerLength));
 
     if (sameLevel !== undefined) {
-      const sameTarget = resolveSameReferenceTarget(match[0], antecedents, context);
+      const sameTarget = resolveSameReferenceTarget(match[0], sameLevel, antecedents, context);
       const base = antecedents[sameLevel];
 
       // 条を名指しする同参照（同法・同条）は、後続の裸の項参照の基準になる。
@@ -586,15 +586,10 @@ const buildCaption = (
 // 同参照を先行詞から解決する。先行詞が無い、または解決できなかった参照なら undefined。
 const resolveSameReferenceTarget = (
   rawText: string,
+  level: SameReferenceLevel,
   antecedents: ReferenceAntecedents,
   context: ArticleLinkContext,
 ): ReferenceLinkTarget | undefined => {
-  const level = sameReferenceLevels.get(rawText.slice(0, sameMarkerLength));
-
-  if (level === undefined) {
-    return undefined;
-  }
-
   const base = antecedents[level];
 
   if (!base?.resolved) {
