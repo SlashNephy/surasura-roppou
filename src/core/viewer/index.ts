@@ -1,5 +1,6 @@
 export { LawDocumentView } from "./LawDocumentView";
 export { LawNodeList } from "./LawNodeList";
+export type { CrossLawArticleTarget } from "./LawNodeList";
 export { LawTableOfContents } from "./LawTableOfContents";
 export { buildArticleCopyText } from "./article-copy";
 export {

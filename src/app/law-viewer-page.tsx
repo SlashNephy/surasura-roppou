@@ -46,7 +46,7 @@ import {
   resolveNodeTextRange,
   toSourceOffset,
 } from "@/core/viewer";
-import type { LawTocItem } from "@/core/viewer";
+import type { CrossLawArticleTarget, LawTocItem } from "@/core/viewer";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/shared/ui/sheet";
@@ -654,6 +654,18 @@ const LawViewerReadyState = ({
     scrollToArticle(activeArticleNumber);
   }, [activeArticleNumber, hasRestoredReadingPosition, mountedArticleNumber]);
 
+  // 他法令の条へは lawId ごと差し替えて遷移する。全ページ遷移ではなく SPA 内遷移にする。
+  const navigateToCrossLawArticle = (target: CrossLawArticleTarget) => {
+    setHasJumpError(false);
+    setIsMobileTocOpen(false);
+
+    void navigate({
+      to: "/laws/$lawId/articles/$article",
+      params: { lawId: target.lawId, article: target.articleNumber },
+      search: {},
+    });
+  };
+
   const navigateToArticle = (articleNumber: string) => {
     setHasJumpError(false);
     setIsMobileTocOpen(false);
@@ -979,6 +991,7 @@ const LawViewerReadyState = ({
               law={state.law}
               nodes={state.nodes}
               onSelectArticle={navigateToArticle}
+              onSelectCrossLawArticle={navigateToCrossLawArticle}
               renderArticleActions={(article) => (
                 <ArticleQuickActions
                   article={article}

@@ -689,6 +689,31 @@ describe("LawNodeList", () => {
       );
     });
 
+    it("navigates through the cross law callback instead of following the href", async () => {
+      const onSelectCrossLawArticle = vi.fn();
+      const crossLawNodes: LawNode[] = referenceNodes.map((existing) =>
+        existing.id === "article:16/paragraph:1"
+          ? { ...existing, plainText: "商法第15条第2項の規定による。", rawText: "" }
+          : existing,
+      );
+
+      render(
+        <LawNodeList
+          lawId="129AC0000000089"
+          nodes={crossLawNodes}
+          onSelectCrossLawArticle={onSelectCrossLawArticle}
+        />,
+      );
+
+      await userEvent.click(screen.getByRole("link", { name: "商法第15条第2項" }));
+
+      expect(onSelectCrossLawArticle).toHaveBeenCalledWith({
+        lawId: "132AC0000000048",
+        articleNumber: "15",
+        paragraphNumber: "2",
+      });
+    });
+
     it("does not intercept a cross law link with the article callback", async () => {
       const onSelectArticle = vi.fn();
       const crossLawNodes: LawNode[] = referenceNodes.map((existing) =>
