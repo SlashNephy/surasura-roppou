@@ -1242,7 +1242,7 @@ describe("segmentReferenceLinks with resolved law numbers", () => {
       .filter((segment) => segment.kind === "link")
       .map((segment) => segment.text);
 
-  const lawIdByLawNumber = new Map([["Heisei/11/法律/156", "411AC0000000156"]]);
+  const lawByLawNumber = new Map([["Heisei/11/法律/156", { lawId: "411AC0000000156" }]]);
 
   it("links an act once its law number is resolved", () => {
     expect(
@@ -1250,7 +1250,7 @@ describe("segmentReferenceLinks with resolved law numbers", () => {
         articles,
         headings,
         currentArticleNumber: "16",
-        lawIdByLawNumber,
+        lawByLawNumber,
       }).filter((segment) => segment.kind === "link"),
     ).toEqual([
       {

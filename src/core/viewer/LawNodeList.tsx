@@ -6,6 +6,7 @@ import {
   type LawNodeType,
   type RubyAnnotation,
 } from "@/core/domain";
+import type { ResolvedLawNumber } from "@/core/jump";
 import { cn } from "@/shared/utils/cn";
 
 import {
@@ -36,9 +37,9 @@ interface LawNodeListProps {
   nodes: LawNode[];
   activeArticleNumber?: string;
   displayMode?: LawTextDisplayMode;
-  // 法令番号キー → lawId。法律の lawId は法令番号から導出できないため、
-  // 前段で非同期に解決した結果をここから引く。
-  lawIdByLawNumber?: ReadonlyMap<string, string>;
+  // 法令番号キー → 引き当てた法令。法律の lawId は法令番号から導出できないため、
+  // 前段で非同期に解決した結果をここから引く。正式名称は下線の左境界に使う。
+  lawByLawNumber?: ReadonlyMap<string, ResolvedLawNumber>;
   onSelectArticle?: (articleNumber: string) => void;
   onSelectCrossLawArticle?: (target: CrossLawArticleTarget) => void;
   renderArticleActions?: (article: LawNode) => ReactNode;
@@ -82,7 +83,7 @@ export const LawNodeList = ({
   activeArticleNumber,
   displayMode = "readable",
   lawId,
-  lawIdByLawNumber,
+  lawByLawNumber,
   nodes,
   onSelectArticle,
   onSelectCrossLawArticle,
@@ -98,7 +99,7 @@ export const LawNodeList = ({
       displayMode,
       headings,
       lawId,
-      lawIdByLawNumber,
+      lawByLawNumber,
       onSelectArticle,
       onSelectCrossLawArticle,
     }),
@@ -107,7 +108,7 @@ export const LawNodeList = ({
       displayMode,
       headings,
       lawId,
-      lawIdByLawNumber,
+      lawByLawNumber,
       onSelectArticle,
       onSelectCrossLawArticle,
     ],
@@ -560,7 +561,7 @@ interface LinkingOptions {
   displayMode: LawTextDisplayMode;
   headings: ArticleLinkContext["headings"];
   lawId: string;
-  lawIdByLawNumber: ReadonlyMap<string, string> | undefined;
+  lawByLawNumber: ReadonlyMap<string, ResolvedLawNumber> | undefined;
   onSelectArticle: ((articleNumber: string) => void) | undefined;
   onSelectCrossLawArticle: ((target: CrossLawArticleTarget) => void) | undefined;
 }
@@ -588,9 +589,7 @@ const renderLinkedText = (
   const segments = segmentReferenceLinks(text, {
     articles: linking.articles,
     headings: linking.headings,
-    ...(linking.lawIdByLawNumber === undefined
-      ? {}
-      : { lawIdByLawNumber: linking.lawIdByLawNumber }),
+    ...(linking.lawByLawNumber === undefined ? {} : { lawByLawNumber: linking.lawByLawNumber }),
     ...(position.partNumber === undefined ? {} : { currentPartNumber: position.partNumber }),
     ...(position.chapterNumber === undefined
       ? {}

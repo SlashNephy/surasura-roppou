@@ -1,5 +1,5 @@
 import type { LawNode } from "@/core/domain";
-import type { LawNumberResolver } from "@/core/jump";
+import type { LawNumberResolver, ResolvedLawNumber } from "@/core/jump";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -17,13 +17,14 @@ const node = (id: string, plainText: string): LawNode => ({
 });
 
 const resolverOf = (
-  byKey: Record<string, string>,
+  lawIdByKey: Record<string, string | undefined>,
 ): { resolver: LawNumberResolver; resolve: ReturnType<typeof vi.fn> } => {
-  const resolve = vi.fn((parsed: { era: string; year: number; type: string; number: number }) =>
-    Promise.resolve(
-      byKey[`${parsed.era}/${String(parsed.year)}/${parsed.type}/${String(parsed.number)}`],
-    ),
-  );
+  const resolve = vi.fn((parsed: { era: string; year: number; type: string; number: number }) => {
+    const lawId =
+      lawIdByKey[`${parsed.era}/${String(parsed.year)}/${parsed.type}/${String(parsed.number)}`];
+
+    return Promise.resolve(lawId === undefined ? undefined : { lawId });
+  });
 
   return { resolver: { resolve }, resolve };
 };
@@ -35,9 +36,9 @@ const deferredResolverOf = (): {
   settle: (key: string, lawId: string) => void;
   pendingKeys: () => string[];
 } => {
-  const pending = new Map<string, (lawId: string | undefined) => void>();
+  const pending = new Map<string, (law: ResolvedLawNumber | undefined) => void>();
   const resolve = (parsed: { era: string; year: number; type: string; number: number }) =>
-    new Promise<string | undefined>((settleOne) => {
+    new Promise<ResolvedLawNumber | undefined>((settleOne) => {
       pending.set(
         `${parsed.era}/${String(parsed.year)}/${parsed.type}/${String(parsed.number)}`,
         settleOne,
@@ -53,7 +54,7 @@ const deferredResolverOf = (): {
         throw new Error(`no pending resolution for ${key}`);
       }
 
-      settleOne(lawId);
+      settleOne({ lawId });
     },
     pendingKeys: () => [...pending.keys()],
   };
@@ -70,7 +71,7 @@ describe("useCrossLawNumbers", () => {
     const { result } = renderHook(() => useCrossLawNumbers(nodes, resolver));
 
     await waitFor(() => {
-      expect(result.current.get("Heisei/11/法律/156")).toBe("411AC0000000156");
+      expect(result.current.get("Heisei/11/法律/156")).toEqual({ lawId: "411AC0000000156" });
     });
     // 同じ法令番号が 2 回現れても解決は 1 回。
     expect(resolve).toHaveBeenCalledTimes(1);
@@ -147,7 +148,7 @@ describe("useCrossLawNumbers", () => {
       expect(pendingKeys()).toContain("Showa/25/法律/131");
     });
     await settleAndFlush("Showa/25/法律/131", "325AC0000000131");
-    expect(result.current.get("Showa/25/法律/131")).toBe("325AC0000000131");
+    expect(result.current.get("Showa/25/法律/131")).toEqual({ lawId: "325AC0000000131" });
     expect(result.current.size).toBe(1);
   });
 
@@ -168,7 +169,7 @@ describe("useCrossLawNumbers", () => {
     });
 
     await waitFor(() => {
-      expect(result.current.get("Heisei/11/法律/156")).toBe("411AC0000000156");
+      expect(result.current.get("Heisei/11/法律/156")).toEqual({ lawId: "411AC0000000156" });
     });
 
     // 輪になっていれば、対応表が埋まった後もここで際限なく描画が積み増される。

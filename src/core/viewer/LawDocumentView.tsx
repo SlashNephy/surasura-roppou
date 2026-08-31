@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import type { Law, LawNode, LawRevision } from "@/core/domain";
+import type { ResolvedLawNumber } from "@/core/jump";
 import { Badge } from "@/shared/ui/badge";
 import { cn } from "@/shared/utils/cn";
 import { formatIsoDateLabel } from "@/shared/utils/dates";
@@ -17,9 +18,9 @@ interface LawDocumentViewProps {
   nodes: LawNode[];
   activeArticleNumber?: string;
   displayMode?: LawTextDisplayMode;
-  // 法令番号キー → lawId。法律の lawId は法令番号から導出できないため、
-  // 前段で非同期に解決した結果をここから引く。
-  lawIdByLawNumber?: ReadonlyMap<string, string>;
+  // 法令番号キー → 引き当てた法令。法律の lawId は法令番号から導出できないため、
+  // 前段で非同期に解決した結果をここから引く。正式名称は下線の左境界に使う。
+  lawByLawNumber?: ReadonlyMap<string, ResolvedLawNumber>;
   onSelectArticle?: (articleNumber: string) => void;
   onSelectCrossLawArticle?: (target: CrossLawArticleTarget) => void;
   renderArticleActions?: (article: LawNode) => ReactNode;
@@ -28,7 +29,7 @@ interface LawDocumentViewProps {
 export const LawDocumentView = ({
   activeArticleNumber,
   displayMode = "readable",
-  lawIdByLawNumber,
+  lawByLawNumber,
   onSelectArticle,
   onSelectCrossLawArticle,
   renderArticleActions,
@@ -83,7 +84,7 @@ export const LawDocumentView = ({
         activeArticleNumber={activeArticleNumber}
         displayMode={displayMode}
         lawId={law.lawId}
-        lawIdByLawNumber={lawIdByLawNumber}
+        lawByLawNumber={lawByLawNumber}
         nodes={nodes}
         onSelectArticle={onSelectArticle}
         onSelectCrossLawArticle={onSelectCrossLawArticle}

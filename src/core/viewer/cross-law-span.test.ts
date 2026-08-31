@@ -1,3 +1,4 @@
+import type { ResolvedLawNumber } from "@/core/jump";
 import { describe, expect, it } from "vitest";
 
 import { detectCrossLawSpan } from "./cross-law-span";
@@ -8,8 +9,8 @@ const detect = (
   text: string,
   marker: string,
   minIndex = 0,
-  lawIdByLawNumber?: ReadonlyMap<string, string>,
-) => detectCrossLawSpan(text, text.indexOf(marker), minIndex, lawIdByLawNumber);
+  lawByLawNumber?: ReadonlyMap<string, ResolvedLawNumber>,
+) => detectCrossLawSpan(text, text.indexOf(marker), minIndex, lawByLawNumber);
 
 describe("detectCrossLawSpan", () => {
   it.each([
@@ -116,11 +117,11 @@ describe("detectCrossLawSpan", () => {
 
 describe("detectCrossLawSpan with resolved law numbers", () => {
   // 法律の lawId は提出区分を含むため法令番号から導出できない。解決済みの対応表から引く。
-  const lawIdByLawNumber = new Map([["Heisei/11/法律/156", "411AC0000000156"]]);
+  const lawByLawNumber = new Map([["Heisei/11/法律/156", { lawId: "411AC0000000156" }]]);
 
   it("resolves an act through the resolved law number map", () => {
     expect(
-      detect("原子力災害対策特別措置法（平成11年法律第156号）第2条", "第2条", 0, lawIdByLawNumber),
+      detect("原子力災害対策特別措置法（平成11年法律第156号）第2条", "第2条", 0, lawByLawNumber),
     ).toEqual({ startIndex: 0, lawId: "411AC0000000156" });
   });
 
@@ -132,14 +133,14 @@ describe("detectCrossLawSpan with resolved law numbers", () => {
         "災害対策基本法第3条第7号に規定する防災計画及び原子力災害対策特別措置法（平成11年法律第156号）第2条",
         "第2条",
         0,
-        lawIdByLawNumber,
+        lawByLawNumber,
       )?.lawId,
     ).toBe("411AC0000000156");
   });
 
   it("keeps an act unresolved when the map has no entry", () => {
-    expect(
-      detect("不正競争防止法（平成5年法律第47号）第2条", "第2条", 0, lawIdByLawNumber),
-    ).toEqual({ startIndex: 0 });
+    expect(detect("不正競争防止法（平成5年法律第47号）第2条", "第2条", 0, lawByLawNumber)).toEqual({
+      startIndex: 0,
+    });
   });
 });

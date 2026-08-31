@@ -784,7 +784,7 @@ describe("LawNodeList", () => {
       render(
         <LawNodeList
           lawId="129AC0000000089"
-          lawIdByLawNumber={new Map([["Heisei/11/法律/156", "411AC0000000156"]])}
+          lawByLawNumber={new Map([["Heisei/11/法律/156", { lawId: "411AC0000000156" }]])}
           nodes={actNodes}
         />,
       );
