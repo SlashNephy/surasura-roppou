@@ -36,5 +36,12 @@ export {
   referenceArticleSpanPattern,
   referencePositionPatternSource,
 } from "./reference-pattern";
-export { deriveLawIdFromLawNumber, parseLawNumber } from "./law-number";
+export {
+  deriveLawIdFromLawNumber,
+  lawNumberKey,
+  lawNumberTypeCode,
+  parseLawNumber,
+} from "./law-number";
 export type { LawNumberEra, ParsedLawNumber } from "./law-number";
+export { createLawNumberResolver } from "./law-number-resolver";
+export type { LawNumberResolver, LawNumberResolverDependencies } from "./law-number-resolver";

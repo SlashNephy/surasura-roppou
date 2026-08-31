@@ -17,6 +17,11 @@ export interface EgovLawRepositoryOptions {
 export interface LawListQuery {
   lawId?: string;
   lawNumber?: string;
+  // 法令番号を構造化して渡す。law_num の完全一致と違い、表記の揺れを気にせず一意に引ける。
+  lawNumberEra?: string;
+  lawNumberYear?: number;
+  lawNumberType?: string;
+  lawNumberNumber?: number;
   title?: string;
   lawTypes?: string[];
   asOf?: string;
@@ -138,6 +143,10 @@ export const createEgovLawRepository = (options: EgovLawRepositoryOptions = {}):
         {
           law_id: query.lawId,
           law_num: query.lawNumber,
+          law_num_era: query.lawNumberEra,
+          law_num_year: query.lawNumberYear,
+          law_num_type: query.lawNumberType,
+          law_num_num: query.lawNumberNumber,
           law_title: query.title,
           law_type: query.lawTypes,
           asof: query.asOf,

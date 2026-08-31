@@ -18,6 +18,7 @@ import {
 } from "@/core/domain";
 import { createEgovLawRepository } from "@/core/egov";
 import type { LawRepository } from "@/core/egov";
+import type { LawNumberResolver } from "@/core/jump";
 import { resolveAsOf } from "@/core/settings";
 import {
   createSavedLawUseCase,
@@ -61,11 +62,13 @@ import { QuizGenerateDialog } from "./QuizGenerateDialog";
 import { StudyCardCreateDialog } from "./StudyCardCreateDialog";
 import { AnchorDriftBadge } from "./AnchorDriftBadge";
 import { useDocumentTitle } from "./document-title";
+import { defaultLawNumberResolver } from "./law-number-resolver";
 import { loadLawViewerDocument } from "./law-viewer-loader";
 import { useRestoredReadingPosition } from "./scroll-restoration";
 import { useSavedViewerState } from "./law-viewer-hooks";
 import type { LawViewerDocument } from "./law-viewer-sample";
 import { useAnchorVerification } from "./use-anchor-verification";
+import { useCrossLawNumbers } from "./use-cross-law-numbers";
 import { useArticleHighlights } from "./use-article-highlights";
 import { useHighlightPainting } from "./use-highlight-painting";
 import { useBaseDate } from "./use-base-date";
@@ -100,11 +103,13 @@ const useLawViewerParams = () => {
 };
 
 interface LawViewerPageProps {
+  lawNumberResolver?: LawNumberResolver;
   repository?: LawRepository;
   storageRepository?: StorageRepository;
 }
 
 export const LawViewerPage = ({
+  lawNumberResolver,
   repository,
   storageRepository = defaultStorageRepository,
 }: LawViewerPageProps = {}) => {
@@ -118,6 +123,7 @@ export const LawViewerPage = ({
       activeArticleNumber={article}
       asOf={asOf}
       lawId={lawId}
+      lawNumberResolver={lawNumberResolver}
       repository={repository}
       storageRepository={storageRepository}
     />
@@ -128,12 +134,14 @@ const LawViewerPageLoader = ({
   activeArticleNumber,
   asOf,
   lawId,
+  lawNumberResolver,
   repository,
   storageRepository,
 }: {
   activeArticleNumber?: string;
   asOf?: string;
   lawId: string;
+  lawNumberResolver?: LawNumberResolver;
   repository?: LawRepository;
   storageRepository: StorageRepository;
 }) => {
@@ -188,6 +196,7 @@ const LawViewerPageLoader = ({
     <LawViewerPageContent
       activeArticleNumber={activeArticleNumber}
       lawId={lawId}
+      lawNumberResolver={lawNumberResolver}
       repository={repository}
       savedLawUseCase={savedLawUseCase}
       state={state}
@@ -199,6 +208,7 @@ const LawViewerPageLoader = ({
 export const LawViewerPageContent = ({
   activeArticleNumber,
   lawId = "",
+  lawNumberResolver,
   repository,
   savedLawUseCase,
   state,
@@ -206,6 +216,7 @@ export const LawViewerPageContent = ({
 }: {
   activeArticleNumber?: string;
   lawId?: string;
+  lawNumberResolver?: LawNumberResolver;
   repository?: LawRepository;
   savedLawUseCase: SavedLawUseCase;
   state: LawViewerState;
@@ -227,6 +238,7 @@ export const LawViewerPageContent = ({
           key={`${state.law.lawId}:${state.revision.revisionId}:${String(state.loadedFromStorage)}`}
           activeArticleNumber={activeArticleNumber}
           lawId={lawId}
+          lawNumberResolver={lawNumberResolver}
           repository={repository}
           savedLawUseCase={savedLawUseCase}
           state={state}
@@ -267,6 +279,7 @@ const findArticleNumberForNode = (nodes: LawNode[], lawNodeId: string): string |
 const LawViewerReadyState = ({
   activeArticleNumber: routeArticleNumber,
   lawId,
+  lawNumberResolver,
   repository,
   savedLawUseCase,
   state: baseState,
@@ -274,6 +287,7 @@ const LawViewerReadyState = ({
 }: {
   activeArticleNumber?: string;
   lawId: string;
+  lawNumberResolver?: LawNumberResolver;
   repository?: LawRepository;
   savedLawUseCase: SavedLawUseCase;
   state: Extract<LawViewerState, { status: "ready" }>;
@@ -298,6 +312,7 @@ const LawViewerReadyState = ({
   // putBookmark はフックの deps を変化させないため、このトークンで再読込を明示的に促す。
   const [anchorRefreshToken, setAnchorRefreshToken] = useState(0);
   const resolvedRepository = repository ?? defaultLawRepository;
+  const resolvedLawNumberResolver = lawNumberResolver ?? defaultLawNumberResolver;
 
   // アクティブ条のアンカー（指紋付きブックマーク）を基準日解決の本文に対して検証する。
   // pinned 判定はこの検証結果のブックマークから得るため、検証は基準日解決版に対して行う。
@@ -533,6 +548,8 @@ const LawViewerReadyState = ({
   );
 
   const tocItems = useMemo(() => buildLawTableOfContents(state.nodes), [state.nodes]);
+  // 本文中の法令番号を裏で解決し、解決できたものから他法令リンクへ回す。
+  const lawIdByLawNumber = useCrossLawNumbers(state.nodes, resolvedLawNumberResolver);
   const articleNumberByNormalizedInput = useMemo(
     () =>
       new Map(
@@ -1020,6 +1037,7 @@ const LawViewerReadyState = ({
               activeArticleNumber={activeArticleNumber}
               displayMode={displayMode}
               law={state.law}
+              lawIdByLawNumber={lawIdByLawNumber}
               nodes={state.nodes}
               onSelectArticle={navigateToArticle}
               onSelectCrossLawArticle={navigateToCrossLawArticle}

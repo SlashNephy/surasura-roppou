@@ -770,6 +770,32 @@ describe("LawNodeList", () => {
       expect(onSelectArticle).not.toHaveBeenCalled();
     });
 
+    it("links an act through the resolved law number map", () => {
+      const actNodes: LawNode[] = referenceNodes.map((existing) =>
+        existing.id === "article:16/paragraph:1"
+          ? {
+              ...existing,
+              plainText: "原子力災害対策特別措置法（平成11年法律第156号）第2条の規定による。",
+              rawText: "",
+            }
+          : existing,
+      );
+
+      render(
+        <LawNodeList
+          lawId="129AC0000000089"
+          lawIdByLawNumber={new Map([["Heisei/11/法律/156", "411AC0000000156"]])}
+          nodes={actNodes}
+        />,
+      );
+
+      expect(
+        screen.getByRole("link", {
+          name: "原子力災害対策特別措置法（平成11年法律第156号）第2条",
+        }),
+      ).toHaveAttribute("href", "/laws/411AC0000000156/articles/2");
+    });
+
     it("renders a same article paragraph reference as an in-page link", () => {
       render(<LawNodeList lawId="129AC0000000089" nodes={referenceNodes} />);
 

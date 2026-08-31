@@ -2,6 +2,7 @@ import {
   createAliasResolver,
   deriveLawIdFromLawNumber,
   initialAliasDictionary,
+  lawNumberKey,
   parseLawNumber,
 } from "@/core/jump";
 import { normalizeForSearch } from "@/core/search";
@@ -41,6 +42,11 @@ const leadingCoordinationPattern = /^(?:及び|並びに|又は|若しくは|、
 
 const hanPattern = /\p{Script=Han}/u;
 
+// 位置表現の末尾になる文字。左スキャンはここで止まるため、法令名の直前にこれらが
+// あるのは「直前に別の参照がある」だけで、「旧民法」のような接頭辞ではない。
+// 漢字ガードの対象から外さないと、参照が連続する条文でリンクを取りこぼす。
+const positionTerminators = new Set(["条", "項", "号", "編", "章", "第"]);
+
 interface LawNumberParenthesis {
   startIndex: number;
   lawId?: string;
@@ -52,6 +58,7 @@ const readLawNumberParenthesis = (
   text: string,
   matchStart: number,
   minIndex: number,
+  lawIdByLawNumber: ReadonlyMap<string, string> | undefined,
 ): LawNumberParenthesis | undefined => {
   if (matchStart <= minIndex || !closingBrackets.has(text[matchStart - 1])) {
     return undefined;
@@ -74,7 +81,7 @@ const readLawNumberParenthesis = (
       return undefined;
     }
 
-    const lawId = deriveLawIdFromLawNumber(parsed);
+    const lawId = deriveLawIdFromLawNumber(parsed) ?? lawIdByLawNumber?.get(lawNumberKey(parsed));
 
     return { startIndex: index, ...(lawId === undefined ? {} : { lawId }) };
   }
@@ -133,8 +140,9 @@ export const detectCrossLawSpan = (
   text: string,
   matchStart: number,
   minIndex: number,
+  lawIdByLawNumber?: ReadonlyMap<string, string>,
 ): CrossLawSpan | undefined => {
-  const parenthesis = readLawNumberParenthesis(text, matchStart, minIndex);
+  const parenthesis = readLawNumberParenthesis(text, matchStart, minIndex, lawIdByLawNumber);
   const nameEnd = parenthesis?.startIndex ?? matchStart;
   const dictionary = readDictionaryLawName(text, nameEnd, minIndex);
 
@@ -148,7 +156,12 @@ export const detectCrossLawSpan = (
 
   // 「旧民法」「新会社法」のように法令名の直前が漢字なら、現行法とは別の法令を
   // 指している可能性が高い。宛先を伏せて無リンクにする。
-  if (startIndex > 0 && hanPattern.test(text[startIndex - 1])) {
+  // ただし直前が位置表現の末尾なら、それは別の参照の終わりであって接頭辞ではない。
+  if (
+    startIndex > 0 &&
+    !positionTerminators.has(text[startIndex - 1]) &&
+    hanPattern.test(text[startIndex - 1])
+  ) {
     return { startIndex };
   }
 

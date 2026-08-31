@@ -1232,3 +1232,40 @@ describe("segmentReferenceLinks for 同 references", () => {
     expect(linkTexts(text, { currentArticleNumber: "4" })).toEqual(expected);
   });
 });
+
+describe("segmentReferenceLinks with resolved law numbers", () => {
+  const articles = buildArticleLinkEntries(lawNodes);
+  const headings = buildHeadingLinkEntries(lawNodes);
+
+  const linkTexts = (text: string, context: Partial<ArticleLinkContext> = {}) =>
+    segmentReferenceLinks(text, { articles, headings, ...context })
+      .filter((segment) => segment.kind === "link")
+      .map((segment) => segment.text);
+
+  const lawIdByLawNumber = new Map([["Heisei/11/法律/156", "411AC0000000156"]]);
+
+  it("links an act once its law number is resolved", () => {
+    expect(
+      segmentReferenceLinks("原子力災害対策特別措置法（平成11年法律第156号）第2条の規定", {
+        articles,
+        headings,
+        currentArticleNumber: "16",
+        lawIdByLawNumber,
+      }).filter((segment) => segment.kind === "link"),
+    ).toEqual([
+      {
+        kind: "link",
+        text: "原子力災害対策特別措置法（平成11年法律第156号）第2条",
+        target: { kind: "article", lawId: "411AC0000000156", articleNumber: "2" },
+      },
+    ]);
+  });
+
+  it("keeps the act unlinked without the resolved law number", () => {
+    expect(
+      linkTexts("原子力災害対策特別措置法（平成11年法律第156号）第2条の規定", {
+        currentArticleNumber: "16",
+      }),
+    ).toEqual([]);
+  });
+});

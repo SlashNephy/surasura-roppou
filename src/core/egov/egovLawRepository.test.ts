@@ -261,4 +261,21 @@ describe("EgovLawRepository", () => {
 
     expect(receivedSignal).toBe(controller.signal);
   });
+
+  it("sends the structured law number query", async () => {
+    const { calls, fetcher } = createJsonFetchStub(lawsFixture);
+    const repository = createEgovLawRepository({ fetcher, now });
+
+    await repository.listLaws({
+      lawNumberEra: "Showa",
+      lawNumberYear: 32,
+      lawNumberType: "Act",
+      lawNumberNumber: 166,
+      limit: 1,
+    });
+
+    expect(calls[0]?.input).toBe(
+      "https://laws.e-gov.go.jp/api/2/laws?law_num_era=Showa&law_num_year=32&law_num_type=Act&law_num_num=166&limit=1&response_format=json",
+    );
+  });
 });

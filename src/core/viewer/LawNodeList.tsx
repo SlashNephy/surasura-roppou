@@ -36,6 +36,9 @@ interface LawNodeListProps {
   nodes: LawNode[];
   activeArticleNumber?: string;
   displayMode?: LawTextDisplayMode;
+  // 法令番号キー → lawId。法律の lawId は法令番号から導出できないため、
+  // 前段で非同期に解決した結果をここから引く。
+  lawIdByLawNumber?: ReadonlyMap<string, string>;
   onSelectArticle?: (articleNumber: string) => void;
   onSelectCrossLawArticle?: (target: CrossLawArticleTarget) => void;
   renderArticleActions?: (article: LawNode) => ReactNode;
@@ -79,6 +82,7 @@ export const LawNodeList = ({
   activeArticleNumber,
   displayMode = "readable",
   lawId,
+  lawIdByLawNumber,
   nodes,
   onSelectArticle,
   onSelectCrossLawArticle,
@@ -89,8 +93,24 @@ export const LawNodeList = ({
   const articles = useMemo(() => buildArticleLinkEntries(nodes), [nodes]);
   const headings = useMemo(() => buildHeadingLinkEntries(nodes), [nodes]);
   const linking = useMemo<LinkingOptions>(
-    () => ({ articles, displayMode, headings, lawId, onSelectArticle, onSelectCrossLawArticle }),
-    [articles, displayMode, headings, lawId, onSelectArticle, onSelectCrossLawArticle],
+    () => ({
+      articles,
+      displayMode,
+      headings,
+      lawId,
+      lawIdByLawNumber,
+      onSelectArticle,
+      onSelectCrossLawArticle,
+    }),
+    [
+      articles,
+      displayMode,
+      headings,
+      lawId,
+      lawIdByLawNumber,
+      onSelectArticle,
+      onSelectCrossLawArticle,
+    ],
   );
 
   return (
@@ -540,6 +560,7 @@ interface LinkingOptions {
   displayMode: LawTextDisplayMode;
   headings: ArticleLinkContext["headings"];
   lawId: string;
+  lawIdByLawNumber: ReadonlyMap<string, string> | undefined;
   onSelectArticle: ((articleNumber: string) => void) | undefined;
   onSelectCrossLawArticle: ((target: CrossLawArticleTarget) => void) | undefined;
 }
@@ -567,6 +588,9 @@ const renderLinkedText = (
   const segments = segmentReferenceLinks(text, {
     articles: linking.articles,
     headings: linking.headings,
+    ...(linking.lawIdByLawNumber === undefined
+      ? {}
+      : { lawIdByLawNumber: linking.lawIdByLawNumber }),
     ...(position.partNumber === undefined ? {} : { currentPartNumber: position.partNumber }),
     ...(position.chapterNumber === undefined
       ? {}
