@@ -63,6 +63,30 @@ describe("useAnchorVerification", () => {
     });
   });
 
+  it("枝番の区切りが違う条番号でもアンカー付きブックマークを引き当てる", async () => {
+    // ブックマークは法令側の正準表記（709の2）で保存されるが、他法令からのリンクで
+    // 開いたときのルートは参照パーサーの表記（709-2）になる。区切りだけの違いで
+    // ブックマークを見失ってはならない。
+    const branchNodes = [articleNode("709の2", "第七百九条の二 枝番の条。")];
+    const fingerprint = await computeArticleFingerprint("第七百九条の二 枝番の条。");
+    const storageRepository = storageWith([
+      bookmark({ lawId: "L", article: "709の2", revisionId: "R", fingerprint }),
+    ]);
+
+    const { result } = renderHook(() =>
+      useAnchorVerification({
+        lawId: "L",
+        article: "709-2",
+        nodes: branchNodes,
+        storageRepository,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current?.status).toBe("match");
+    });
+  });
+
   it("未アンカー（指紋なし）ブックマークは undefined（検証対象外）", async () => {
     const storageRepository = storageWith([bookmark({ lawId: "L", article: "1" })]);
 

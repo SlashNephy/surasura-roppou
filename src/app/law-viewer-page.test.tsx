@@ -1150,6 +1150,18 @@ describe("LawViewerPageContent", () => {
     expect(articleInput).toHaveAttribute("aria-invalid", "true");
   });
 
+  it("lands on a branch article whose route uses a different branch separator", async () => {
+    // ルートの「709-2」と法令側の正準表記「709の2」は枝番の区切りだけが違う。
+    // 他法令へのリンクは参照パーサーの表記（ハイフン連結）で URL を組み立てるため、
+    // 区切りが違っても着地できなければならない。
+    renderLawViewerContentRoute("/laws/custom-law/articles/709-2", nonNumericArticleState);
+
+    expect(await screen.findByRole("article", { name: "条番号テスト法" })).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    // 選択中の条は法令側の正準表記（709の2）で表示される。ルートのハイフン表記ではない。
+    expect(screen.getAllByText("第709の2条").length).toBeGreaterThan(0);
+  });
+
   it("keeps the law body visible and shows an alert for an unknown route article", async () => {
     renderLawViewerRoute("/laws/129AC0000000089/articles/999");
 

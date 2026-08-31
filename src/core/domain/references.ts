@@ -160,3 +160,11 @@ const decodeReferenceSegment = (value: string): string | undefined => {
 export const hasReferenceValue = (value: string | null | undefined): value is string => {
   return value !== undefined && value !== null && value !== "";
 };
+
+// 条番号の枝番区切りは、由来によって表記が割れる。e-Gov API の Num 属性は枝番を "_" で
+// 表記する（876_9）が、Num 属性を持たない条は title からフォールバックで抽出され "-" 連結に
+// なる（12-2）。本文中の「第876条の9」を読む reference-parser は常に "-" で連結する。
+// LawNode.number（アプリ正準表記）はアンカー id・URL・保存済みブックマークの基準になって
+// いるため変更できない。突き合わせのときだけ、ここで区切りと文字幅を揃える。
+export const normalizeArticleNumberForLookup = (articleNumber: string): string =>
+  articleNumber.normalize("NFKC").replace(/\s+/g, "").replaceAll("_", "-").replaceAll("の", "-");

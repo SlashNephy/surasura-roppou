@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import type { Bookmark, LawNode } from "@/core/domain";
-import { buildArticleReferenceKey } from "@/core/domain";
+import { buildArticleReferenceKey, normalizeArticleNumberForLookup } from "@/core/domain";
 import type { StorageRepository } from "@/core/storage";
 import type { AnchorStatus } from "@/core/viewer";
 import { verifyAnchor } from "@/core/viewer";
@@ -43,7 +43,12 @@ export const useAnchorVerification = ({
     let cancelled = false;
     // lawId・article のみで照合する key（revisionId は除く）。
     // アンカーはどのリビジョンで保存されていても、現在閲覧中の条と突き合わせる。
-    const targetKey = buildArticleReferenceKey({ lawId, article });
+    // 条番号は枝番の区切りが表記で割れるため（876_9 / 876-9 / 876の9）、
+    // key を組む前に両側とも正規化して、区切りだけの違いで見失わないようにする。
+    const targetKey = buildArticleReferenceKey({
+      lawId,
+      article: normalizeArticleNumberForLookup(article),
+    });
 
     const run = async () => {
       // 条(article)が変わったら前の検証結果を即座に捨てる
@@ -56,7 +61,10 @@ export const useAnchorVerification = ({
           typeof bookmark.target.fingerprint === "string" &&
           buildArticleReferenceKey({
             lawId: bookmark.target.lawId,
-            article: bookmark.target.article ?? undefined,
+            article:
+              bookmark.target.article == null
+                ? undefined
+                : normalizeArticleNumberForLookup(bookmark.target.article),
           }) === targetKey,
       );
 

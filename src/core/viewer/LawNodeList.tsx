@@ -27,6 +27,7 @@ import {
   segmentReferenceLinks,
   type ArticleLinkContext,
   type ReferenceLinkSegment,
+  type ReferenceLinkTarget,
 } from "./reference-links";
 
 interface LawNodeListProps {
@@ -35,7 +36,17 @@ interface LawNodeListProps {
   activeArticleNumber?: string;
   displayMode?: LawTextDisplayMode;
   onSelectArticle?: (articleNumber: string) => void;
+  onSelectCrossLawArticle?: (target: CrossLawArticleTarget) => void;
   renderArticleActions?: (article: LawNode) => ReactNode;
+}
+
+// 他法令の条への遷移先。onSelectArticle は同一法令内の条移動のためのコールバックで
+// lawId を取らないため、他法令へは別のコールバックを用意する。
+export interface CrossLawArticleTarget {
+  lawId: string;
+  articleNumber: string;
+  paragraphNumber?: string;
+  itemNumber?: string;
 }
 
 type HeadingLawNodeType = Exclude<LawNodeType, "Article" | "Paragraph" | "Item" | "Subitem">;
@@ -69,6 +80,7 @@ export const LawNodeList = ({
   lawId,
   nodes,
   onSelectArticle,
+  onSelectCrossLawArticle,
   renderArticleActions,
 }: LawNodeListProps) => {
   const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
@@ -76,8 +88,8 @@ export const LawNodeList = ({
   const articles = useMemo(() => buildArticleLinkEntries(nodes), [nodes]);
   const headings = useMemo(() => buildHeadingLinkEntries(nodes), [nodes]);
   const linking = useMemo<LinkingOptions>(
-    () => ({ articles, displayMode, headings, lawId, onSelectArticle }),
-    [articles, displayMode, headings, lawId, onSelectArticle],
+    () => ({ articles, displayMode, headings, lawId, onSelectArticle, onSelectCrossLawArticle }),
+    [articles, displayMode, headings, lawId, onSelectArticle, onSelectCrossLawArticle],
   );
 
   return (
@@ -533,6 +545,7 @@ interface LinkingOptions {
   headings: ArticleLinkContext["headings"];
   lawId: string;
   onSelectArticle: ((articleNumber: string) => void) | undefined;
+  onSelectCrossLawArticle: ((target: CrossLawArticleTarget) => void) | undefined;
 }
 
 // 表示文字列を参照リンク入りの ReactNode 列へ写す。
@@ -603,7 +616,7 @@ const ReferenceSegment = ({
 
   const { caption, target, text } = segment;
   // 他法令へのリンクは別ページへ遷移する。lawId が違えばページ内アンカーでは表せず、
-  // onSelectArticle も同一法令内の条移動のためのコールバックなので使わない。
+  // onSelectArticle も同一法令内の条移動のためのコールバックなので使えない。
   const crossLawId = target.kind === "article" ? target.lawId : undefined;
   const isCrossLaw = crossLawId !== undefined;
   // 編・章の見出しと、同じ条の中の項へはページ内リンク。条をまたぐときは条ルートへ遷移する。
@@ -622,6 +635,9 @@ const ReferenceSegment = ({
         : isInPage
           ? `#${paragraphAnchorId(target.articleNumber, target.paragraphNumber ?? "")}`
           : buildLawArticleUrl({ lawId: linking.lawId, article: target.articleNumber });
+  // ページ内アンカーはブラウザ標準の挙動で足りる。条ルートへ動くリンクだけ、
+  // コールバックがあれば全ページ遷移から SPA 内遷移へ差し替える。
+  const navigateInApp = buildInAppNavigation(target, crossLawId, isInPage, linking);
   // 見出しの注入は見やすい表示のときだけ。原文表示では原文にない文字を足さない。
   const showCaption = caption !== undefined && linking.displayMode === "readable";
 
@@ -630,7 +646,7 @@ const ReferenceSegment = ({
       className="text-primary underline decoration-dotted underline-offset-4 hover:decoration-solid"
       href={href}
       onClick={
-        isInPage || isCrossLaw || linking.onSelectArticle === undefined
+        navigateInApp === undefined
           ? undefined
           : (event) => {
               // 修飾キー付きクリックや中クリックは、新しいタブ・ウィンドウで開く
@@ -647,7 +663,7 @@ const ReferenceSegment = ({
               }
 
               event.preventDefault();
-              linking.onSelectArticle?.(target.articleNumber);
+              navigateInApp();
             }
       }
     >
@@ -658,4 +674,40 @@ const ReferenceSegment = ({
       {showCaption ? withRuby(text.slice(caption.offset)) : null}
     </a>
   );
+};
+
+const buildInAppNavigation = (
+  target: ReferenceLinkTarget,
+  crossLawId: string | undefined,
+  isInPage: boolean,
+  linking: LinkingOptions,
+): (() => void) | undefined => {
+  if (isInPage || target.kind !== "article") {
+    return undefined;
+  }
+
+  if (crossLawId !== undefined) {
+    const { onSelectCrossLawArticle } = linking;
+
+    return onSelectCrossLawArticle === undefined
+      ? undefined
+      : () => {
+          onSelectCrossLawArticle({
+            lawId: crossLawId,
+            articleNumber: target.articleNumber,
+            ...(target.paragraphNumber === undefined
+              ? {}
+              : { paragraphNumber: target.paragraphNumber }),
+            ...(target.itemNumber === undefined ? {} : { itemNumber: target.itemNumber }),
+          });
+        };
+  }
+
+  const { onSelectArticle } = linking;
+
+  return onSelectArticle === undefined
+    ? undefined
+    : () => {
+        onSelectArticle(target.articleNumber);
+      };
 };

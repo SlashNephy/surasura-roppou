@@ -9,6 +9,7 @@ import { applyLawTextDisplayMode } from "./displayMode";
 import type { LawTextDisplayMode } from "./displayMode";
 import { formatLawTypeLabel } from "./lawType";
 import { LawNodeList } from "./LawNodeList";
+import type { CrossLawArticleTarget } from "./LawNodeList";
 
 interface LawDocumentViewProps {
   law: Law;
@@ -17,6 +18,7 @@ interface LawDocumentViewProps {
   activeArticleNumber?: string;
   displayMode?: LawTextDisplayMode;
   onSelectArticle?: (articleNumber: string) => void;
+  onSelectCrossLawArticle?: (target: CrossLawArticleTarget) => void;
   renderArticleActions?: (article: LawNode) => ReactNode;
 }
 
@@ -24,6 +26,7 @@ export const LawDocumentView = ({
   activeArticleNumber,
   displayMode = "readable",
   onSelectArticle,
+  onSelectCrossLawArticle,
   renderArticleActions,
   law,
   revision,
@@ -78,6 +81,7 @@ export const LawDocumentView = ({
         lawId={law.lawId}
         nodes={nodes}
         onSelectArticle={onSelectArticle}
+        onSelectCrossLawArticle={onSelectCrossLawArticle}
         renderArticleActions={renderArticleActions}
       />
     </article>
