@@ -19,6 +19,7 @@ import {
   chapterAnchorId,
   computeChildArticleContext,
   paragraphAnchorId,
+  itemAnchorId,
   partAnchorId,
 } from "./lawToc";
 import {
@@ -230,16 +231,11 @@ const LawNodeBlock = ({
     case "Item":
     case "Subitem": {
       const parent = node.parentId === undefined ? undefined : nodeById.get(node.parentId);
-      // 条直下の項だけ、本文中の参照リンクの着地先としてアンカーを持つ。
+      // 条直下の項と、その項の直下の号だけ、参照リンクと URL の着地先としてアンカーを持つ。
       // 附則・別表の中は条アンカーと同様に URL 到達可能でないため付けない。
-      const paragraphId =
-        node.type === "Paragraph" &&
-        parent?.type === "Article" &&
-        isUrlAddressableArticleContext &&
-        parent.number !== undefined &&
-        node.number !== undefined
-          ? paragraphAnchorId(parent.number, node.number)
-          : undefined;
+      const paragraphId = isUrlAddressableArticleContext
+        ? buildParagraphOrItemAnchorId(node, parent, nodeById)
+        : undefined;
       const marker =
         node.type === "Paragraph"
           ? (node.title ?? getArticleParagraphMarker(node, nodeById))
@@ -710,4 +706,30 @@ const buildInAppNavigation = (
     : () => {
         onSelectArticle(target.articleNumber);
       };
+};
+
+// 項・号のアンカー id を組み立てる。条直下の項は a15-p2、その項の直下の号は a15-p2-i3。
+// 条・項の番号がどこかで欠けていれば一意にならないため付けない。
+const buildParagraphOrItemAnchorId = (
+  node: LawNode,
+  parent: LawNode | undefined,
+  nodeById: Map<string, LawNode>,
+): string | undefined => {
+  if (node.number === undefined || parent?.number === undefined) {
+    return undefined;
+  }
+
+  if (node.type === "Paragraph") {
+    return parent.type === "Article" ? paragraphAnchorId(parent.number, node.number) : undefined;
+  }
+
+  if (node.type !== "Item" || parent.type !== "Paragraph") {
+    return undefined;
+  }
+
+  const article = parent.parentId === undefined ? undefined : nodeById.get(parent.parentId);
+
+  return article?.type === "Article" && article.number !== undefined
+    ? itemAnchorId(article.number, parent.number, node.number)
+    : undefined;
 };

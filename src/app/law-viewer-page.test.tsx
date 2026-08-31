@@ -1150,6 +1150,110 @@ describe("LawViewerPageContent", () => {
     expect(articleInput).toHaveAttribute("aria-invalid", "true");
   });
 
+  const paragraphItemState = {
+    status: "ready",
+    law: {
+      lawId: "custom-law",
+      title: "項号テスト法",
+      aliases: [],
+      source: "egov",
+    },
+    revision: {
+      lawId: "custom-law",
+      revisionId: "custom-law_revision",
+      fetchedAt: "2026-07-05T00:00:00.000Z",
+    },
+    nodes: [
+      {
+        id: "article:15",
+        lawId: "custom-law",
+        revisionId: "custom-law_revision",
+        type: "Article",
+        path: "article:15",
+        number: "15",
+        title: "第十五条",
+        rawText: "",
+        plainText: "",
+        children: ["article:15/paragraph:1", "article:15/paragraph:2"],
+      },
+      {
+        id: "article:15/paragraph:1",
+        lawId: "custom-law",
+        revisionId: "custom-law_revision",
+        type: "Paragraph",
+        path: "article:15/paragraph:1",
+        number: "1",
+        rawText: "",
+        plainText: "第一項の本文。",
+        parentId: "article:15",
+        children: [],
+      },
+      {
+        id: "article:15/paragraph:2",
+        lawId: "custom-law",
+        revisionId: "custom-law_revision",
+        type: "Paragraph",
+        path: "article:15/paragraph:2",
+        number: "2",
+        rawText: "",
+        plainText: "次に掲げる者とする。",
+        parentId: "article:15",
+        children: ["article:15/paragraph:2/item:3"],
+      },
+      {
+        id: "article:15/paragraph:2/item:3",
+        lawId: "custom-law",
+        revisionId: "custom-law_revision",
+        type: "Item",
+        path: "article:15/paragraph:2/item:3",
+        number: "3",
+        rawText: "",
+        plainText: "三　第三号の本文。",
+        parentId: "article:15/paragraph:2",
+        children: [],
+      },
+    ],
+    isPinned: false,
+    loadedFromStorage: false,
+  } satisfies LawViewerState;
+
+  const scrolledAnchorIds = () =>
+    scrollMocks.scrollIntoView.mock.instances.map((element) => (element as Element).id);
+
+  it("lands on the paragraph anchor given by the paragraph query", async () => {
+    renderLawViewerContentRoute("/laws/custom-law/articles/15?paragraph=2", paragraphItemState);
+
+    await screen.findByRole("article", { name: "第十五条" });
+
+    await waitFor(() => {
+      expect(scrolledAnchorIds()).toContain("a15-p2");
+    });
+  });
+
+  it("lands on the item anchor given by the paragraph and item queries", async () => {
+    renderLawViewerContentRoute(
+      "/laws/custom-law/articles/15?paragraph=2&item=3",
+      paragraphItemState,
+    );
+
+    await screen.findByRole("article", { name: "第十五条" });
+
+    await waitFor(() => {
+      expect(scrolledAnchorIds()).toContain("a15-p2-i3");
+    });
+  });
+
+  it("falls back to the article when the queried paragraph does not exist", async () => {
+    renderLawViewerContentRoute("/laws/custom-law/articles/15?paragraph=9", paragraphItemState);
+
+    await screen.findByRole("article", { name: "第十五条" });
+
+    await waitFor(() => {
+      expect(scrolledAnchorIds()).toContain("a15");
+    });
+    expect(scrolledAnchorIds()).not.toContain("a15-p9");
+  });
+
   it("lands on a branch article whose route uses a different branch separator", async () => {
     // ルートの「709-2」と法令側の正準表記「709の2」は枝番の区切りだけが違う。
     // 他法令へのリンクは参照パーサーの表記（ハイフン連結）で URL を組み立てるため、
