@@ -447,7 +447,7 @@ Issue #40 の監査によって、現行実装と品質基準の差を特定し�
 - [ ] **OCR/PWA 変更**：現行アプリでは OCR 画像の外部 request と永続化がなく、OCR 画像と OCR テキストの analytics 送信もないことを Network と各保存領域で確認した。
 - [ ] **保存スキーマ変更**：ローカルスキーマの変更が export、import、全削除へ与える影響を、公開動作で確認した。
 - [ ] **すべての変更**：`pnpm run typecheck`、`pnpm run lint`、`pnpm run format:check`、`pnpm test` をコミット直前に順番どおり実行し、すべて終了コード 0 であることを記録した。
-- [ ] **すべての変更**：PR 前に `pnpm run review:antigravity` を実行し、skip または指摘がある場合も出力を記録した。
+- [ ] **すべての変更**：PR 前に `pnpm run review:antigravity` を成功させ、指摘がある場合も出力を記録した。
 - [ ] **すべての変更**：適合の根拠として、実行したコマンドと出力、実レスポンス、スクリーンショットのうち該当する証跡を添付した。
 
 ## 10. 監査の更新手順

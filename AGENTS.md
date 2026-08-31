@@ -56,7 +56,8 @@ PR を作成する前に `pnpm run review:antigravity` を実行してくださ�
 PR 作成後に大きな変更を入れた場合も、再度実行してください。
 
 このコマンドは `script/antigravity-review.sh` を通じて Antigravity CLI (`agy`) による静的レビューを行います。
-`agy` が利用できない環境では skip されるため、その場合は最終報告や PR 本文に記録してください。
+`agy` が利用できない場合、このコマンドは失敗します。レビューを実行できないまま PR を作らないでください。
+`agy` は `mise.toml` で固定しているため、`mise install` でインストールしてください。
 
 Antigravity CLI のレビュー後は、クォータ、使用量、残量が出力に含まれていればその値を報告してください。
 Antigravity CLI の指摘は鵜呑みにせず、実際のコード、型、実行時 contract、プロジェクト規約に照らして妥当性を検証してください。

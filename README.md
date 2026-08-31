@@ -66,7 +66,8 @@ PR 前の独立レビュー:
 pnpm run review:antigravity
 ```
 
-`review:antigravity` は Antigravity CLI (`agy`) が利用できない環境では skip します。skip した場合は、PR 本文や最終報告にその旨を記録します。
+`review:antigravity` は Antigravity CLI (`agy`) が利用できない場合や、レビューが失敗した場合に失敗します。
+`agy` は `mise.toml` で固定しているため、`mise install` でインストールしてください。
 
 ## Deployment
 
