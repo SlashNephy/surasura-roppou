@@ -144,3 +144,71 @@ describe("detectCrossLawSpan with resolved law numbers", () => {
     });
   });
 });
+
+describe("detectCrossLawSpan with official titles", () => {
+  const lawByLawNumber = new Map<string, ResolvedLawNumber>([
+    ["Showa/22/法律/132", { lawId: "322AC0000000132", title: "農業協同組合法" }],
+    [
+      "Heisei/3/法律/76",
+      {
+        lawId: "403AC0000000076",
+        title: "育児休業、介護休業等育児又は家族介護を行う労働者の福祉に関する法律",
+      },
+    ],
+    ["Heisei/11/法律/156", { lawId: "411AC0000000156", title: "原子力災害対策特別措置法" }],
+  ]);
+
+  it("starts the span at the official title instead of swallowing the preceding phrase", () => {
+    // 「中」は改正条文の言い回しで、法令名の一部ではない。左スキャンでは区切れない。
+    const text = "附則第九条中農業協同組合法（昭和22年法律第132号）第十一条";
+
+    expect(detect(text, "第十一条", 0, lawByLawNumber)).toEqual({
+      startIndex: text.indexOf("農業協同組合法"),
+      lawId: "322AC0000000132",
+    });
+  });
+
+  it("keeps a title that contains a punctuation mark whole", () => {
+    // 「、」は左スキャンの境界文字なので、正式名称を使わないと頭が切れる。
+    const text =
+      "育児休業、介護休業等育児又は家族介護を行う労働者の福祉に関する法律（平成3年法律第76号）第2条";
+
+    expect(detect(text, "第2条", 0, lawByLawNumber)).toEqual({
+      startIndex: 0,
+      lawId: "403AC0000000076",
+    });
+  });
+
+  it("does not use a title that would reach before the previous segment", () => {
+    // minIndex は直前に確定したリンクの終端。正式名称がそこを越えるなら使わない。
+    const text = "第1条農業協同組合法（昭和22年法律第132号）第十一条";
+
+    expect(detect(text, "第十一条", text.indexOf("組合法"), lawByLawNumber)?.startIndex).toBe(
+      text.indexOf("組合法"),
+    );
+  });
+
+  it("falls back to the left scan when the body uses a former name", () => {
+    // 法令が改称されると本文の表記と現在の正式名称が違う（実データにあった例）。
+    // 完全一致しないので従来どおり左スキャンへ落ちる。
+    const text = "労働時間の短縮の促進に関する臨時措置法（平成4年法律第90号）第2条の規定";
+    const renamed = new Map<string, ResolvedLawNumber>([
+      [
+        "Heisei/4/法律/90",
+        { lawId: "404AC0000000090", title: "労働時間等の設定の改善に関する特別措置法" },
+      ],
+    ]);
+
+    expect(detect(text, "第2条", 0, renamed)).toEqual({
+      startIndex: 0,
+      lawId: "404AC0000000090",
+    });
+  });
+
+  it("does not suppress a reference that carries a law number even when a kanji precedes it", () => {
+    // 宛先は名称ではなく法令番号が決める。「旧」「中」のような接頭辞を疑う理由が無い。
+    const text = "旧民法（明治二十九年法律第八十九号）第90条";
+
+    expect(detect(text, "第90条", 0, lawByLawNumber)?.lawId).toBe("129AC0000000089");
+  });
+});
