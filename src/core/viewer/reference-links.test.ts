@@ -1033,3 +1033,133 @@ describe("segmentReferenceLinks for bare articles enumerated after a cross law r
     expect(linkTexts(text, { currentArticleNumber: "4" })).toEqual(expected);
   });
 });
+
+describe("segmentReferenceLinks for 同 references", () => {
+  const articles = buildArticleLinkEntries(numberedLawNodes);
+  const headings = buildHeadingLinkEntries(numberedLawNodes);
+
+  const links = (text: string, context: Partial<ArticleLinkContext> = {}) =>
+    segmentReferenceLinks(text, { articles, headings, ...context }).filter(
+      (segment) => segment.kind === "link",
+    );
+
+  const linkTexts = (text: string, context: Partial<ArticleLinkContext> = {}) =>
+    links(text, context).map((segment) => segment.text);
+
+  it("resolves 同条 to the article named earlier in the sentence", () => {
+    expect(
+      links("第2条第1項の規定による宣言があった時から同条第2項の規定による解除まで", {
+        currentArticleNumber: "4",
+      }),
+    ).toEqual([
+      {
+        kind: "link",
+        text: "第2条第1項",
+        target: { kind: "article", articleNumber: "2" },
+        caption: { text: "定義", offset: 3 },
+      },
+      { kind: "link", text: "同条第2項", target: { kind: "article", articleNumber: "2" } },
+    ]);
+  });
+
+  it("resolves 同項 to the paragraph named earlier, not to the nearest article", () => {
+    // 「第3条」は項を名指ししていないため先行詞にならない。同項は第2条第1項を指す。
+    expect(
+      linkTexts("第2条第1項の許可（第3条の規定により読み替えて適用される同項の承認を含む。）", {
+        currentArticleNumber: "4",
+      }),
+    ).toEqual(["第2条第1項", "第3条", "同項"]);
+  });
+
+  it("resolves 同項 through a relative article reference", () => {
+    expect(
+      links("前条第1項の計画に従い、同項に規定する業務を行う", {
+        currentArticleNumber: "3",
+      }),
+    ).toEqual([
+      {
+        kind: "link",
+        text: "前条第1項",
+        target: { kind: "article", articleNumber: "2" },
+        caption: { text: "定義", offset: 2 },
+      },
+      { kind: "link", text: "同項", target: { kind: "article", articleNumber: "2" } },
+    ]);
+  });
+
+  it("resolves 同項 to the other law named earlier in the sentence", () => {
+    expect(
+      links("商法第798条第1項の規定により、同項に規定する者は", { currentArticleNumber: "4" }),
+    ).toEqual([
+      {
+        kind: "link",
+        text: "商法第798条第1項",
+        target: {
+          kind: "article",
+          lawId: "132AC0000000048",
+          articleNumber: "798",
+          paragraphNumber: "1",
+        },
+      },
+      {
+        kind: "link",
+        text: "同項",
+        target: {
+          kind: "article",
+          lawId: "132AC0000000048",
+          articleNumber: "798",
+          paragraphNumber: "1",
+        },
+      },
+    ]);
+  });
+
+  it.each([
+    {
+      name: "does not link 同項 whose antecedent is an unresolvable law",
+      // 「規制法」は辞書外で法令番号も伴わないため解決できない。
+      // 同項が自法令の第1項へ落ちてはならない。
+      text: "規制法第2条第1項の許可（規制法第3条により読み替えて適用される同項の承認）",
+      expected: [],
+    },
+    {
+      name: "does not link 同条 with no antecedent",
+      text: "同条第2項の規定",
+      expected: [],
+    },
+    {
+      name: "does not link 同項 with no antecedent",
+      text: "同項に規定する",
+      expected: [],
+    },
+    {
+      name: "does not link a bare 同法",
+      text: "商法第798条の規定及び同法の規定",
+      expected: ["商法第798条"],
+    },
+    {
+      name: "drops the antecedent at a sentence boundary",
+      text: "第2条第1項の規定による。同項に規定する者は",
+      expected: ["第2条第1項"],
+    },
+  ])("$name", ({ expected, text }) => {
+    expect(linkTexts(text, { currentArticleNumber: "4" })).toEqual(expected);
+  });
+
+  it("resolves 同法 with an article to the law named earlier in the sentence", () => {
+    expect(
+      links("商法第798条の規定に基づき同法第15条に規定する", { currentArticleNumber: "4" }),
+    ).toEqual([
+      {
+        kind: "link",
+        text: "商法第798条",
+        target: { kind: "article", lawId: "132AC0000000048", articleNumber: "798" },
+      },
+      {
+        kind: "link",
+        text: "同法第15条",
+        target: { kind: "article", lawId: "132AC0000000048", articleNumber: "15" },
+      },
+    ]);
+  });
+});

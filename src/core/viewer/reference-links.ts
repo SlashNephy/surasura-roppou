@@ -232,6 +232,32 @@ const sameReferenceLevels = new Map<string, SameReferenceLevel>([
 
 const sameMarkerLength = 2;
 
+// 同参照の先行詞。リンクにならなかった参照も記録するため resolved を持つ。
+// 記録しないと、辞書外の法令を指す「同項」が、同じ文の前方にある自法令の項へ
+// 誤って結び付く。
+interface ReferenceAntecedent {
+  resolved: boolean;
+  lawId?: string;
+  articleNumber?: string;
+  paragraphNumber?: string;
+  itemNumber?: string;
+}
+
+type ReferenceAntecedents = Partial<Record<SameReferenceLevel, ReferenceAntecedent>>;
+
+// 参照が名指しした階層それぞれに、その参照を先行詞として記録する。
+// 「第76条」のように項を名指ししない参照は、項の先行詞を上書きしない。
+const recordAntecedents = (
+  antecedents: ReferenceAntecedents,
+  antecedent: ReferenceAntecedent,
+): ReferenceAntecedents => ({
+  ...antecedents,
+  ...(antecedent.lawId === undefined ? {} : { law: antecedent }),
+  ...(antecedent.articleNumber === undefined ? {} : { article: antecedent }),
+  ...(antecedent.paragraphNumber === undefined ? {} : { paragraph: antecedent }),
+  ...(antecedent.itemNumber === undefined ? {} : { item: antecedent }),
+});
+
 export const segmentReferenceLinks = (
   text: string,
   context: ArticleLinkContext,
@@ -248,6 +274,8 @@ export const segmentReferenceLinks = (
   // 「商法第798条及び第2条」の後半のような、列挙で続く裸の条参照を
   // 現在の法令の条として誤解決しないための抑止に使う。
   let isArticleScopeCrossLaw = false;
+  // 同参照の先行詞。階層ごとに独立して持つ。句点で切れる。
+  let antecedents: ReferenceAntecedents = {};
   // 文の境界判定のために見終えたテキストの終端。マッチしなかった箇所も含めて走査する。
   let scannedIndex = 0;
 
@@ -263,25 +291,51 @@ export const segmentReferenceLinks = (
     if (text.slice(scannedIndex, match.index).includes("。")) {
       articleScopeEndIndex = undefined;
       isArticleScopeCrossLaw = false;
+      antecedents = {};
     }
 
     scannedIndex = match.index + match[0].length;
 
-    // 同参照（同法・同条・同項・同号）は先行詞から解決する必要があるため、まだリンクに
-    // しない。ここで抑止しないと parseReference が同X を読み飛ばし、「同条第2項」が
-    // 現在の条の第2項として誤解決される。
+    // 同参照（同法・同条・同項・同号）は parseReference が同X を読み飛ばすため、通常の
+    // 経路に載せると「同条第2項」が現在の条の第2項として誤解決される。先行詞から解決する。
     const sameLevel = sameReferenceLevels.get(match[0].slice(0, sameMarkerLength));
 
     if (sameLevel !== undefined) {
-      // 条を名指しする同参照は、後続の裸の項参照の基準になる。
+      const sameTarget = resolveSameReferenceTarget(match[0], antecedents, context);
+      const base = antecedents[sameLevel];
+
+      // 条を名指しする同参照（同法・同条）は、後続の裸の項参照の基準になる。
       // 「同条第1項、第2項」の第2項が現在の条の項へ誤解決しないようスコープを立てる。
-      // 同法は直前に名指しした法令を指すため、列挙で続く裸の条もその法令の条とみなす。
-      // 同条は自法令の条を指すこともあるため、従来どおり自法令のスコープにする。
+      // 同法は先行詞を解決できなくても他法令を指すため、常に他法令のスコープにする。
+      // 同条は自法令の条を指すこともあるため、先行詞が他法令のときだけそうする。
       if (sameLevel === "law" || sameLevel === "article") {
         articleScopeEndIndex = scannedIndex;
-        isArticleScopeCrossLaw = sameLevel === "law";
+        isArticleScopeCrossLaw = sameLevel === "law" || base?.lawId !== undefined;
       }
 
+      // 解決できた同参照は、それ自身が後続の同参照の先行詞になる。
+      if (sameTarget?.kind === "article") {
+        antecedents = recordAntecedents(antecedents, {
+          resolved: true,
+          ...(sameTarget.lawId === undefined ? {} : { lawId: sameTarget.lawId }),
+          articleNumber: sameTarget.articleNumber,
+          ...(sameTarget.paragraphNumber === undefined
+            ? {}
+            : { paragraphNumber: sameTarget.paragraphNumber }),
+          ...(sameTarget.itemNumber === undefined ? {} : { itemNumber: sameTarget.itemNumber }),
+        });
+      }
+
+      if (sameTarget === undefined) {
+        continue;
+      }
+
+      if (match.index > lastIndex) {
+        segments.push({ kind: "text", text: text.slice(lastIndex, match.index) });
+      }
+
+      segments.push({ kind: "link", text: match[0], target: sameTarget });
+      lastIndex = scannedIndex;
       continue;
     }
 
@@ -329,6 +383,20 @@ export const segmentReferenceLinks = (
       articleScopeEndIndex = scannedIndex;
       isArticleScopeCrossLaw = true;
 
+      // 他法令を指す参照は、リンクにならなくても先行詞として記録する。記録しないと、
+      // 法令 ID を引けなかった法令を指す同参照が、前方の自法令の条・項へ落ちる。
+      antecedents = recordAntecedents(antecedents, {
+        resolved: crossLawSpan.lawId !== undefined,
+        ...(crossLawSpan.lawId === undefined ? {} : { lawId: crossLawSpan.lawId }),
+        ...(parsed.article === undefined || isRelativeShift(parsed.article)
+          ? {}
+          : { articleNumber: parsed.article }),
+        ...(parsed.paragraph === undefined || isRelativeShift(parsed.paragraph)
+          ? {}
+          : { paragraphNumber: parsed.paragraph }),
+        ...(parsed.item === undefined ? {} : { itemNumber: parsed.item }),
+      });
+
       const crossLawTarget =
         crossLawSpan.lawId === undefined
           ? undefined
@@ -359,6 +427,19 @@ export const segmentReferenceLinks = (
     if (guardChar !== undefined) {
       articleScopeEndIndex = scannedIndex;
       isArticleScopeCrossLaw = lawNameGuardChars.has(guardChar);
+
+      // ここで記録しないと、辞書外の法令を指す参照が先行詞にならず、後続の同参照が
+      // 自法令へ落ちる。解決できていないため resolved は false のまま記録する。
+      antecedents = recordAntecedents(antecedents, {
+        resolved: false,
+        ...(parsed.article === undefined || isRelativeShift(parsed.article)
+          ? {}
+          : { articleNumber: parsed.article }),
+        ...(parsed.paragraph === undefined || isRelativeShift(parsed.paragraph)
+          ? {}
+          : { paragraphNumber: parsed.paragraph }),
+        ...(parsed.item === undefined ? {} : { itemNumber: parsed.item }),
+      });
       continue;
     }
 
@@ -378,6 +459,23 @@ export const segmentReferenceLinks = (
 
     if (match.index > lastIndex) {
       segments.push({ kind: "text", text: text.slice(lastIndex, match.index) });
+    }
+
+    if (target.kind === "article") {
+      // 項は target からではなく parsed から取る。条をまたぐ着地は条単位に丸められる
+      // （target.paragraphNumber が落ちる）が、先行詞としては名指しされた項を覚えて
+      // おく必要があるため。「第2条第1項…同項」が第2条第1項を指せるようにする。
+      const namedParagraph =
+        parsed.paragraph !== undefined && !isRelativeShift(parsed.paragraph)
+          ? parsed.paragraph
+          : target.paragraphNumber;
+
+      antecedents = recordAntecedents(antecedents, {
+        resolved: true,
+        articleNumber: target.articleNumber,
+        ...(namedParagraph === undefined ? {} : { paragraphNumber: namedParagraph }),
+        ...(parsed.item === undefined ? {} : { itemNumber: parsed.item }),
+      });
     }
 
     const caption = buildCaption(match[0], target, context);
@@ -431,6 +529,63 @@ const buildCaption = (
   const articleSpan = referenceArticleSpanPattern.exec(rawText);
 
   return { text: caption, offset: articleSpan === null ? rawText.length : articleSpan[0].length };
+};
+
+// 同参照を先行詞から解決する。先行詞が無い、または解決できなかった参照なら undefined。
+const resolveSameReferenceTarget = (
+  rawText: string,
+  antecedents: ReferenceAntecedents,
+  context: ArticleLinkContext,
+): ReferenceLinkTarget | undefined => {
+  const level = sameReferenceLevels.get(rawText.slice(0, sameMarkerLength));
+
+  if (level === undefined) {
+    return undefined;
+  }
+
+  const base = antecedents[level];
+
+  if (!base?.resolved) {
+    return undefined;
+  }
+
+  // 同X の後ろに続く位置指定（同条第4項 の「第4項」）を読む。
+  const deeper = parseReference(rawText.slice(sameMarkerLength));
+  const articleNumber = level === "law" ? deeper?.article : base.articleNumber;
+
+  if (articleNumber === undefined || isRelativeShift(articleNumber)) {
+    return undefined;
+  }
+
+  const paragraphNumber =
+    level === "law" || level === "article" ? deeper?.paragraph : base.paragraphNumber;
+
+  if (paragraphNumber !== undefined && isRelativeShift(paragraphNumber)) {
+    return undefined;
+  }
+
+  const itemNumber = level === "item" ? base.itemNumber : deeper?.item;
+
+  // 自法令の中を指す同参照は、条・項が実在するかを既存の経路で検証する。
+  if (base.lawId === undefined) {
+    return resolveTarget(
+      {
+        kind: "relative",
+        score: 0,
+        article: articleNumber,
+        ...(paragraphNumber === undefined ? {} : { paragraph: paragraphNumber }),
+      },
+      context,
+    );
+  }
+
+  return {
+    kind: "article",
+    lawId: base.lawId,
+    articleNumber,
+    ...(paragraphNumber === undefined ? {} : { paragraphNumber }),
+    ...(itemNumber === undefined ? {} : { itemNumber }),
+  };
 };
 
 // 他法令の条・項・号は手元にノードが無いため検証しない。存在しない条・項へ着地しても
