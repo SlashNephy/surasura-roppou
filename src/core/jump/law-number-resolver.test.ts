@@ -139,6 +139,44 @@ describe("createLawNumberResolver", () => {
     expect(listLawsSpy).toHaveBeenCalledTimes(1);
   });
 
+  it("resolves an api-unresolvable law type from the cached catalog", async () => {
+    // 省令は法令番号から引けないが、検索経由でカタログに入っていれば解決できる。
+    // 種別で早々に諦めると、手元にある答えを使い損ねる。
+    const { dependencies, listLawsSpy } = createDependencies({
+      catalog: [
+        {
+          lawId: "127M10000040002",
+          title: "テスト省令",
+          lawNumber: "明治二十七年大蔵省令第二号",
+          aliases: [],
+          cachedAt: "2026-08-31T00:00:00.000Z",
+        },
+      ],
+    });
+    const resolver = createLawNumberResolver(dependencies);
+
+    await expect(resolver.resolve(parse("明治二十七年大蔵省令第二号"))).resolves.toBe(
+      "127M10000040002",
+    );
+    expect(listLawsSpy).not.toHaveBeenCalled();
+  });
+
+  it("does not send duplicate requests for concurrent resolves of the same law number", async () => {
+    const { dependencies, listLawsSpy } = createDependencies({
+      listLaws: () => Promise.resolve(lawResult("332AC1000000166", "昭和三十二年法律第百六十六号")),
+    });
+    const resolver = createLawNumberResolver(dependencies);
+
+    const [first, second] = await Promise.all([
+      resolver.resolve(parse("昭和32年法律第166号")),
+      resolver.resolve(parse("昭和32年法律第166号")),
+    ]);
+
+    expect(first).toBe("332AC1000000166");
+    expect(second).toBe("332AC1000000166");
+    expect(listLawsSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("does not remember an abort as a failure", async () => {
     const abortError = new DOMException("aborted", "AbortError");
     let attempts = 0;

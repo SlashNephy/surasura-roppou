@@ -74,6 +74,73 @@ export const createLawNumberResolver = ({
     return index;
   };
 
+  // 問い合わせ中の約束。解決済みの記憶へ載るのは応答後なので、同じ法令番号を同時に
+  // 解決しようとすると memo をすり抜けて二重に問い合わせてしまう。
+  const inFlight = new Map<string, Promise<string | undefined>>();
+
+  const request = async (
+    parsed: ParsedLawNumber,
+    key: string,
+    signal: AbortSignal | undefined,
+  ): Promise<string | undefined> => {
+    // キャッシュは種別によらず引く。省令のように法令番号から問い合わせられない種別でも、
+    // 検索経由でカタログに入っていれば解決できる。
+    cachedCatalog ??= loadCatalogIndex();
+    const cachedLawId = (await cachedCatalog).get(key);
+
+    if (cachedLawId !== undefined) {
+      resolved.set(key, cachedLawId);
+      return cachedLawId;
+    }
+
+    const typeCode = lawNumberTypeCode(parsed.type);
+
+    if (typeCode === undefined) {
+      // 府令・省令などは法令番号から引けない。問い合わせずに諦める。
+      unresolvable.add(key);
+      return undefined;
+    }
+
+    let result;
+
+    try {
+      result = await lawRepository.listLaws(
+        {
+          lawNumberEra: parsed.era,
+          lawNumberYear: parsed.year,
+          lawNumberType: typeCode,
+          lawNumberNumber: parsed.number,
+          limit: 1,
+        },
+        signal === undefined ? {} : { signal },
+      );
+    } catch (error) {
+      // 中断は正常系。失敗として覚えず、呼び出し側へ伝播させる。
+      if (isAbortError(error)) {
+        throw error;
+      }
+
+      // ネットワーク不通などは失敗として覚え、同じセッション中は再試行しない。
+      unresolvable.add(key);
+      return undefined;
+    }
+
+    // noUncheckedIndexedAccess が無効なため [0] だと undefined が型に現れず lint に落ちる。
+    // .at(0) は型定義上も T | undefined を返すため、空配列という異常系を検査できる。
+    const law = result.laws.at(0)?.law;
+
+    // 一意に引けたときだけ採る。複数ヒットはどれか決められない。
+    if (result.totalCount !== 1 || law === undefined) {
+      unresolvable.add(key);
+      return undefined;
+    }
+
+    resolved.set(key, law.lawId);
+    await indexRepository.upsertCatalogEntries([toCatalogEntry(law, now)]);
+
+    return law.lawId;
+  };
+
   return {
     async resolve(parsed, options = {}) {
       const derived = deriveLawIdFromLawNumber(parsed);
@@ -93,60 +160,19 @@ export const createLawNumberResolver = ({
         return undefined;
       }
 
-      const typeCode = lawNumberTypeCode(parsed.type);
+      const pending = inFlight.get(key);
 
-      if (typeCode === undefined) {
-        // 府令・省令などは法令番号から引けない。問い合わせずに諦める。
-        unresolvable.add(key);
-        return undefined;
+      if (pending !== undefined) {
+        return pending;
       }
 
-      cachedCatalog ??= loadCatalogIndex();
-      const cachedLawId = (await cachedCatalog).get(key);
+      const started = request(parsed, key, options.signal).finally(() => {
+        inFlight.delete(key);
+      });
 
-      if (cachedLawId !== undefined) {
-        resolved.set(key, cachedLawId);
-        return cachedLawId;
-      }
+      inFlight.set(key, started);
 
-      let result;
-
-      try {
-        result = await lawRepository.listLaws(
-          {
-            lawNumberEra: parsed.era,
-            lawNumberYear: parsed.year,
-            lawNumberType: typeCode,
-            lawNumberNumber: parsed.number,
-            limit: 1,
-          },
-          options.signal === undefined ? {} : { signal: options.signal },
-        );
-      } catch (error) {
-        // 中断は正常系。失敗として覚えず、呼び出し側へ伝播させる。
-        if (isAbortError(error)) {
-          throw error;
-        }
-
-        // ネットワーク不通などは失敗として覚え、同じセッション中は再試行しない。
-        unresolvable.add(key);
-        return undefined;
-      }
-
-      // noUncheckedIndexedAccess が無効なため [0] だと undefined が型に現れず lint に落ちる。
-      // .at(0) は型定義上も T | undefined を返すため、空配列という異常系を検査できる。
-      const law = result.laws.at(0)?.law;
-
-      // 一意に引けたときだけ採る。複数ヒットはどれか決められない。
-      if (result.totalCount !== 1 || law === undefined) {
-        unresolvable.add(key);
-        return undefined;
-      }
-
-      resolved.set(key, law.lawId);
-      await indexRepository.upsertCatalogEntries([toCatalogEntry(law, now)]);
-
-      return law.lawId;
+      return started;
     },
   };
 };
