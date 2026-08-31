@@ -953,6 +953,12 @@ describe("segmentReferenceLinks for cross law references", () => {
     expect(noLinkTexts(text, { currentArticleNumber: "16" })).toEqual([]);
   });
 
+  it("does not link a bare article enumerated after 同法", () => {
+    // 同法は直前に名指しした法令を指すため、列挙で続く裸の条もその法令の条を指す。
+    // 現在の法令の条へ解決してはならない。
+    expect(noLinkTexts("同法第798条及び第15条の規定", { currentArticleNumber: "16" })).toEqual([]);
+  });
+
   it("keeps a bare paragraph reference out of the current article after a cross law reference", () => {
     expect(noLinkTexts("商法第15条第1項及び第2項の規定", { currentArticleNumber: "16" })).toEqual([
       "商法第15条第1項",
@@ -1022,6 +1028,205 @@ describe("segmentReferenceLinks for bare articles enumerated after a cross law r
       name: "starts a new sentence scope after a cross law reference",
       text: "商法第798条の規定。第2条及び第3条の規定",
       expected: ["商法第798条", "第2条", "第3条"],
+    },
+  ])("$name", ({ expected, text }) => {
+    expect(linkTexts(text, { currentArticleNumber: "4" })).toEqual(expected);
+  });
+});
+
+describe("segmentReferenceLinks for 同 references", () => {
+  const articles = buildArticleLinkEntries(numberedLawNodes);
+  const headings = buildHeadingLinkEntries(numberedLawNodes);
+
+  const links = (text: string, context: Partial<ArticleLinkContext> = {}) =>
+    segmentReferenceLinks(text, { articles, headings, ...context }).filter(
+      (segment) => segment.kind === "link",
+    );
+
+  const linkTexts = (text: string, context: Partial<ArticleLinkContext> = {}) =>
+    links(text, context).map((segment) => segment.text);
+
+  it.each([
+    {
+      name: "resolves 同条 to the article named earlier in the sentence",
+      text: "第2条第1項の規定による宣言があった時から同条第2項の規定による解除まで",
+      context: { currentArticleNumber: "4" },
+      expected: [
+        {
+          kind: "link",
+          text: "第2条第1項",
+          target: { kind: "article", articleNumber: "2" },
+          caption: { text: "定義", offset: 3 },
+        },
+        { kind: "link", text: "同条第2項", target: { kind: "article", articleNumber: "2" } },
+      ],
+    },
+    {
+      name: "resolves 同項 to the paragraph named earlier, not to the nearest article",
+      // 「第3条」は項を名指ししていないため先行詞にならない。同項は第2条第1項を指す。
+      text: "第2条第1項の許可（第3条の規定により読み替えて適用される同項の承認を含む。）",
+      context: { currentArticleNumber: "4" },
+      expected: [
+        {
+          kind: "link",
+          text: "第2条第1項",
+          target: { kind: "article", articleNumber: "2" },
+          caption: { text: "定義", offset: 3 },
+        },
+        { kind: "link", text: "第3条", target: { kind: "article", articleNumber: "3" } },
+        { kind: "link", text: "同項", target: { kind: "article", articleNumber: "2" } },
+      ],
+    },
+    {
+      name: "resolves 同項 through a relative article reference",
+      text: "前条第1項の計画に従い、同項に規定する業務を行う",
+      context: { currentArticleNumber: "3" },
+      expected: [
+        {
+          kind: "link",
+          text: "前条第1項",
+          target: { kind: "article", articleNumber: "2" },
+          caption: { text: "定義", offset: 2 },
+        },
+        { kind: "link", text: "同項", target: { kind: "article", articleNumber: "2" } },
+      ],
+    },
+    {
+      name: "resolves 同項 to the other law named earlier in the sentence",
+      text: "商法第798条第1項の規定により、同項に規定する者は",
+      context: { currentArticleNumber: "4" },
+      expected: [
+        {
+          kind: "link",
+          text: "商法第798条第1項",
+          target: {
+            kind: "article",
+            lawId: "132AC0000000048",
+            articleNumber: "798",
+            paragraphNumber: "1",
+          },
+        },
+        {
+          kind: "link",
+          text: "同項",
+          target: {
+            kind: "article",
+            lawId: "132AC0000000048",
+            articleNumber: "798",
+            paragraphNumber: "1",
+          },
+        },
+      ],
+    },
+    {
+      name: "resolves 同法 with an article to the law named earlier in the sentence",
+      text: "商法第798条の規定に基づき同法第15条に規定する",
+      context: { currentArticleNumber: "4" },
+      expected: [
+        {
+          kind: "link",
+          text: "商法第798条",
+          target: { kind: "article", lawId: "132AC0000000048", articleNumber: "798" },
+        },
+        {
+          kind: "link",
+          text: "同法第15条",
+          target: { kind: "article", lawId: "132AC0000000048", articleNumber: "15" },
+        },
+      ],
+    },
+    {
+      name: "resolves 同号 to the article and paragraph named earlier (item is not tracked for self-law targets)",
+      // 自法令経路では itemNumber が resolveTarget に渡らないため、同号は項レベルで
+      // 着地する（第1号と第2号を区別しない）。挙動を変えず、現状を固定するテスト。
+      text: "第2条第1項第1号の規定（同号の要件を満たすとき）",
+      context: { currentArticleNumber: "2", currentParagraphNumber: "2" },
+      expected: [
+        {
+          kind: "link",
+          text: "第2条第1項第1号",
+          target: { kind: "article", articleNumber: "2", paragraphNumber: "1" },
+        },
+        {
+          kind: "link",
+          text: "同号",
+          target: { kind: "article", articleNumber: "2", paragraphNumber: "1" },
+        },
+      ],
+    },
+    {
+      name: "resolves 同条第2項 to a paragraph in the current article, whose bare article reference lands on the current position",
+      // 「第2条」は現在位置（第2条第1項）そのものへ着地するためリンクにならないが、
+      // 条自体は実在するため先行詞としては有効。同条第2項は同じ条の別の項なので
+      // ページ内アンカーへ着地できる（#278 finding 1 の回帰）。
+      text: "第2条の規定により同条第2項の規定を適用する",
+      context: { currentArticleNumber: "2", currentParagraphNumber: "1" },
+      expected: [
+        {
+          kind: "link",
+          text: "同条第2項",
+          target: { kind: "article", articleNumber: "2", paragraphNumber: "2" },
+        },
+      ],
+    },
+  ])("$name", ({ context, expected, text }) => {
+    expect(links(text, context)).toEqual(expected);
+  });
+
+  it.each([
+    {
+      name: "does not link 同項 whose antecedent is an unresolvable law",
+      // 「規制法」は辞書外で法令番号も伴わないため解決できない。
+      // 同項が自法令の第1項へ落ちてはならない。
+      text: "規制法第2条第1項の許可（規制法第3条により読み替えて適用される同項の承認）",
+      expected: [],
+    },
+    {
+      name: "does not link 同条 with no antecedent",
+      text: "同条第2項の規定",
+      expected: [],
+    },
+    {
+      name: "does not link 同項 with no antecedent",
+      text: "同項に規定する",
+      expected: [],
+    },
+    {
+      name: "does not link a bare 同法",
+      text: "商法第798条の規定及び同法の規定",
+      expected: ["商法第798条"],
+    },
+    {
+      name: "drops the antecedent at a sentence boundary",
+      text: "第2条第1項の規定による。同項に規定する者は",
+      expected: ["第2条第1項"],
+    },
+    {
+      name: "does not link 同条 to an article suppressed as part of a cross-law enumeration",
+      // 「第15条」は商法の列挙として抑止される。記録しないと、同条が
+      // 抑止された第15条ではなく先行の第798条へ誤って結び付いてしまう。
+      text: "商法第798条及び第15条の規定に基づき同条の規定を準用する",
+      expected: ["商法第798条"],
+    },
+    {
+      name: "does not let an unresolved self-law reference leave a stale antecedent",
+      // 「第2条第99項」は存在しない項のため解決できない。記録しないと、同項が
+      // 前方の第2条第1項へ誤って結び付いてしまう。
+      text: "第2条第1項の規定による許可（第2条第99項の規定により読み替えて適用される同項の承認を含む。）",
+      expected: ["第2条第1項"],
+    },
+    {
+      name: "does not let an unresolved 同条 reference leave a stale paragraph antecedent",
+      // 「同条第99項」は存在しない項のため解決できない。無効化しないと、同項が
+      // 前方の第2条第1項へ誤って結び付いてしまう。
+      text: "第2条第1項の規定による許可（同条第99項の規定により読み替えて適用される同項の承認を含む。）",
+      expected: ["第2条第1項"],
+    },
+    {
+      name: "does not link 同条第2項 whose antecedent article does not exist",
+      // 「第99条」はフィクスチャに実在しないため、同条は先行詞として解決できない。
+      text: "第99条の規定により同条第2項の規定を適用する",
+      expected: [],
     },
   ])("$name", ({ expected, text }) => {
     expect(linkTexts(text, { currentArticleNumber: "4" })).toEqual(expected);
