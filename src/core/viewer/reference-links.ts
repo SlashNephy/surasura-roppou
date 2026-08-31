@@ -190,13 +190,25 @@ export type ReferenceLinkSegment =
 // 直前 1 文字が法令名・附則・条例の末尾、または既に別の条を指す語（「同条」「当該条」）で
 // 終わる場合も抑止する。トレードオフとして「本法第15条」のような正しい自法令参照も
 // 抑止されるが、無リンクに倒す。
-// 「章」は「国連憲章第7章」のような辞書外の法令名を、「編」は編を名指しする他法令参照を
-// 抑止するために含める。「律」は「…に関する法律」のように「法律」で終わる辞書外の法令名
-// （例:「行政機関の保有する情報の公開に関する法律」）を抑止するために含める。
-const precedingGuardChars = new Set(["法", "令", "則", "例", "条", "編", "章", "律"]);
+// 「章」は「国連憲章第7章」のような辞書外の法令名を抑止するために含める。「律」は
+// 「…に関する法律」のように「法律」で終わる辞書外の法令名（例:「行政機関の保有する情報の
+// 公開に関する法律」）を抑止するために含める。
+const lawNameGuardChars = new Set(["法", "令", "則", "例", "律", "章"]);
 
-const hasPrecedingGuardChar = (text: string, matchStart: number): boolean =>
-  matchStart > 0 && precedingGuardChars.has(text[matchStart - 1]);
+// 別の条を名指しする語（「同条」「当該条」）と、編を名指しする他法令参照の末尾。
+// 法令名の末尾と分けて持つのは、列挙で続く裸の条参照を抑止するかの判断に使うため。
+// 「同条」は自法令の条を指すので、続く裸の条参照も自法令の条とみなしてよい。
+const sameLawGuardChars = new Set(["条", "編"]);
+
+const precedingGuardChar = (text: string, matchStart: number): string | undefined => {
+  if (matchStart === 0) {
+    return undefined;
+  }
+
+  const char = text[matchStart - 1];
+
+  return lawNameGuardChars.has(char) || sameLawGuardChars.has(char) ? char : undefined;
+};
 
 // 条・項の相対シフト（前条・次条・前項・次項）かどうかを判定する。相対シフトは現在位置から
 // 一意に解決できるため、文スコープ抑止の対象外にする（裸の数字の項参照とは扱いを分ける）。
@@ -220,6 +232,10 @@ export const segmentReferenceLinks = (
   // 「第三十条第二項及び第三項」の後半のような、列挙で続く裸の項参照を
   // 現在の条の項として誤解決しないための抑止に使う。
   let articleScopeEndIndex: number | undefined;
+  // その条スコープが、現在の法令とは別の法令の条を名指ししていたか。
+  // 「商法第798条及び第2条」の後半のような、列挙で続く裸の条参照を
+  // 現在の法令の条として誤解決しないための抑止に使う。
+  let isArticleScopeCrossLaw = false;
   // 文の境界判定のために見終えたテキストの終端。マッチしなかった箇所も含めて走査する。
   let scannedIndex = 0;
 
@@ -234,6 +250,7 @@ export const segmentReferenceLinks = (
     // 以降の continue より前で状態を更新する。
     if (text.slice(scannedIndex, match.index).includes("。")) {
       articleScopeEndIndex = undefined;
+      isArticleScopeCrossLaw = false;
     }
 
     scannedIndex = match.index + match[0].length;
@@ -244,20 +261,33 @@ export const segmentReferenceLinks = (
       continue;
     }
 
-    // 条を名指ししない裸の数字の項参照（第2項）は、直前の条名指しから列挙の接続だけで
-    // つながっていれば、その条の項を指している可能性が高い。確信が持てないためリンク化しない。
+    // 直前の条名指しから、列挙の接続だけでつながっているか。
+    const continuesArticleScope =
+      articleScopeEndIndex !== undefined &&
+      coordinationGapPattern.test(text.slice(articleScopeEndIndex, match.index));
+
+    // 条を名指ししない裸の数字の項参照（第2項）は、列挙で続いていればその条の項を
+    // 指している可能性が高い。確信が持てないためリンク化しない。
     // 地の文を挟んだ裸の項参照は現在の条の項を指す起草慣行のため、抑止しない。
     // また前項・次項は常に同じ条の直前・直後の項を指すため、いずれの場合も対象外とする。
-    const isSuppressedByArticleScope =
-      articleScopeEndIndex !== undefined &&
-      coordinationGapPattern.test(text.slice(articleScopeEndIndex, match.index)) &&
+    const isSuppressedParagraph =
       parsed.article === undefined &&
       parsed.paragraph !== undefined &&
       !isRelativeShift(parsed.paragraph);
 
+    // 他法令の条に列挙で続く裸の条参照（「商法第798条及び第2条」の第2条）は、
+    // その法令の条を指す。現在の法令の条へ解決すると別の条文へ飛ぶため抑止する。
+    const isSuppressedArticle =
+      isArticleScopeCrossLaw && parsed.article !== undefined && !isRelativeShift(parsed.article);
+
+    const isSuppressedByArticleScope =
+      continuesArticleScope && (isSuppressedParagraph || isSuppressedArticle);
+
     // 条を名指ししていれば、リンクになったかどうかに関わらずスコープを立てる。
+    // 抑止した裸の条は列挙の一部なので、他法令というスコープの性質を引き継ぐ。
     if (parsed.article !== undefined) {
       articleScopeEndIndex = scannedIndex;
+      isArticleScopeCrossLaw = isSuppressedArticle && continuesArticleScope;
     }
 
     // 他法令を指す参照は、リンクになったかどうかに関わらず条名指しとしてスコープを立てる。
@@ -267,6 +297,7 @@ export const segmentReferenceLinks = (
 
     if (crossLawSpan !== undefined) {
       articleScopeEndIndex = scannedIndex;
+      isArticleScopeCrossLaw = true;
 
       const crossLawTarget =
         crossLawSpan.lawId === undefined
@@ -292,8 +323,12 @@ export const segmentReferenceLinks = (
 
     // ガード文字（例: 同条）で弾いた参照も、別の条を名指ししているという点では
     // 条名指しと同じ。以降の裸の項参照が現在の条へ誤解決しないようスコープを立てる。
-    if (hasPrecedingGuardChar(text, match.index)) {
+    // 法令名の末尾で弾いた場合は他法令のスコープとして扱い、列挙で続く裸の条も抑止する。
+    const guardChar = precedingGuardChar(text, match.index);
+
+    if (guardChar !== undefined) {
       articleScopeEndIndex = scannedIndex;
+      isArticleScopeCrossLaw = lawNameGuardChars.has(guardChar);
       continue;
     }
 
