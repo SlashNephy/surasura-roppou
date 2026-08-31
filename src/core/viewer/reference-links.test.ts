@@ -953,6 +953,12 @@ describe("segmentReferenceLinks for cross law references", () => {
     expect(noLinkTexts(text, { currentArticleNumber: "16" })).toEqual([]);
   });
 
+  it("does not link a bare article enumerated after 同法", () => {
+    // 同法は直前に名指しした法令を指すため、列挙で続く裸の条もその法令の条を指す。
+    // 現在の法令の条へ解決してはならない。
+    expect(noLinkTexts("同法第798条及び第15条の規定", { currentArticleNumber: "16" })).toEqual([]);
+  });
+
   it("keeps a bare paragraph reference out of the current article after a cross law reference", () => {
     expect(noLinkTexts("商法第15条第1項及び第2項の規定", { currentArticleNumber: "16" })).toEqual([
       "商法第15条第1項",

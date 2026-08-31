@@ -275,9 +275,11 @@ export const segmentReferenceLinks = (
     if (sameLevel !== undefined) {
       // 条を名指しする同参照は、後続の裸の項参照の基準になる。
       // 「同条第1項、第2項」の第2項が現在の条の項へ誤解決しないようスコープを立てる。
+      // 同法は直前に名指しした法令を指すため、列挙で続く裸の条もその法令の条とみなす。
+      // 同条は自法令の条を指すこともあるため、従来どおり自法令のスコープにする。
       if (sameLevel === "law" || sameLevel === "article") {
         articleScopeEndIndex = scannedIndex;
-        isArticleScopeCrossLaw = false;
+        isArticleScopeCrossLaw = sameLevel === "law";
       }
 
       continue;
