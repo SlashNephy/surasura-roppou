@@ -87,7 +87,15 @@ export const deriveLawIdFromLawNumber = (parsed: ParsedLawNumber): string | unde
     return undefined;
   }
 
-  if (parsed.year > 99 || parsed.number > 9_999_999_999) {
+  // parseLawNumber を経由しない呼び出しにも備え、下限（1 以上の整数）も検証する。
+  if (
+    !Number.isInteger(parsed.year) ||
+    !Number.isInteger(parsed.number) ||
+    parsed.year < 1 ||
+    parsed.year > 99 ||
+    parsed.number < 1 ||
+    parsed.number > 9_999_999_999
+  ) {
     return undefined;
   }
 

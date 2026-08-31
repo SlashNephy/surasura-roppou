@@ -93,6 +93,22 @@ describe("deriveLawIdFromLawNumber", () => {
       name: "does not derive an id for a year outside the two digit range",
       parsed: { era: "Showa", year: 100, type: "政令", number: 1 },
     },
+    {
+      name: "does not derive an id for a year of zero",
+      parsed: { era: "Showa", year: 0, type: "政令", number: 1 },
+    },
+    {
+      name: "does not derive an id for a number of zero",
+      parsed: { era: "Showa", year: 22, type: "政令", number: 0 },
+    },
+    {
+      name: "does not derive an id for a non integer year",
+      parsed: { era: "Showa", year: 22.5, type: "政令", number: 1 },
+    },
+    {
+      name: "does not derive an id for a non integer number",
+      parsed: { era: "Showa", year: 22, type: "政令", number: 1.5 },
+    },
   ] as const)("$name", ({ parsed }) => {
     expect(deriveLawIdFromLawNumber(parsed)).toBeUndefined();
   });
