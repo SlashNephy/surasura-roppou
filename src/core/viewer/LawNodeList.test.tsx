@@ -674,6 +674,42 @@ describe("LawNodeList", () => {
       expect(link).toHaveAttribute("href", "/laws/129AC0000000089/articles/15");
     });
 
+    it("renders a cross law reference as a link to the other law", () => {
+      const crossLawNodes: LawNode[] = referenceNodes.map((existing) =>
+        existing.id === "article:16/paragraph:1"
+          ? { ...existing, plainText: "商法第15条第2項の規定による。", rawText: "" }
+          : existing,
+      );
+
+      render(<LawNodeList lawId="129AC0000000089" nodes={crossLawNodes} />);
+
+      expect(screen.getByRole("link", { name: "商法第15条第2項" })).toHaveAttribute(
+        "href",
+        "/laws/132AC0000000048/articles/15?paragraph=2",
+      );
+    });
+
+    it("does not intercept a cross law link with the article callback", async () => {
+      const onSelectArticle = vi.fn();
+      const crossLawNodes: LawNode[] = referenceNodes.map((existing) =>
+        existing.id === "article:16/paragraph:1"
+          ? { ...existing, plainText: "商法第15条の規定による。", rawText: "" }
+          : existing,
+      );
+
+      render(
+        <LawNodeList
+          lawId="129AC0000000089"
+          nodes={crossLawNodes}
+          onSelectArticle={onSelectArticle}
+        />,
+      );
+
+      await userEvent.click(screen.getByRole("link", { name: "商法第15条" }));
+
+      expect(onSelectArticle).not.toHaveBeenCalled();
+    });
+
     it("renders a same article paragraph reference as an in-page link", () => {
       render(<LawNodeList lawId="129AC0000000089" nodes={referenceNodes} />);
 

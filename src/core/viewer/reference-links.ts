@@ -1,14 +1,12 @@
 import type { LawNode } from "@/core/domain";
 import {
   bodyReferencePositionPatternSource,
-  createAliasResolver,
-  initialAliasDictionary,
   parseReference,
   referenceArticleSpanPattern,
   type ParsedReference,
 } from "@/core/jump";
-import { normalizeForSearch } from "@/core/search";
 
+import { detectCrossLawSpan } from "./cross-law-span";
 import { chapterAnchorId, computeChildArticleContext, partAnchorId } from "./lawToc";
 
 // 本文の参照リンクを解決するために必要な、法令 1 件ぶんの条の一覧。
@@ -146,9 +144,13 @@ const buildHeadingLinkEntry = (
 };
 
 // 参照リンクの着地先。項は同じ条の中を指すときだけ載る（条をまたぐ着地は v1 では条単位）。
+// lawId があるものは他法令へのリンク。他法令では手元にノードが無いため項・号を検証できず、
+// 着地先ページの「指定された条文が見つかりません」を最後の砦にして、そのまま URL へ載せる。
 export interface ArticleLinkTarget {
+  lawId?: string;
   articleNumber: string;
   paragraphNumber?: string;
+  itemNumber?: string;
 }
 
 // 編・章の見出しへの着地先。URL は動かさず、ページ内アンカーへ飛ばす（#201 と兼ね合い）。
@@ -182,48 +184,23 @@ export type ReferenceLinkSegment =
   | { kind: "text"; text: string }
   | { kind: "link"; text: string; target: ReferenceLinkTarget; caption?: ReferenceLinkCaption };
 
-// 法令名の判定専用の resolver。組込辞書のみで十分（本文リンク化は候補解決までは行わない）。
-const defaultResolver = createAliasResolver();
-
-// 法令名部を後方から拾う窓幅。辞書の正規化キーの最大長を使う（reference-detector と同じ考え方）。
-const maxLawNameLength = Math.max(
-  ...initialAliasDictionary.flatMap((entry) =>
-    [entry.officialTitle, ...entry.aliases].map(
-      (surface) => normalizeForSearch(surface).normalized.length,
-    ),
-  ),
-);
-
-// 位置表現の直前に法令名が隣接しているかを判定する。位置部だけを渡す parseReference では
-// 法令名の有無を判定できないため、他法令参照（absolute）をここで弾く。
-const hasPrecedingLawName = (text: string, matchStart: number): boolean => {
-  const from = Math.max(0, matchStart - maxLawNameLength);
-
-  for (let start = from; start < matchStart; start += 1) {
-    if (defaultResolver.resolve(text.slice(start, matchStart)).length > 0) {
-      return true;
-    }
-  }
-
-  return false;
-};
-
-// alias 辞書は主要法令しか収録していないため、辞書外の法令名（例:「不正競争防止法」）は
-// hasPrecedingLawName で拾えない。誤ったリンクは無リンクより有害という方針のため、
+// alias 辞書は主要法令しか収録しておらず、法令番号の括弧書きも伴わない辞書外の法令名
+// （例:「不正競争防止法」）は detectCrossLawSpan でも拾えない。誤ったリンクは無リンクより
+// 有害という方針のため、
 // 直前 1 文字が法令名・附則・条例の末尾、または既に別の条を指す語（「同条」「当該条」）で
 // 終わる場合も抑止する。トレードオフとして「本法第15条」のような正しい自法令参照も
 // 抑止されるが、無リンクに倒す。
 // 「章」は「国連憲章第7章」のような辞書外の法令名を、「編」は編を名指しする他法令参照を
-// 抑止するために含める。
-const precedingGuardChars = new Set(["法", "令", "則", "例", "条", "編", "章"]);
+// 抑止するために含める。「律」は「…に関する法律」のように「法律」で終わる辞書外の法令名
+// （例:「行政機関の保有する情報の公開に関する法律」）を抑止するために含める。
+const precedingGuardChars = new Set(["法", "令", "則", "例", "条", "編", "章", "律"]);
 
 const hasPrecedingGuardChar = (text: string, matchStart: number): boolean =>
   matchStart > 0 && precedingGuardChars.has(text[matchStart - 1]);
 
-// 項の相対シフト（前項・次項）かどうかを判定する。相対シフトは現在位置から一意に
-// 解決できるため、文スコープ抑止の対象外にする（裸の数字の項参照とは扱いを分ける）。
-const isRelativeParagraphShift = (paragraph: string): boolean =>
-  paragraph === "previous" || paragraph === "next";
+// 条・項の相対シフト（前条・次条・前項・次項）かどうかを判定する。相対シフトは現在位置から
+// 一意に解決できるため、文スコープ抑止の対象外にする（裸の数字の項参照とは扱いを分ける）。
+const isRelativeShift = (value: string): boolean => value === "previous" || value === "next";
 
 // 条を名指しする参照と、そのあとの裸の項参照とをつなぐ列挙の接続。
 // 「第30条第2項及び第3項」のように接続詞・読点だけで並ぶ場合、後半の項は
@@ -276,18 +253,46 @@ export const segmentReferenceLinks = (
       coordinationGapPattern.test(text.slice(articleScopeEndIndex, match.index)) &&
       parsed.article === undefined &&
       parsed.paragraph !== undefined &&
-      !isRelativeParagraphShift(parsed.paragraph);
+      !isRelativeShift(parsed.paragraph);
 
     // 条を名指ししていれば、リンクになったかどうかに関わらずスコープを立てる。
     if (parsed.article !== undefined) {
       articleScopeEndIndex = scannedIndex;
     }
 
-    // 法令名を伴う参照（例: 商法第15条）やガード文字（例: 同条）で弾いた参照も、
-    // 別の条（または別の法令の条）を名指ししているという点では条名指しと同じ。
-    // ここでリンク化を見送っても、以降の裸の項参照が現在の条へ誤解決しないよう
-    // スコープを立てておく。
-    if (hasPrecedingLawName(text, match.index) || hasPrecedingGuardChar(text, match.index)) {
+    // 他法令を指す参照は、リンクになったかどうかに関わらず条名指しとしてスコープを立てる。
+    // そうしないと「商法第15条第1項及び第2項」の後半の裸の項参照が、
+    // 現在の条の項へ誤解決する。
+    const crossLawSpan = detectCrossLawSpan(text, match.index, lastIndex);
+
+    if (crossLawSpan !== undefined) {
+      articleScopeEndIndex = scannedIndex;
+
+      const crossLawTarget =
+        crossLawSpan.lawId === undefined
+          ? undefined
+          : resolveCrossLawTarget(parsed, crossLawSpan.lawId);
+
+      if (crossLawTarget === undefined) {
+        continue;
+      }
+
+      if (crossLawSpan.startIndex > lastIndex) {
+        segments.push({ kind: "text", text: text.slice(lastIndex, crossLawSpan.startIndex) });
+      }
+
+      segments.push({
+        kind: "link",
+        text: text.slice(crossLawSpan.startIndex, scannedIndex),
+        target: crossLawTarget,
+      });
+      lastIndex = scannedIndex;
+      continue;
+    }
+
+    // ガード文字（例: 同条）で弾いた参照も、別の条を名指ししているという点では
+    // 条名指しと同じ。以降の裸の項参照が現在の条へ誤解決しないようスコープを立てる。
+    if (hasPrecedingGuardChar(text, match.index)) {
       articleScopeEndIndex = scannedIndex;
       continue;
     }
@@ -341,6 +346,11 @@ const buildCaption = (
     return undefined;
   }
 
+  // 他法令の条には、条番号が偶然一致しただけの自法令の見出しが付いてしまうため付けない。
+  if (target.lawId !== undefined) {
+    return undefined;
+  }
+
   if (target.articleNumber === context.currentArticleNumber) {
     return undefined;
   }
@@ -356,6 +366,38 @@ const buildCaption = (
   const articleSpan = referenceArticleSpanPattern.exec(rawText);
 
   return { text: caption, offset: articleSpan === null ? rawText.length : articleSpan[0].length };
+};
+
+// 他法令の条・項・号は手元にノードが無いため検証しない。存在しない条・項へ着地しても
+// 着地先ページが「指定された条文が見つかりません」を出すため、そのまま URL へ載せる。
+const resolveCrossLawTarget = (
+  parsed: ParsedReference,
+  lawId: string,
+): ReferenceLinkTarget | undefined => {
+  // 前条・次条・前項・次項は現在位置が基準のため、他法令では解決できない。
+  // 条を伴わない参照（項・号だけ、編・章だけ）も他法令では着地先が決まらない。
+  if (parsed.article === undefined || isRelativeShift(parsed.article)) {
+    return undefined;
+  }
+
+  if (parsed.paragraph !== undefined && isRelativeShift(parsed.paragraph)) {
+    return undefined;
+  }
+
+  // 枝番の条番号は、アプリ正準表記が e-Gov の Num 由来で "876_9"、パーサーの出力が
+  // "876-9" と割れる。他法令のノードを持たない以上どちらが正しいか確かめられないため、
+  // 着地しないリンクを作らないよう見送る。
+  if (parsed.article.includes("-")) {
+    return undefined;
+  }
+
+  return {
+    kind: "article",
+    lawId,
+    articleNumber: parsed.article,
+    ...(parsed.paragraph === undefined ? {} : { paragraphNumber: parsed.paragraph }),
+    ...(parsed.item === undefined ? {} : { itemNumber: parsed.item }),
+  };
 };
 
 const resolveTarget = (
@@ -547,7 +589,7 @@ const resolveParagraphNumber = (
   entry: ArticleLinkEntry,
   context: ArticleLinkContext,
 ): string | undefined => {
-  if (!isRelativeParagraphShift(paragraph)) {
+  if (!isRelativeShift(paragraph)) {
     return entry.paragraphNumbers.includes(paragraph) ? paragraph : undefined;
   }
 

@@ -602,14 +602,26 @@ const ReferenceSegment = ({
   }
 
   const { caption, target, text } = segment;
+  // 他法令へのリンクは別ページへ遷移する。lawId が違えばページ内アンカーでは表せず、
+  // onSelectArticle も同一法令内の条移動のためのコールバックなので使わない。
+  const crossLawId = target.kind === "article" ? target.lawId : undefined;
+  const isCrossLaw = crossLawId !== undefined;
   // 編・章の見出しと、同じ条の中の項へはページ内リンク。条をまたぐときは条ルートへ遷移する。
-  const isInPage = target.kind === "heading" || target.paragraphNumber !== undefined;
+  const isInPage =
+    target.kind === "heading" || (!isCrossLaw && target.paragraphNumber !== undefined);
   const href =
     target.kind === "heading"
       ? `#${target.anchorId}`
-      : isInPage
-        ? `#${paragraphAnchorId(target.articleNumber, target.paragraphNumber ?? "")}`
-        : buildLawArticleUrl({ lawId: linking.lawId, article: target.articleNumber });
+      : isCrossLaw
+        ? buildLawArticleUrl({
+            lawId: crossLawId,
+            article: target.articleNumber,
+            paragraph: target.paragraphNumber,
+            item: target.itemNumber,
+          })
+        : isInPage
+          ? `#${paragraphAnchorId(target.articleNumber, target.paragraphNumber ?? "")}`
+          : buildLawArticleUrl({ lawId: linking.lawId, article: target.articleNumber });
   // 見出しの注入は見やすい表示のときだけ。原文表示では原文にない文字を足さない。
   const showCaption = caption !== undefined && linking.displayMode === "readable";
 
@@ -618,7 +630,7 @@ const ReferenceSegment = ({
       className="text-primary underline decoration-dotted underline-offset-4 hover:decoration-solid"
       href={href}
       onClick={
-        isInPage || linking.onSelectArticle === undefined
+        isInPage || isCrossLaw || linking.onSelectArticle === undefined
           ? undefined
           : (event) => {
               // 修飾キー付きクリックや中クリックは、新しいタブ・ウィンドウで開く
