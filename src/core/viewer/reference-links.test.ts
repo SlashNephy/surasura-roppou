@@ -1163,8 +1163,26 @@ describe("segmentReferenceLinks for 同 references", () => {
       text: "第2条第1項の規定による許可（同条第99項の規定により読み替えて適用される同項の承認を含む。）",
       expected: ["第2条第1項"],
     },
+    {
+      name: "does not link 同条第2項 whose antecedent article does not exist",
+      // 「第99条」はフィクスチャに実在しないため、同条は先行詞として解決できない。
+      text: "第99条の規定により同条第2項の規定を適用する",
+      expected: [],
+    },
   ])("$name", ({ expected, text }) => {
     expect(linkTexts(text, { currentArticleNumber: "4" })).toEqual(expected);
+  });
+
+  it("resolves 同条第2項 to a paragraph in the current article, whose bare article reference lands on the current position", () => {
+    // 「第2条」は現在位置（第2条第1項）そのものへ着地するためリンクにならないが、
+    // 条自体は実在するため先行詞としては有効。同条第2項は同じ条の別の項なので
+    // ページ内アンカーへ着地できる（#278 finding 1 の回帰）。
+    expect(
+      linkTexts("第2条の規定により同条第2項の規定を適用する", {
+        currentArticleNumber: "2",
+        currentParagraphNumber: "1",
+      }),
+    ).toEqual(["同条第2項"]);
   });
 
   it("resolves 同法 with an article to the law named earlier in the sentence", () => {

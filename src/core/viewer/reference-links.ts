@@ -494,10 +494,14 @@ export const segmentReferenceLinks = (
     const target = resolveTarget(parsed, context);
 
     if (target === undefined) {
-      // 解決に失敗した自法令参照（存在しない条・項、現在位置そのものへの参照など）も、
-      // 記録しないと後続の同参照が前方の無関係な条・項へ誤って結び付く。
+      // resolveTarget が undefined を返す理由は2つある。(1) 条・項が実在しない
+      // （本当に解決不能）、(2) 着地先が現在位置と同じでリンクにならない（押しても
+      // 動かないリンクを作らないための抑止）。(2) は先行詞としては有効（例:
+      // 「第2条の規定により同条第2項」は現在位置が第2条第1項でも、同条第2項は
+      // 別の項なのでページ内アンカーへ着地できる）ため、条・項が実在するかで
+      // resolved を決める。
       antecedents = recordAntecedents(antecedents, {
-        resolved: false,
+        resolved: referenceTargetExists(parsed, context),
         ...(parsed.article === undefined || isRelativeShift(parsed.article)
           ? {}
           : { articleNumber: parsed.article }),
@@ -658,6 +662,39 @@ const resolveCrossLawTarget = (
     ...(parsed.paragraph === undefined ? {} : { paragraphNumber: parsed.paragraph }),
     ...(parsed.item === undefined ? {} : { itemNumber: parsed.item }),
   };
+};
+
+// resolveTarget が undefined を返す参照のうち、指している条・項が実在するかどうかを
+// 判定する。同参照の先行詞としての有効性は「実在するか」だけで決まり、「着地先が
+// 現在位置と同じでリンクにならない」という resolveTarget 側の抑止とは独立している。
+const referenceTargetExists = (parsed: ParsedReference, context: ArticleLinkContext): boolean => {
+  // 法令名を伴う参照・編章のみの参照は、この経路の対象外（自法令の条・項の実在確認では
+  // 判定できない）。
+  if (parsed.kind === "absolute") {
+    return false;
+  }
+
+  if (parsed.article === undefined && (parsed.part !== undefined || parsed.chapter !== undefined)) {
+    return false;
+  }
+
+  const articleNumber = resolveArticleNumber(parsed, context);
+
+  if (articleNumber === undefined) {
+    return false;
+  }
+
+  const entry = context.articles.find((candidate) => candidate.articleNumber === articleNumber);
+
+  if (entry === undefined) {
+    return false;
+  }
+
+  if (parsed.paragraph === undefined) {
+    return true;
+  }
+
+  return resolveParagraphNumber(parsed.paragraph, entry, context) !== undefined;
 };
 
 const resolveTarget = (
