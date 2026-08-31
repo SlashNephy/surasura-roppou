@@ -135,6 +135,16 @@ export const createLawNumberResolver = ({
       return undefined;
     }
 
+    // law_num_type が複合する法令があり（例: 政令が Act,CabinetOrder を兼ねる）、
+    // 要求した種別と異なる法令が同じ条件で一意に返ることがある。誤リンクは無リンクより
+    // 有害なため、引き当てた法令の法令番号を読み直し、要求したキーと一致するときだけ採る。
+    const resolvedNumber = law.lawNumber === undefined ? undefined : parseLawNumber(law.lawNumber);
+
+    if (resolvedNumber === undefined || lawNumberKey(resolvedNumber) !== key) {
+      unresolvable.add(key);
+      return undefined;
+    }
+
     resolved.set(key, law.lawId);
     await indexRepository.upsertCatalogEntries([toCatalogEntry(law, now)]);
 

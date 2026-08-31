@@ -177,6 +177,19 @@ describe("createLawNumberResolver", () => {
     expect(listLawsSpy).toHaveBeenCalledTimes(1);
   });
 
+  it("does not resolve when the returned law's number does not match the request", async () => {
+    // 322CO0000000052（昭和二十二年政令第五十二号）は law_num_type が "Act,CabinetOrder" を
+    // 兼ねるため、law_num_type=Act で問い合わせても totalCount 1 で返ってくる（実測済み）。
+    // 本文が指す「昭和二十二年法律第五十二号」とは別の法令であり、誤リンクしてはならない。
+    const { dependencies, upsertCatalogEntries } = createDependencies({
+      listLaws: () => Promise.resolve(lawResult("322CO0000000052", "昭和二十二年政令第五十二号")),
+    });
+    const resolver = createLawNumberResolver(dependencies);
+
+    await expect(resolver.resolve(parse("昭和22年法律第52号"))).resolves.toBeUndefined();
+    expect(upsertCatalogEntries).not.toHaveBeenCalled();
+  });
+
   it("does not remember an abort as a failure", async () => {
     const abortError = new DOMException("aborted", "AbortError");
     let attempts = 0;
