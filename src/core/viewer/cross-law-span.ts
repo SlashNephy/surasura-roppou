@@ -53,6 +53,12 @@ const readLawNumberParenthesis = (
   }
 
   for (let index = matchStart - 2; index >= minIndex; index -= 1) {
+    if (closingBrackets.has(text[index])) {
+      // 入れ子の内側の閉じ括弧に先に当たった場合、それより先の開き括弧を
+      // 対応括弧とみなすと入れ子の内側を誤って対応括弧と誤認してしまう。
+      return undefined;
+    }
+
     if (!openingBrackets.has(text[index])) {
       continue;
     }

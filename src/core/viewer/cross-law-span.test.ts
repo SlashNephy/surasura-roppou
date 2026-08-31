@@ -82,6 +82,11 @@ describe("detectCrossLawSpan", () => {
       text: "（親告罪）第709条",
       marker: "第709条",
     },
+    {
+      name: "does not mistake a nested parenthesis for the matching one",
+      text: "この法律（労働基準法施行令（昭和二十二年政令第二十一号）を含む。）第5条",
+      marker: "第5条",
+    },
   ])("$name", ({ marker, text }) => {
     expect(detect(text, marker)).toBeUndefined();
   });
