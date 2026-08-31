@@ -35,6 +35,14 @@ export const articleAnchorId = (articleNumber: string): string => `a${articleNum
 export const paragraphAnchorId = (articleNumber: string, paragraphNumber: string): string =>
   `${articleAnchorId(articleNumber)}-p${paragraphNumber}`;
 
+// 号のアンカー。号番号は項ごとにリセットするため、項アンカーを前置して一意にする
+// （第15条第2項第3号 → a15-p2-i3）。
+export const itemAnchorId = (
+  articleNumber: string,
+  paragraphNumber: string,
+  itemNumber: string,
+): string => `${paragraphAnchorId(articleNumber, paragraphNumber)}-i${itemNumber}`;
+
 // 編・章の見出しアンカー。章番号は編ごとにリセットするため、章の id には所属編を含める
 // （編を持たない法令では章番号だけで一意になる）。条の a15 / a15-p2 とは接頭辞が異なる。
 export const partAnchorId = (partNumber: string): string => `pt${partNumber}`;

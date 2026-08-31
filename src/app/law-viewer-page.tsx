@@ -43,6 +43,8 @@ import {
   findLawNodeElement,
   highlightPopoverAttribute,
   isHighlightSupported,
+  itemAnchorId,
+  paragraphAnchorId,
   resolveNodeTextRange,
   toSourceOffset,
 } from "@/core/viewer";
@@ -549,6 +551,10 @@ const LawViewerReadyState = ({
       ? undefined
       : articleNumberByNormalizedInput.get(normalizeArticleNumberForLookup(routeArticleNumber));
   const isRouteArticleKnown = routeArticleNumber === undefined || activeArticleNumber !== undefined;
+  // 条の中の着地位置。他法令へのリンクが項・号まで指すため search から受ける。
+  const articleSearch = useSearch({ from: "/laws/$lawId/articles/$article", shouldThrow: false });
+  const articleParagraph = articleSearch?.paragraph;
+  const articleItem = articleSearch?.item;
 
   // 選択条が変わったらモバイルの「この条文」シートを閉じる。条→条の直接遷移でも、
   // 前の条のつもりで開いたシートが別の条の操作に化けたまま残るのを防ぐ（誤操作回避）。
@@ -634,11 +640,33 @@ const LawViewerReadyState = ({
     }
   };
 
-  const scrollToArticle = (articleNumber: string) => {
-    document
-      .getElementById(articleAnchorId(articleNumber))
-      ?.scrollIntoView({ block: "start", behavior: "smooth" });
-  };
+  // 条の中のどこへ着地するかは search が決める。号 → 項 → 条の順に、実在する
+  // 最も深いアンカーへ寄せる。存在しない項・号を指定されても条には着地する。
+  const scrollToArticle = useCallback(
+    (articleNumber: string) => {
+      const anchorIds = [
+        ...(articleParagraph === undefined
+          ? []
+          : articleItem === undefined
+            ? [paragraphAnchorId(articleNumber, articleParagraph)]
+            : [
+                itemAnchorId(articleNumber, articleParagraph, articleItem),
+                paragraphAnchorId(articleNumber, articleParagraph),
+              ]),
+        articleAnchorId(articleNumber),
+      ];
+
+      for (const anchorId of anchorIds) {
+        const element = document.getElementById(anchorId);
+
+        if (element) {
+          element.scrollIntoView({ block: "start", behavior: "smooth" });
+          return;
+        }
+      }
+    },
+    [articleParagraph, articleItem],
+  );
 
   useEffect(() => {
     if (activeArticleNumber === undefined) {
@@ -652,7 +680,7 @@ const LawViewerReadyState = ({
     }
 
     scrollToArticle(activeArticleNumber);
-  }, [activeArticleNumber, hasRestoredReadingPosition, mountedArticleNumber]);
+  }, [activeArticleNumber, hasRestoredReadingPosition, mountedArticleNumber, scrollToArticle]);
 
   // 他法令の条へは lawId ごと差し替えて遷移する。全ページ遷移ではなく SPA 内遷移にする。
   const navigateToCrossLawArticle = (target: CrossLawArticleTarget) => {
@@ -662,7 +690,11 @@ const LawViewerReadyState = ({
     void navigate({
       to: "/laws/$lawId/articles/$article",
       params: { lawId: target.lawId, article: target.articleNumber },
-      search: {},
+      // href と同じ着地位置になるよう、項・号をそのまま渡す。
+      search: {
+        ...(target.paragraphNumber === undefined ? {} : { paragraph: target.paragraphNumber }),
+        ...(target.itemNumber === undefined ? {} : { item: target.itemNumber }),
+      },
     });
   };
 
@@ -795,7 +827,6 @@ const LawViewerReadyState = ({
   // 一度だけカード作成ダイアログを自動起動し、リロード時の再起動を防ぐため param を消す。
   // study=new でなければガードを解除し、同一法令内の別条への再遷移でも
   // 自動起動できるようにする（param 消去後・別条遷移後に false へ戻る）。
-  const articleSearch = useSearch({ from: "/laws/$lawId/articles/$article", shouldThrow: false });
   const cardAutoOpenedRef = useRef(false);
 
   useEffect(() => {

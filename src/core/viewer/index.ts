@@ -7,6 +7,7 @@ export {
   articleAnchorId,
   buildLawTableOfContents,
   chapterAnchorId,
+  itemAnchorId,
   paragraphAnchorId,
   partAnchorId,
 } from "./lawToc";

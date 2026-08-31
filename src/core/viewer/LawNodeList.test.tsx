@@ -666,6 +666,41 @@ describe("LawNodeList", () => {
       }),
     ];
 
+    const itemNodes: LawNode[] = [
+      node({
+        id: "article:15",
+        type: "Article",
+        path: "article:15",
+        number: "15",
+        title: "第十五条",
+        children: ["article:15/paragraph:2"],
+      }),
+      node({
+        id: "article:15/paragraph:2",
+        type: "Paragraph",
+        path: "article:15/paragraph:2",
+        number: "2",
+        plainText: "次に掲げる者とする。",
+        parentId: "article:15",
+        children: ["article:15/paragraph:2/item:3"],
+      }),
+      node({
+        id: "article:15/paragraph:2/item:3",
+        type: "Item",
+        path: "article:15/paragraph:2/item:3",
+        number: "3",
+        plainText: "三　保佐人",
+        parentId: "article:15/paragraph:2",
+      }),
+    ];
+
+    it("gives an item under an article-direct paragraph an anchor id", () => {
+      const { container } = render(<LawNodeList lawId="129AC0000000089" nodes={itemNodes} />);
+
+      expect(container.querySelector("#a15-p2")).not.toBeNull();
+      expect(container.querySelector("#a15-p2-i3")).not.toBeNull();
+    });
+
     it("renders a cross article reference as a link to the article route", () => {
       render(<LawNodeList lawId="129AC0000000089" nodes={referenceNodes} />);
 

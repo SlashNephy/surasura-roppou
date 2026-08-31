@@ -25,6 +25,13 @@ import {
   StudyPage,
 } from "./pages";
 import { navigateToCandidate, navigateToReviewCandidate } from "./search-navigation";
+
+// 条ルートの search。条の中のどこへ着地するかを持つ。
+export interface LawViewerArticleSearch {
+  study?: "new";
+  paragraph?: string;
+  item?: string;
+}
 import { SavedCollectionPage, SavedPage } from "./saved-page";
 import { getScrollRestorationKey } from "./scroll-restoration";
 import { StudyCardDetailPage } from "./study-card-detail-page";
@@ -83,8 +90,14 @@ const createRouteTree = ({
     component: LawViewerRoute,
     // OCR 候補からの「復習に追加」は study=new を付けて遷移し、本文ロード後に
     // 学習カード作成ダイアログを自動起動する。未指定・他値は空 search に畳む。
-    validateSearch: (search: Record<string, unknown>): { study?: "new" } =>
-      search.study === "new" ? { study: "new" } : {},
+    // paragraph / item は条の中の着地位置。他法令へのリンクが項・号まで指すため受ける。
+    validateSearch: (search: Record<string, unknown>): LawViewerArticleSearch => ({
+      ...(search.study === "new" ? { study: "new" as const } : {}),
+      ...(typeof search.paragraph === "string" && search.paragraph !== ""
+        ? { paragraph: search.paragraph }
+        : {}),
+      ...(typeof search.item === "string" && search.item !== "" ? { item: search.item } : {}),
+    }),
   });
 
   const SavedRoute = () => <SavedPage storageRepository={storageRepository} />;
