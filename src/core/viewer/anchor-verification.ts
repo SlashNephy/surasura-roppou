@@ -1,10 +1,18 @@
 import type { LawNode } from "@/core/domain";
-import { computeArticleFingerprint } from "@/core/domain";
+import { computeArticleFingerprint, normalizeArticleNumberForLookup } from "@/core/domain";
 
-// 現在解決した nodes から、指定の条番号の Article ノードを引く。
-// 解決キーは条番号（枝番はビューワー/TOC と同じハイフン表現）で、階層 path は使わない。
+// 現在解決した nodes から、指定の条番号の Article ノードを引く。階層 path は使わない。
+// 条番号は枝番の区切りが由来で割れる（876_9 / 876-9 / 876の9）ため、両側を正規化して
+// 突き合わせる。保存済みアンカーやルートの表記が正準表記と違っても引き当てられる。
 export const findArticleNode = (nodes: LawNode[], article: string): LawNode | undefined => {
-  return nodes.find((node) => node.type === "Article" && node.number === article);
+  const normalized = normalizeArticleNumberForLookup(article);
+
+  return nodes.find(
+    (node) =>
+      node.type === "Article" &&
+      node.number !== undefined &&
+      normalizeArticleNumberForLookup(node.number) === normalized,
+  );
 };
 
 export type AnchorStatus = "match" | "drift" | "not_found";
