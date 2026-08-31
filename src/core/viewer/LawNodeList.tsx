@@ -604,7 +604,8 @@ const ReferenceSegment = ({
   const { caption, target, text } = segment;
   // 他法令へのリンクは別ページへ遷移する。lawId が違えばページ内アンカーでは表せず、
   // onSelectArticle も同一法令内の条移動のためのコールバックなので使わない。
-  const isCrossLaw = target.kind === "article" && target.lawId !== undefined;
+  const crossLawId = target.kind === "article" ? target.lawId : undefined;
+  const isCrossLaw = crossLawId !== undefined;
   // 編・章の見出しと、同じ条の中の項へはページ内リンク。条をまたぐときは条ルートへ遷移する。
   const isInPage =
     target.kind === "heading" || (!isCrossLaw && target.paragraphNumber !== undefined);
@@ -613,7 +614,7 @@ const ReferenceSegment = ({
       ? `#${target.anchorId}`
       : isCrossLaw
         ? buildLawArticleUrl({
-            lawId: target.lawId ?? linking.lawId,
+            lawId: crossLawId,
             article: target.articleNumber,
             paragraph: target.paragraphNumber,
             item: target.itemNumber,
