@@ -76,7 +76,10 @@ export const createLawNumberResolver = ({
 
   // 問い合わせ中の約束。解決済みの記憶へ載るのは応答後なので、同じ法令番号を同時に
   // 解決しようとすると memo をすり抜けて二重に問い合わせてしまう。
-  const inFlight = new Map<string, Promise<string | undefined>>();
+  const inFlight = new Map<
+    string,
+    { promise: Promise<string | undefined>; signal: AbortSignal | undefined }
+  >();
 
   const request = async (
     parsed: ParsedLawNumber,
@@ -178,15 +181,21 @@ export const createLawNumberResolver = ({
 
       const pending = inFlight.get(key);
 
-      if (pending !== undefined) {
-        return pending;
+      // 相乗り先のプロミスは最初の呼び出し側の signal に紐づく。その signal が既に
+      // 中断済みなら、相乗りしても AbortError で reject されるだけで終わる。中断済みの
+      // 実行中プロミスへは相乗りせず、新しい要求を始める。
+      if (pending !== undefined && pending.signal?.aborted !== true) {
+        return pending.promise;
       }
 
       const started = request(parsed, key, options.signal).finally(() => {
-        inFlight.delete(key);
+        // 自分より新しい要求に inFlight を上書きされていたら、そちらを消さない。
+        if (inFlight.get(key)?.promise === started) {
+          inFlight.delete(key);
+        }
       });
 
-      inFlight.set(key, started);
+      inFlight.set(key, { promise: started, signal: options.signal });
 
       return started;
     },

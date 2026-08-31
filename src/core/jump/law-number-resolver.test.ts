@@ -202,6 +202,39 @@ describe("createLawNumberResolver", () => {
     await expect(resolver.resolve(parse("昭和32年法律第166号"))).resolves.toBe("332AC1000000166");
   });
 
+  it("starts a fresh request instead of joining an in-flight promise whose signal is already aborted", async () => {
+    // 法令 A の表示中に解決が走り、法令 B へ切り替えて A の effect が中断しても、
+    // B が同じ法令番号を解決しようとしたときに中断済みのプロミスへ相乗りしてはならない。
+    const controllerA = new AbortController();
+    let callCount = 0;
+    const { dependencies } = createDependencies({
+      listLaws: (_query, options) => {
+        callCount += 1;
+
+        if (callCount === 1) {
+          return new Promise((_resolve, reject) => {
+            options?.signal?.addEventListener("abort", () => {
+              reject(new DOMException("aborted", "AbortError"));
+            });
+          });
+        }
+
+        return Promise.resolve(lawResult("332AC1000000166", "昭和三十二年法律第百六十六号"));
+      },
+    });
+    const resolver = createLawNumberResolver(dependencies);
+
+    const first = resolver.resolve(parse("昭和32年法律第166号"), { signal: controllerA.signal });
+
+    first.catch(() => {
+      // 中断は想定内。ここでは検証しない。
+    });
+    controllerA.abort();
+
+    await expect(resolver.resolve(parse("昭和32年法律第166号"))).resolves.toBe("332AC1000000166");
+    expect(callCount).toBe(2);
+  });
+
   it("does not remember an abort as a failure", async () => {
     const abortError = new DOMException("aborted", "AbortError");
     let attempts = 0;
