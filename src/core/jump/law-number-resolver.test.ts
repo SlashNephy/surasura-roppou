@@ -59,9 +59,9 @@ describe("createLawNumberResolver", () => {
     const { dependencies, listLawsSpy } = createDependencies();
     const resolver = createLawNumberResolver(dependencies);
 
-    await expect(resolver.resolve(parse("昭和二十二年政令第二十一号"))).resolves.toBe(
-      "322CO0000000021",
-    );
+    await expect(resolver.resolve(parse("昭和二十二年政令第二十一号"))).resolves.toEqual({
+      lawId: "322CO0000000021",
+    });
     expect(listLawsSpy).not.toHaveBeenCalled();
   });
 
@@ -80,7 +80,10 @@ describe("createLawNumberResolver", () => {
     const resolver = createLawNumberResolver(dependencies);
 
     // 本文側は算用数字で現れることがある。キーで突き合わせるため引けなければならない。
-    await expect(resolver.resolve(parse("昭和32年法律第166号"))).resolves.toBe("332AC1000000166");
+    await expect(resolver.resolve(parse("昭和32年法律第166号"))).resolves.toEqual({
+      lawId: "332AC1000000166",
+      title: "核原料物質、核燃料物質及び原子炉の規制に関する法律",
+    });
     expect(listLawsSpy).not.toHaveBeenCalled();
   });
 
@@ -90,7 +93,10 @@ describe("createLawNumberResolver", () => {
     });
     const resolver = createLawNumberResolver(dependencies);
 
-    await expect(resolver.resolve(parse("昭和32年法律第166号"))).resolves.toBe("332AC1000000166");
+    await expect(resolver.resolve(parse("昭和32年法律第166号"))).resolves.toEqual({
+      lawId: "332AC1000000166",
+      title: "テスト法",
+    });
     expect(listLawsSpy).toHaveBeenCalledWith(
       {
         lawNumberEra: "Showa",
@@ -155,9 +161,10 @@ describe("createLawNumberResolver", () => {
     });
     const resolver = createLawNumberResolver(dependencies);
 
-    await expect(resolver.resolve(parse("明治二十七年大蔵省令第二号"))).resolves.toBe(
-      "127M10000040002",
-    );
+    await expect(resolver.resolve(parse("明治二十七年大蔵省令第二号"))).resolves.toEqual({
+      lawId: "127M10000040002",
+      title: "テスト省令",
+    });
     expect(listLawsSpy).not.toHaveBeenCalled();
   });
 
@@ -172,8 +179,8 @@ describe("createLawNumberResolver", () => {
       resolver.resolve(parse("昭和32年法律第166号")),
     ]);
 
-    expect(first).toBe("332AC1000000166");
-    expect(second).toBe("332AC1000000166");
+    expect(first).toEqual({ lawId: "332AC1000000166", title: "テスト法" });
+    expect(second).toEqual({ lawId: "332AC1000000166", title: "テスト法" });
     expect(listLawsSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -199,7 +206,10 @@ describe("createLawNumberResolver", () => {
 
     const resolver = createLawNumberResolver(dependencies);
 
-    await expect(resolver.resolve(parse("昭和32年法律第166号"))).resolves.toBe("332AC1000000166");
+    await expect(resolver.resolve(parse("昭和32年法律第166号"))).resolves.toEqual({
+      lawId: "332AC1000000166",
+      title: "テスト法",
+    });
   });
 
   it("starts a fresh request instead of joining an in-flight promise whose signal is already aborted", async () => {
@@ -231,7 +241,10 @@ describe("createLawNumberResolver", () => {
     });
     controllerA.abort();
 
-    await expect(resolver.resolve(parse("昭和32年法律第166号"))).resolves.toBe("332AC1000000166");
+    await expect(resolver.resolve(parse("昭和32年法律第166号"))).resolves.toEqual({
+      lawId: "332AC1000000166",
+      title: "テスト法",
+    });
     expect(callCount).toBe(2);
   });
 
@@ -252,7 +265,10 @@ describe("createLawNumberResolver", () => {
       } as unknown as SearchIndexRepository,
     });
 
-    await expect(resolver.resolve(parse("昭和32年法律第166号"))).resolves.toBe("332AC1000000166");
+    await expect(resolver.resolve(parse("昭和32年法律第166号"))).resolves.toEqual({
+      lawId: "332AC1000000166",
+      title: "テスト法",
+    });
   });
 
   it("does not remember an abort as a failure", async () => {
@@ -270,6 +286,44 @@ describe("createLawNumberResolver", () => {
     const resolver = createLawNumberResolver(dependencies);
 
     await expect(resolver.resolve(parse("昭和32年法律第166号"))).rejects.toBe(abortError);
-    await expect(resolver.resolve(parse("昭和32年法律第166号"))).resolves.toBe("332AC1000000166");
+    await expect(resolver.resolve(parse("昭和32年法律第166号"))).resolves.toEqual({
+      lawId: "332AC1000000166",
+      title: "テスト法",
+    });
+  });
+
+  it("carries the official title when resolving through the repository", async () => {
+    const { dependencies } = createDependencies({
+      listLaws: () => Promise.resolve(lawResult("332AC1000000166", "昭和三十二年法律第百六十六号")),
+    });
+    const resolver = createLawNumberResolver(dependencies);
+
+    await expect(resolver.resolve(parse("昭和32年法律第166号"))).resolves.toEqual({
+      lawId: "332AC1000000166",
+      title: "テスト法",
+    });
+  });
+
+  it("carries the official title of a derived cabinet order from the cached catalog", async () => {
+    // 政令の lawId は法令番号から導出できるが、正式名称は導出できない。
+    // 下線の左境界を正確にするため、キャッシュにあれば正式名称も載せる。
+    const { dependencies, listLawsSpy } = createDependencies({
+      catalog: [
+        {
+          lawId: "322CO0000000021",
+          title: "労働基準法施行令",
+          lawNumber: "昭和二十二年政令第二十一号",
+          aliases: [],
+          cachedAt: "2026-08-31T00:00:00.000Z",
+        },
+      ],
+    });
+    const resolver = createLawNumberResolver(dependencies);
+
+    await expect(resolver.resolve(parse("昭和二十二年政令第二十一号"))).resolves.toEqual({
+      lawId: "322CO0000000021",
+      title: "労働基準法施行令",
+    });
+    expect(listLawsSpy).not.toHaveBeenCalled();
   });
 });
