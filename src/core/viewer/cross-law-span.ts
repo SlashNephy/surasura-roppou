@@ -34,8 +34,7 @@ const closingBrackets = new Set(["）", ")"]);
 // 副作用として、法令名自体にこれらの文字を含む場合（「…条約」「国連憲章」等）は
 // スキャンがその手前で止まり下線が短くなるが、リンク先は法令番号から決まるため
 // 誤リンクにはならない（失敗方向は安全側）。
-const lawNameBoundaryPattern =
-  /[\s、。，．・（）()「」『』〔〕［］[\]｛｝{}"'条項号編章第]/;
+const lawNameBoundaryPattern = /[\s、。，．・（）()「」『』〔〕［］[\]｛｝{}"'条項号編章第]/;
 
 // スパンの先頭に残る列挙の接続語。reference-links の coordinationGapPattern と同じ語彙。
 const leadingCoordinationPattern = /^(?:及び|並びに|又は|若しくは|、|・)+/;
