@@ -190,6 +190,18 @@ describe("createLawNumberResolver", () => {
     expect(upsertCatalogEntries).not.toHaveBeenCalled();
   });
 
+  it("resolves even when caching the result fails", async () => {
+    const { dependencies, upsertCatalogEntries } = createDependencies({
+      listLaws: () => Promise.resolve(lawResult("332AC1000000166", "昭和三十二年法律第百六十六号")),
+    });
+
+    upsertCatalogEntries.mockRejectedValueOnce(new Error("write failed"));
+
+    const resolver = createLawNumberResolver(dependencies);
+
+    await expect(resolver.resolve(parse("昭和32年法律第166号"))).resolves.toBe("332AC1000000166");
+  });
+
   it("does not remember an abort as a failure", async () => {
     const abortError = new DOMException("aborted", "AbortError");
     let attempts = 0;

@@ -146,7 +146,13 @@ export const createLawNumberResolver = ({
     }
 
     resolved.set(key, law.lawId);
-    await indexRepository.upsertCatalogEntries([toCatalogEntry(law, now)]);
+
+    try {
+      // キャッシュへの反映は best-effort。失敗しても解決結果自体は返す。
+      await indexRepository.upsertCatalogEntries([toCatalogEntry(law, now)]);
+    } catch (error) {
+      console.warn("[jump] failed to cache resolved law number entry", error);
+    }
 
     return law.lawId;
   };
