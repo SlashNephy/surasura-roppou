@@ -158,65 +158,75 @@ describe("detectCrossLawSpan with official titles", () => {
     ["Heisei/11/法律/156", { lawId: "411AC0000000156", title: "原子力災害対策特別措置法" }],
   ]);
 
-  it("starts the span at the official title instead of swallowing the preceding phrase", () => {
-    // 「中」は改正条文の言い回しで、法令名の一部ではない。左スキャンでは区切れない。
-    // 境界が正確になると直前が漢字（「中」）になるため、宛先は漢字ガードで伏せられる。
-    const text = "附則第九条中農業協同組合法（昭和22年法律第132号）第十一条";
-
-    expect(detect(text, "第十一条", 0, lawByLawNumber)).toEqual({
-      startIndex: text.indexOf("農業協同組合法"),
-    });
-  });
-
-  it("keeps a title that contains a punctuation mark whole", () => {
-    // 「、」は左スキャンの境界文字なので、正式名称を使わないと頭が切れる。
-    const text =
-      "育児休業、介護休業等育児又は家族介護を行う労働者の福祉に関する法律（平成3年法律第76号）第2条";
-
-    expect(detect(text, "第2条", 0, lawByLawNumber)).toEqual({
-      startIndex: 0,
-      lawId: "403AC0000000076",
-    });
-  });
-
-  it("does not use a title that would reach before the previous segment", () => {
-    // minIndex は直前に確定したリンクの終端。正式名称がそこを越えるなら使わない。
-    const text = "第1条農業協同組合法（昭和22年法律第132号）第十一条";
-
-    expect(detect(text, "第十一条", text.indexOf("組合法"), lawByLawNumber)?.startIndex).toBe(
-      text.indexOf("組合法"),
-    );
-  });
-
-  it("falls back to the left scan when the body uses a former name", () => {
-    // 法令が改称されると本文の表記と現在の正式名称が違う（実データにあった例）。
-    // 完全一致しないので従来どおり左スキャンへ落ちる。
-    const text = "労働時間の短縮の促進に関する臨時措置法（平成4年法律第90号）第2条の規定";
-    const renamed = new Map<string, ResolvedLawNumber>([
-      [
-        "Heisei/4/法律/90",
-        { lawId: "404AC0000000090", title: "労働時間等の設定の改善に関する特別措置法" },
-      ],
-    ]);
-
-    expect(detect(text, "第2条", 0, renamed)).toEqual({
-      startIndex: 0,
-      lawId: "404AC0000000090",
-    });
-  });
-
-  it("suppresses a reference prefixed by a kanji even when it carries a law number", () => {
-    // 正式名称で境界が決まると「旧」が法令名の外に出て漢字ガードに掛かる。
-    // 法令番号があっても例外にしない。本則ではガードの例外に利得が無く、
-    // 「旧民法」のような別法令の参照を抑止できる側に倒すため。
-    const text = "旧民法（明治二十九年法律第八十九号）第90条";
-    const lawByLawNumberWithEntry = new Map<string, ResolvedLawNumber>([
-      ...lawByLawNumber,
-      ["Meiji/29/法律/89", { lawId: "129AC0000000089", title: "民法" }],
-    ]);
-
-    expect(detect(text, "第90条", 0, lawByLawNumberWithEntry)).toEqual({
-      startIndex: text.indexOf("民法"),
-    });
+  it.each([
+    {
+      name: "starts the span at the official title instead of swallowing the preceding phrase",
+      // 先行する列挙は法令名の一部ではない。区切り文字が無いので左スキャンでは切れない。
+      text: "地方公共団体の議会の議員及び農業協同組合法（昭和22年法律第132号）第十一条",
+      marker: "第十一条",
+      minIndex: 0,
+      lawByLawNumber,
+      expected: { startIndex: "地方公共団体の議会の議員及び".length, lawId: "322AC0000000132" },
+    },
+    {
+      name: "keeps a title that contains a punctuation mark whole",
+      // 「、」は左スキャンの境界文字なので、正式名称を使わないと頭が切れる。
+      text: "育児休業、介護休業等育児又は家族介護を行う労働者の福祉に関する法律（平成3年法律第76号）第2条",
+      marker: "第2条",
+      minIndex: 0,
+      lawByLawNumber,
+      expected: { startIndex: 0, lawId: "403AC0000000076" },
+    },
+    {
+      name: "does not use a title that would reach before the previous segment",
+      // minIndex は直前に確定したリンクの終端。正式名称がそこを越えるなら使わない。
+      text: "第1条農業協同組合法（昭和22年法律第132号）第十一条",
+      marker: "第十一条",
+      minIndex: "第1条農業協同".length,
+      lawByLawNumber,
+      // 直前が「同」（漢字）になるため、宛先は漢字ガードで伏せられる。
+      expected: { startIndex: "第1条農業協同".length },
+    },
+    {
+      name: "falls back to the left scan when the body uses a former name",
+      // 法令が改称されると本文の表記と現在の正式名称が違う（実データにあった例）。
+      // 完全一致しないので従来どおり左スキャンへ落ちる。
+      text: "労働時間の短縮の促進に関する臨時措置法（平成4年法律第90号）第2条の規定",
+      marker: "第2条",
+      minIndex: 0,
+      lawByLawNumber: new Map<string, ResolvedLawNumber>([
+        [
+          "Heisei/4/法律/90",
+          { lawId: "404AC0000000090", title: "労働時間等の設定の改善に関する特別措置法" },
+        ],
+      ]),
+      expected: { startIndex: 0, lawId: "404AC0000000090" },
+    },
+    {
+      name: "falls back to the left scan when the title is empty",
+      // 空文字列を長さ 0 の一致として扱うと、開き括弧の位置に境界が潰れる。
+      text: "労働時間の短縮の促進に関する臨時措置法（平成4年法律第90号）第2条の規定",
+      marker: "第2条",
+      minIndex: 0,
+      lawByLawNumber: new Map<string, ResolvedLawNumber>([
+        ["Heisei/4/法律/90", { lawId: "404AC0000000090", title: "" }],
+      ]),
+      expected: { startIndex: 0, lawId: "404AC0000000090" },
+    },
+    {
+      name: "suppresses a reference prefixed by a kanji even when it carries a law number",
+      // 正式名称で境界が決まると「旧」が法令名の外に出て漢字ガードに掛かる。
+      // 法令番号があっても例外にしない。本則ではガードの例外に利得が無く、
+      // 「旧民法」のような別法令の参照を抑止できる側に倒すため。
+      text: "旧民法（明治二十九年法律第八十九号）第90条",
+      marker: "第90条",
+      minIndex: 0,
+      lawByLawNumber: new Map<string, ResolvedLawNumber>([
+        ["Meiji/29/法律/89", { lawId: "129AC0000000089", title: "民法" }],
+      ]),
+      expected: { startIndex: "旧".length },
+    },
+  ])("$name", ({ text, marker, minIndex, lawByLawNumber: table, expected }) => {
+    expect(detect(text, marker, minIndex, table)).toEqual(expected);
   });
 });
