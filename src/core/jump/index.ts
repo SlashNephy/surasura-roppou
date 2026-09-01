@@ -44,4 +44,8 @@ export {
 } from "./law-number";
 export type { LawNumberEra, ParsedLawNumber } from "./law-number";
 export { createLawNumberResolver } from "./law-number-resolver";
-export type { LawNumberResolver, LawNumberResolverDependencies } from "./law-number-resolver";
+export type {
+  LawNumberResolver,
+  LawNumberResolverDependencies,
+  ResolvedLawNumber,
+} from "./law-number-resolver";

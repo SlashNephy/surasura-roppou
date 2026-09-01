@@ -549,7 +549,7 @@ const LawViewerReadyState = ({
 
   const tocItems = useMemo(() => buildLawTableOfContents(state.nodes), [state.nodes]);
   // 本文中の法令番号を裏で解決し、解決できたものから他法令リンクへ回す。
-  const lawIdByLawNumber = useCrossLawNumbers(state.nodes, resolvedLawNumberResolver);
+  const lawByLawNumber = useCrossLawNumbers(state.nodes, resolvedLawNumberResolver);
   const articleNumberByNormalizedInput = useMemo(
     () =>
       new Map(
@@ -1037,7 +1037,7 @@ const LawViewerReadyState = ({
               activeArticleNumber={activeArticleNumber}
               displayMode={displayMode}
               law={state.law}
-              lawIdByLawNumber={lawIdByLawNumber}
+              lawByLawNumber={lawByLawNumber}
               nodes={state.nodes}
               onSelectArticle={navigateToArticle}
               onSelectCrossLawArticle={navigateToCrossLawArticle}

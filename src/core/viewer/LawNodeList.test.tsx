@@ -784,7 +784,7 @@ describe("LawNodeList", () => {
       render(
         <LawNodeList
           lawId="129AC0000000089"
-          lawIdByLawNumber={new Map([["Heisei/11/法律/156", "411AC0000000156"]])}
+          lawByLawNumber={new Map([["Heisei/11/法律/156", { lawId: "411AC0000000156" }]])}
           nodes={actNodes}
         />,
       );
@@ -794,6 +794,34 @@ describe("LawNodeList", () => {
           name: "原子力災害対策特別措置法（平成11年法律第156号）第2条",
         }),
       ).toHaveAttribute("href", "/laws/411AC0000000156/articles/2");
+    });
+
+    it("underlines a cross-law reference from the official title, not the preceding phrase", () => {
+      // 前の列挙は法令名の一部ではない。区切り文字が無いため、正式名称が無いと下線に入る。
+      const actNodes: LawNode[] = referenceNodes.map((existing) =>
+        existing.id === "article:16/paragraph:1"
+          ? {
+              ...existing,
+              plainText:
+                "地方公共団体の議会の議員及び農業協同組合法（昭和22年法律第132号）第十一条の規定による。",
+              rawText: "",
+            }
+          : existing,
+      );
+
+      render(
+        <LawNodeList
+          lawByLawNumber={
+            new Map([["Showa/22/法律/132", { lawId: "322AC0000000132", title: "農業協同組合法" }]])
+          }
+          lawId="129AC0000000089"
+          nodes={actNodes}
+        />,
+      );
+
+      expect(
+        screen.getByRole("link", { name: "農業協同組合法（昭和22年法律第132号）第11条" }),
+      ).toHaveAttribute("href", "/laws/322AC0000000132/articles/11");
     });
 
     it("renders a same article paragraph reference as an in-page link", () => {

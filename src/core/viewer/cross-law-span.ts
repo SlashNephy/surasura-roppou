@@ -4,6 +4,7 @@ import {
   initialAliasDictionary,
   lawNumberKey,
   parseLawNumber,
+  type ResolvedLawNumber,
 } from "@/core/jump";
 import { normalizeForSearch } from "@/core/search";
 
@@ -50,6 +51,7 @@ const positionTerminators = new Set(["条", "項", "号", "編", "章", "第"]);
 interface LawNumberParenthesis {
   startIndex: number;
   lawId?: string;
+  title?: string;
 }
 
 // 位置表現の直前にある法令番号の括弧書きを読む。括弧が無い、または中身が
@@ -58,7 +60,7 @@ const readLawNumberParenthesis = (
   text: string,
   matchStart: number,
   minIndex: number,
-  lawIdByLawNumber: ReadonlyMap<string, string> | undefined,
+  lawByLawNumber: ReadonlyMap<string, ResolvedLawNumber> | undefined,
 ): LawNumberParenthesis | undefined => {
   if (matchStart <= minIndex || !closingBrackets.has(text[matchStart - 1])) {
     return undefined;
@@ -81,9 +83,14 @@ const readLawNumberParenthesis = (
       return undefined;
     }
 
-    const lawId = deriveLawIdFromLawNumber(parsed) ?? lawIdByLawNumber?.get(lawNumberKey(parsed));
+    const resolvedLaw = lawByLawNumber?.get(lawNumberKey(parsed));
+    const lawId = deriveLawIdFromLawNumber(parsed) ?? resolvedLaw?.lawId;
 
-    return { startIndex: index, ...(lawId === undefined ? {} : { lawId }) };
+    return {
+      startIndex: index,
+      ...(lawId === undefined ? {} : { lawId }),
+      ...(resolvedLaw?.title === undefined ? {} : { title: resolvedLaw.title }),
+    };
   }
 
   return undefined;
@@ -121,6 +128,29 @@ const readDictionaryLawName = (
   return undefined;
 };
 
+// 法令番号から引いた正式名称が括弧の直前にそのまま置かれていれば、境界はそこで厳密に決まる。
+// 表記ゆれは吸収しない。正規化すると長さが変わり、開始位置の算出が狂うため。
+const readTitledLawName = (
+  text: string,
+  nameEnd: number,
+  minIndex: number,
+  title: string | undefined,
+): number | undefined => {
+  // 空文字列だと slice 比較が常に一致し、開き括弧の位置に境界が潰れてしまう。
+  if (title === undefined || title === "") {
+    return undefined;
+  }
+
+  const start = nameEnd - title.length;
+
+  // 直前に確定したセグメントを越えて遡らない。
+  if (start < minIndex) {
+    return undefined;
+  }
+
+  return text.slice(start, nameEnd) === title ? start : undefined;
+};
+
 // 法令番号の括弧書きの直前を、区切り文字に当たるまで法令名として読む。
 // 辞書に無い法令名を拾うための経路なので、左境界は厳密には決まらない。
 // 助詞を巻き込んで下線が長くなることはあるが、宛先は法令番号で決まるため誤リンクにはならない。
@@ -140,9 +170,9 @@ export const detectCrossLawSpan = (
   text: string,
   matchStart: number,
   minIndex: number,
-  lawIdByLawNumber?: ReadonlyMap<string, string>,
+  lawByLawNumber?: ReadonlyMap<string, ResolvedLawNumber>,
 ): CrossLawSpan | undefined => {
-  const parenthesis = readLawNumberParenthesis(text, matchStart, minIndex, lawIdByLawNumber);
+  const parenthesis = readLawNumberParenthesis(text, matchStart, minIndex, lawByLawNumber);
   const nameEnd = parenthesis?.startIndex ?? matchStart;
   const dictionary = readDictionaryLawName(text, nameEnd, minIndex);
 
@@ -150,12 +180,18 @@ export const detectCrossLawSpan = (
     return undefined;
   }
 
+  // 正式名称は法令番号が決めるので最も確か。次に辞書の最長一致、最後に左スキャン。
   const startIndex =
+    readTitledLawName(text, nameEnd, minIndex, parenthesis?.title) ??
     dictionary?.startIndex ??
     (parenthesis === undefined ? nameEnd : readFreeLawName(text, nameEnd, minIndex));
 
   // 「旧民法」「新会社法」のように法令名の直前が漢字なら、現行法とは別の法令を
   // 指している可能性が高い。宛先を伏せて無リンクにする。
+  // 法令番号を伴う参照を例外にすることも考えられるが、実データで数えると本則の
+  // リンク数は例外の有無で変わらなかった（「附則第九条中農業協同組合法（…）」の
+  // ような改正条文の言い回しは附則にしか現れない）。利得が無いなら
+  // 「誤ったリンクは無リンクより有害」に従い、抑止側に倒す。
   // ただし直前が位置表現の末尾なら、それは別の参照の終わりであって接頭辞ではない。
   if (
     startIndex > 0 &&

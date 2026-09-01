@@ -6,6 +6,7 @@ import {
   parseLawNumber,
   type LawNumberResolver,
   type ParsedLawNumber,
+  type ResolvedLawNumber,
 } from "@/core/jump";
 
 // 本文中の法令番号の括弧書き。中身は parseLawNumber に委ねるため、括弧の中を粗く取る。
@@ -17,14 +18,14 @@ const concurrency = 6;
 
 // 走査結果が無いときに返す空の表。毎描画で作り直すと、この表を deps に持つ
 // 下流のメモが無駄に壊れるため、参照を固定する。
-const emptyLawIdByLawNumber: ReadonlyMap<string, string> = new Map();
+const emptyLawByLawNumber: ReadonlyMap<string, ResolvedLawNumber> = new Map();
 
 // どの走査結果に対する解決かを覚えておく。法令が変わって走査結果が入れ替わったら、
 // 前の法令の対応表は使わない。
-interface ResolvedLawIds {
+interface ResolvedLawNumbers {
   lawNumbers: ReadonlyMap<string, ParsedLawNumber>;
   resolver: LawNumberResolver;
-  lawIdByLawNumber: ReadonlyMap<string, string>;
+  lawByLawNumber: ReadonlyMap<string, ResolvedLawNumber>;
 }
 
 // 本文を走査して法令番号を重複排除する。表示モードによらず plainText を見る。
@@ -50,8 +51,8 @@ const collectLawNumbers = (nodes: LawNode[]): Map<string, ParsedLawNumber> => {
 export const useCrossLawNumbers = (
   nodes: LawNode[],
   resolver: LawNumberResolver,
-): ReadonlyMap<string, string> => {
-  const [resolved, setResolved] = useState<ResolvedLawIds | undefined>(undefined);
+): ReadonlyMap<string, ResolvedLawNumber> => {
+  const [resolved, setResolved] = useState<ResolvedLawNumbers | undefined>(undefined);
   const collected = useMemo(() => collectLawNumbers(nodes), [nodes]);
   // 走査結果の内容キー。呼び出し側が毎描画で新しい nodes 配列を渡しても、中身が
   // 同じなら同じ参照を返し、effect の再実行を防ぐ（さもないと解決 → 再描画 →
@@ -85,29 +86,31 @@ export const useCrossLawNumbers = (
         const parsed = entries[cursor];
         cursor += 1;
 
-        const lawId = await resolver.resolve(parsed, { signal: controller.signal });
+        const law = await resolver.resolve(parsed, { signal: controller.signal });
 
         // 中断後は表を触らない。法令を切り替えた後や、画面を離れた後の反映を防ぐ。
-        if (lawId === undefined || isAborted()) {
+        if (law === undefined || isAborted()) {
           continue;
         }
 
         setResolved((previous) => {
           // 前の法令の対応表には積み増さない。走査結果と解決器が同じときだけ引き継ぐ。
           const matches = previous?.lawNumbers === lawNumbers && previous.resolver === resolver;
-          const base = matches ? previous.lawIdByLawNumber : emptyLawIdByLawNumber;
+          const base = matches ? previous.lawByLawNumber : emptyLawByLawNumber;
           const key = lawNumberKey(parsed);
+          const existing = base.get(key);
 
           // 既に同じ結果が入っていれば、新しいオブジェクトを作らない。作ると
           // 再描画が走り、nodes を作り直す呼び出し側では輪になる。
-          if (matches && base.get(key) === lawId) {
+          // 解決結果は毎回別のオブジェクトになるため、参照ではなく中身で比べる。
+          if (matches && existing?.lawId === law.lawId && existing.title === law.title) {
             return previous;
           }
 
           return {
             lawNumbers,
             resolver,
-            lawIdByLawNumber: new Map(base).set(key, lawId),
+            lawByLawNumber: new Map(base).set(key, law),
           };
         });
       }
@@ -132,6 +135,6 @@ export const useCrossLawNumbers = (
   // 法令が変わった直後は、まだ前の法令の対応表が state に残っている。描画時に
   // 突き合わせて捨てることで、effect の中で同期的に state を書き戻さずに済む。
   return resolved?.lawNumbers === lawNumbers && resolved.resolver === resolver
-    ? resolved.lawIdByLawNumber
-    : emptyLawIdByLawNumber;
+    ? resolved.lawByLawNumber
+    : emptyLawByLawNumber;
 };

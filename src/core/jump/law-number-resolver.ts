@@ -10,9 +10,19 @@ import {
   type ParsedLawNumber,
 } from "./law-number";
 
+// 法令番号から引き当てた法令。title は下線の左境界を決めるために使う。
+// 政令の導出経路でキャッシュに無い場合など、正式名称が分からないことがある。
+export interface ResolvedLawNumber {
+  lawId: string;
+  title?: string;
+}
+
 export interface LawNumberResolver {
-  // キャッシュ優先で lawId を返す。解決できなければ undefined。
-  resolve(parsed: ParsedLawNumber, options?: { signal?: AbortSignal }): Promise<string | undefined>;
+  // キャッシュ優先で引き当てる。解決できなければ undefined。
+  resolve(
+    parsed: ParsedLawNumber,
+    options?: { signal?: AbortSignal },
+  ): Promise<ResolvedLawNumber | undefined>;
 }
 
 export interface LawNumberResolverDependencies {
@@ -50,15 +60,15 @@ export const createLawNumberResolver = ({
   now = () => new Date(),
 }: LawNumberResolverDependencies): LawNumberResolver => {
   // 解決済みと、解決できなかったものの記憶。同じ法令番号を何度も問い合わせない。
-  const resolved = new Map<string, string>();
+  const resolved = new Map<string, ResolvedLawNumber>();
   const unresolvable = new Set<string>();
   // 起動から一度だけカタログを読む。法令を切り替えるたびに読み直さない。
-  let cachedCatalog: Promise<Map<string, string>> | undefined;
+  let cachedCatalog: Promise<Map<string, ResolvedLawNumber>> | undefined;
 
   // キャッシュの読み込みは best-effort。IndexedDB はプライベートウィンドウや容量超過で
   // 読めないことがあり、そこで解決そのものを止めるとリンクが一切出なくなる。
-  const loadCatalogIndex = async (): Promise<Map<string, string>> => {
-    const index = new Map<string, string>();
+  const loadCatalogIndex = async (): Promise<Map<string, ResolvedLawNumber>> => {
+    const index = new Map<string, ResolvedLawNumber>();
     let entries;
 
     try {
@@ -77,7 +87,7 @@ export const createLawNumberResolver = ({
       const parsed = parseLawNumber(entry.lawNumber);
 
       if (parsed !== undefined) {
-        index.set(lawNumberKey(parsed), entry.lawId);
+        index.set(lawNumberKey(parsed), { lawId: entry.lawId, title: entry.title });
       }
     }
 
@@ -88,22 +98,22 @@ export const createLawNumberResolver = ({
   // 解決しようとすると memo をすり抜けて二重に問い合わせてしまう。
   const inFlight = new Map<
     string,
-    { promise: Promise<string | undefined>; signal: AbortSignal | undefined }
+    { promise: Promise<ResolvedLawNumber | undefined>; signal: AbortSignal | undefined }
   >();
 
   const request = async (
     parsed: ParsedLawNumber,
     key: string,
     signal: AbortSignal | undefined,
-  ): Promise<string | undefined> => {
+  ): Promise<ResolvedLawNumber | undefined> => {
     // キャッシュは種別によらず引く。省令のように法令番号から問い合わせられない種別でも、
     // 検索経由でカタログに入っていれば解決できる。
     cachedCatalog ??= loadCatalogIndex();
-    const cachedLawId = (await cachedCatalog).get(key);
+    const cached = (await cachedCatalog).get(key);
 
-    if (cachedLawId !== undefined) {
-      resolved.set(key, cachedLawId);
-      return cachedLawId;
+    if (cached !== undefined) {
+      resolved.set(key, cached);
+      return cached;
     }
 
     const typeCode = lawNumberTypeCode(parsed.type);
@@ -158,7 +168,9 @@ export const createLawNumberResolver = ({
       return undefined;
     }
 
-    resolved.set(key, law.lawId);
+    const entry: ResolvedLawNumber = { lawId: law.lawId, title: law.title };
+
+    resolved.set(key, entry);
 
     try {
       // キャッシュへの反映は best-effort。失敗しても解決結果自体は返す。
@@ -167,18 +179,24 @@ export const createLawNumberResolver = ({
       console.warn("[jump] failed to cache resolved law number entry", error);
     }
 
-    return law.lawId;
+    return entry;
   };
 
   return {
     async resolve(parsed, options = {}) {
+      const key = lawNumberKey(parsed);
       const derived = deriveLawIdFromLawNumber(parsed);
 
       if (derived !== undefined) {
-        return derived;
+        // 政令は法令番号から lawId が決まる。正式名称は決まらないので、キャッシュに
+        // あるときだけ載せる。ここでネットワークには出ない。
+        cachedCatalog ??= loadCatalogIndex();
+        const cached = (await cachedCatalog).get(key);
+        const title = cached?.lawId === derived ? cached.title : undefined;
+
+        return { lawId: derived, ...(title === undefined ? {} : { title }) };
       }
 
-      const key = lawNumberKey(parsed);
       const known = resolved.get(key);
 
       if (known !== undefined) {

@@ -4,6 +4,7 @@ import {
   parseReference,
   referenceArticleSpanPattern,
   type ParsedReference,
+  type ResolvedLawNumber,
 } from "@/core/jump";
 
 import { detectCrossLawSpan } from "./cross-law-span";
@@ -178,9 +179,9 @@ export interface ArticleLinkContext {
   // 前編・次編・前章・次章の基準にもなる。
   currentPartNumber?: string;
   currentChapterNumber?: string;
-  // 法令番号キー → lawId。法律の lawId は法令番号から導出できないため、
-  // 前段で非同期に解決した結果をここから引く。
-  lawIdByLawNumber?: ReadonlyMap<string, string>;
+  // 法令番号キー → 引き当てた法令。法律の lawId は法令番号から導出できないため、
+  // 前段で非同期に解決した結果をここから引く。正式名称は下線の左境界に使う。
+  lawByLawNumber?: ReadonlyMap<string, ResolvedLawNumber>;
 }
 
 export type ReferenceLinkSegment =
@@ -407,7 +408,7 @@ export const segmentReferenceLinks = (
     // 他法令を指す参照は、リンクになったかどうかに関わらず条名指しとしてスコープを立てる。
     // そうしないと「商法第15条第1項及び第2項」の後半の裸の項参照が、
     // 現在の条の項へ誤解決する。
-    const crossLawSpan = detectCrossLawSpan(text, match.index, lastIndex, context.lawIdByLawNumber);
+    const crossLawSpan = detectCrossLawSpan(text, match.index, lastIndex, context.lawByLawNumber);
 
     if (crossLawSpan !== undefined) {
       articleScopeEndIndex = scannedIndex;
