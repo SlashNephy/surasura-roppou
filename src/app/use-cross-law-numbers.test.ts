@@ -77,6 +77,23 @@ describe("useCrossLawNumbers", () => {
     expect(resolve).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps the official title the resolver returned", async () => {
+    // 対応表は lawId だけでなく正式名称も運ぶ。下流の左境界の判定がこれを使う。
+    const resolver: LawNumberResolver = {
+      resolve: () => Promise.resolve({ lawId: "322AC0000000132", title: "農業協同組合法" }),
+    };
+    const nodes = [node("p1", "農業協同組合法（昭和22年法律第132号）第11条の規定による。")];
+
+    const { result } = renderHook(() => useCrossLawNumbers(nodes, resolver));
+
+    await waitFor(() => {
+      expect(result.current.get("Showa/22/法律/132")).toEqual({
+        lawId: "322AC0000000132",
+        title: "農業協同組合法",
+      });
+    });
+  });
+
   it("omits law numbers the resolver could not resolve", async () => {
     const { resolve, resolver } = resolverOf({ "Heisei/11/法律/156": "411AC0000000156" });
     const nodes = [

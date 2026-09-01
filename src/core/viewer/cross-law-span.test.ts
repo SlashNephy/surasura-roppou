@@ -160,11 +160,11 @@ describe("detectCrossLawSpan with official titles", () => {
 
   it("starts the span at the official title instead of swallowing the preceding phrase", () => {
     // 「中」は改正条文の言い回しで、法令名の一部ではない。左スキャンでは区切れない。
+    // 境界が正確になると直前が漢字（「中」）になるため、宛先は漢字ガードで伏せられる。
     const text = "附則第九条中農業協同組合法（昭和22年法律第132号）第十一条";
 
     expect(detect(text, "第十一条", 0, lawByLawNumber)).toEqual({
       startIndex: text.indexOf("農業協同組合法"),
-      lawId: "322AC0000000132",
     });
   });
 
@@ -205,25 +205,18 @@ describe("detectCrossLawSpan with official titles", () => {
     });
   });
 
-  it("does not suppress a reference that carries a law number even when a kanji precedes it", () => {
-    // 宛先は名称ではなく法令番号が決める。「旧」「中」のような接頭辞を疑う理由が無い。
-    // それを保証するため、対応表にこの法令番号のエントリを用意し、宛先が
-    // 実際に番号から決まる状態にしてから検証する。
+  it("suppresses a reference prefixed by a kanji even when it carries a law number", () => {
+    // 正式名称で境界が決まると「旧」が法令名の外に出て漢字ガードに掛かる。
+    // 法令番号があっても例外にしない。本則ではガードの例外に利得が無く、
+    // 「旧民法」のような別法令の参照を抑止できる側に倒すため。
     const text = "旧民法（明治二十九年法律第八十九号）第90条";
     const lawByLawNumberWithEntry = new Map<string, ResolvedLawNumber>([
       ...lawByLawNumber,
       ["Meiji/29/法律/89", { lawId: "129AC0000000089", title: "民法" }],
     ]);
 
-    expect(detect(text, "第90条", 0, lawByLawNumberWithEntry)?.lawId).toBe("129AC0000000089");
-  });
-
-  it("suppresses a reference whose law number can never be looked up", () => {
-    // 太政官布告は deriveLawIdFromLawNumber が扱わず、対応表にも載り得ない。
-    // 括弧書きがあっても宛先は結局辞書（名称「刑法」）から来るため、
-    // 漢字ガードを外してはならず、宛先は伏せられなければならない。
-    const text = "旧刑法（明治十三年太政官布告第三十六号）第二百条";
-
-    expect(detect(text, "第二百条", 0, lawByLawNumber)?.lawId).toBeUndefined();
+    expect(detect(text, "第90条", 0, lawByLawNumberWithEntry)).toEqual({
+      startIndex: text.indexOf("民法"),
+    });
   });
 });

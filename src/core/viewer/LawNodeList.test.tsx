@@ -797,12 +797,13 @@ describe("LawNodeList", () => {
     });
 
     it("underlines a cross-law reference from the official title, not the preceding phrase", () => {
-      // 「中」は改正条文の言い回しで法令名の一部ではない。正式名称が無いと下線に入る。
+      // 前の列挙は法令名の一部ではない。区切り文字が無いため、正式名称が無いと下線に入る。
       const actNodes: LawNode[] = referenceNodes.map((existing) =>
         existing.id === "article:16/paragraph:1"
           ? {
               ...existing,
-              plainText: "附則第九条中農業協同組合法（昭和22年法律第132号）第十一条の規定による。",
+              plainText:
+                "地方公共団体の議会の議員及び農業協同組合法（昭和22年法律第132号）第十一条の規定による。",
               rawText: "",
             }
           : existing,
