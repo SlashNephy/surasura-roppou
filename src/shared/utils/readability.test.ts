@@ -60,11 +60,19 @@ describe("readability", () => {
     expect(transformReadableText(input)).toBe(expected);
   });
 
-  // 成分の一つでも読めない表記は、部分的に算用数字へ変えず原文のまま残す。
+  // 一つの規則が扱う成分は揃えて変換する。元号が読めない法令番号は法令番号として扱わず、
+  // 号数だけが号の規則（政令・勅令の号数と同じ扱い）で算用数字になる。
+  it("converts only the components a rule can read", () => {
+    expect(transformReadableText("平成十十年法律第一五一号のうち")).toBe(
+      "平成十十年法律第151号のうち",
+    );
+  });
+
+  // 元号を伴わない月日も日付として位取りの漢数字を読む。
   it.each([
-    ["平成十十年一二月八日", "平成十十年一二月八日"],
-    ["平成十十年法律第一五一号", "平成十十年法律第151号"],
-  ])("keeps a date whose component cannot be read: %s", (input, expected) => {
+    ["一二月八日", "12月8日"],
+    ["一月一〇日", "1月10日"],
+  ])("converts positional kanji numbers in a month and day: %s", (input, expected) => {
     expect(transformReadableText(input)).toBe(expected);
   });
 

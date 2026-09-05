@@ -25,6 +25,9 @@ const unitByKanji = new Map([
 const kanjiNumberPattern = "[〇一二三四五六七八九十百千]+";
 const eraYearPattern = `${kanjiNumberPattern}|元`;
 const branchNumberPattern = `${kanjiNumberPattern}(?:の${kanjiNumberPattern})*`;
+const kanjiNumberOnlyRegex = new RegExp(`^${kanjiNumberPattern}$`, "u");
+// 号は条・項と同じ規則で扱う。法令番号のうち法律以外（政令・勅令など）は法令番号の規則が
+// 拾わないため、「政令第三百号」のような号数はこの規則が算用数字にする。
 const articleNumberRegex = new RegExp(`第(${kanjiNumberPattern})(条|項|号)`, "g");
 // 本文中の「第四章の二つ」などとの曖昧さを避け、e-Gov の見出し形式である先頭の構造番号と区切りがそろう場合だけ変換する。
 const structuralHeadingPrefixRegex = new RegExp(
@@ -54,8 +57,11 @@ const eraDateRegex = new RegExp(
   `(令和|平成|昭和|大正|明治)(${eraYearPattern})年(${kanjiNumberPattern})月(${kanjiNumberPattern})日`,
   "g",
 );
+// 改正附則の法令番号（AmendLawNum）は「平成一一年一二月八日法律第一五一号」のように
+// 公布年月日を挟む。年月日と号数を別々に変換すると、どちらかが読めないときに混在するため
+// 一つの単位として扱う。
 const lawNumberRegex = new RegExp(
-  `(令和|平成|昭和|大正|明治)(${eraYearPattern})年法律第(${kanjiNumberPattern})号`,
+  `(令和|平成|昭和|大正|明治)(${eraYearPattern})年(?:(${kanjiNumberPattern})月(${kanjiNumberPattern})日)?法律第(${kanjiNumberPattern})号`,
   "g",
 );
 const quantityLimitPattern = "以上|以下|以内|未満|を超え|を越え|をこえ|を経過";
@@ -135,7 +141,7 @@ export const toArabicNumber = (
   kanjiNumber: string,
   { allowPositional = false }: { allowPositional?: boolean } = {},
 ): number | undefined => {
-  if (!new RegExp(`^${kanjiNumberPattern}$`, "u").test(kanjiNumber)) {
+  if (!kanjiNumberOnlyRegex.test(kanjiNumber)) {
     return undefined;
   }
 
@@ -295,14 +301,29 @@ const transformDates = (text: string): string =>
   });
 
 const transformLawNumbers = (text: string): string =>
-  text.replace(lawNumberRegex, (match, era: string, year: string, lawNumber: string) => {
-    const displayYear = replaceEraYear(year);
-    const replaced = replaceNumberingKanjiAll([lawNumber]);
+  text.replace(
+    lawNumberRegex,
+    (
+      match,
+      era: string,
+      year: string,
+      month: string | undefined,
+      day: string | undefined,
+      lawNumber: string,
+    ) => {
+      const displayYear = replaceEraYear(year);
+      const dateParts = month === undefined || day === undefined ? [] : [month, day];
+      const replaced = replaceNumberingKanjiAll([...dateParts, lawNumber]);
 
-    return displayYear === undefined || replaced === undefined
-      ? match
-      : `${era}${displayYear}年法律第${replaced[0]}号`;
-  });
+      if (displayYear === undefined || replaced === undefined) {
+        return match;
+      }
+
+      const displayDate = dateParts.length === 0 ? "" : `${replaced[0]}月${replaced[1]}日`;
+
+      return `${era}${displayYear}年${displayDate}法律第${replaced.at(-1) ?? ""}号`;
+    },
+  );
 
 // 分数 → 歩合 → 月日 → 助数詞 → 裸の数量の順に適用する。
 // 「三分の二以上」は分数を先に処理しないと「三分の2以上」で止まり、
@@ -320,8 +341,9 @@ const transformQuantities = (text: string): string =>
 
       return replaced === undefined ? match : `${replaced[0]}割${replaced[1]}分`;
     })
+    // 「○月○日」は日付として読めるため、位取りの漢数字（「一二月八日」）も変換する。
     .replace(monthDayRegex, (match, month: string, day: string) => {
-      const replaced = replaceKanjiNumbersAll([month, day]);
+      const replaced = replaceNumberingKanjiAll([month, day]);
 
       return replaced === undefined ? match : `${replaced[0]}月${replaced[1]}日`;
     })
