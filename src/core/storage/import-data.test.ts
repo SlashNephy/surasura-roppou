@@ -52,6 +52,38 @@ describe("parseSavedDataImport", () => {
     });
   });
 
+  // 附則ノードは改正法令番号と抄を持つ。スキーマは additionalProperties を許さないため、
+  // 定義を欠くと改正附則を含む法令のエクスポートがインポートできなくなる。
+  it("accepts saved supplementary provision nodes that carry the amending law number", () => {
+    const data = createSavedDataExportFixture();
+    const withSupplementaryProvision = {
+      ...data,
+      savedLaws: data.savedLaws.map((savedLaw) => ({
+        ...savedLaw,
+        nodes: [
+          ...savedLaw.nodes,
+          {
+            id: "civil-code-supplementary-provision-2",
+            lawId: savedLaw.law.lawId,
+            revisionId: savedLaw.revision.revisionId,
+            type: "SupplementaryProvision" as const,
+            path: "supplementary-provision:2",
+            title: "附　則",
+            amendLawNumber: "平成一一年一二月八日法律第一五一号",
+            isExtract: true,
+            rawText: "附　則",
+            plainText: "附　則",
+            children: [],
+          },
+        ],
+      })),
+    };
+
+    expect(parseSavedDataImport(stringify(withSupplementaryProvision)).data).toEqual(
+      withSupplementaryProvision,
+    );
+  });
+
   it("reports invalid JSON separately from schema errors", () => {
     const error = getImportError("{not-json");
 
