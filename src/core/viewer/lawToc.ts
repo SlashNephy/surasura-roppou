@@ -23,6 +23,9 @@ export interface LawTocItem {
   title: string;
   // 条の見出し（例:「（親告罪）」）。目次で条番号の隣に添える。条以外では付かない。
   caption?: string;
+  // 附則の改正法令番号と抄。同じ「附則」が並ぶ目次で附則を区別するために添える。
+  amendLawNumber?: string;
+  isExtract?: boolean;
   type: LawNodeType;
   depth: number;
   articleNumber?: string;
@@ -97,6 +100,8 @@ const buildTocItems = (
       id: node.id,
       title,
       ...(caption === undefined ? {} : { caption }),
+      ...(node.amendLawNumber === undefined ? {} : { amendLawNumber: node.amendLawNumber }),
+      ...(node.isExtract === true ? { isExtract: true } : {}),
       type: node.type,
       depth,
       ...(articleNumber === undefined ? {} : { articleNumber }),

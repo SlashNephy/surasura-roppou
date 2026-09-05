@@ -50,6 +50,11 @@ export interface LawNode {
   number?: string;
   title?: string;
   caption?: string;
+  // 附則の改正法令番号（e-Gov の SupplProvision/@AmendLawNum）。制定時の附則には付かない。
+  // 見出しがどれも「附則」で揃うため、いつの改正で加わった附則かはこれでしか区別できない。
+  amendLawNumber?: string;
+  // 附則が抄（一部抜粋）であること（e-Gov の SupplProvision/@Extract）。
+  isExtract?: boolean;
   rawText: string;
   plainText: string;
   normalizedText?: string;

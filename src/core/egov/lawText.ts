@@ -105,6 +105,7 @@ export const normalizeEgovLawText = (
       number,
       ...(title === undefined ? {} : { title }),
       ...(caption === undefined ? {} : { caption }),
+      ...getSupplementaryProvisionAttributes(apiNode, nodeType),
       rawText: collectRawText(apiNode),
       plainText,
       normalizedText: plainText,
@@ -167,6 +168,25 @@ const getNodeTitle = (apiNode: EgovLawTextNode, nodeType: LawNodeType): string |
   );
 
   return titleNode === undefined ? undefined : collectRawText(titleNode);
+};
+
+// 附則は e-Gov の見出しがどれも「附則」で、改正法令番号（AmendLawNum）と抄（Extract）だけが
+// 制定時の附則との違いを示す。表示レイヤーで見出しに添えるため属性として持たせる。
+const getSupplementaryProvisionAttributes = (
+  apiNode: EgovLawTextNode,
+  nodeType: LawNodeType,
+): Pick<LawNode, "amendLawNumber" | "isExtract"> => {
+  if (nodeType !== "SupplementaryProvision") {
+    return {};
+  }
+
+  const amendLawNumber = stringifyAttribute(apiNode.attr.AmendLawNum);
+  const isExtract = stringifyAttribute(apiNode.attr.Extract) === "true";
+
+  return {
+    ...(amendLawNumber === undefined || amendLawNumber === "" ? {} : { amendLawNumber }),
+    ...(isExtract ? { isExtract } : {}),
+  };
 };
 
 const getNodeCaption = (apiNode: EgovLawTextNode, nodeType: LawNodeType): string | undefined => {

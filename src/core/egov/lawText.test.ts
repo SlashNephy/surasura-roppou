@@ -428,6 +428,46 @@ describe("normalizeEgovLawText", () => {
     );
   });
 
+  // e-Gov では改正附則も見出しが「附則」で揃うため、改正法令番号を持たせないと
+  // どの改正で加わった附則か区別できない。
+  it("extracts the amending law number and the extract flag of a supplementary provision", () => {
+    const nodes = normalizeLawBody([
+      lawTextNode(
+        "SupplProvision",
+        [
+          lawTextNode("SupplProvisionLabel", ["附　則"]),
+          lawTextNode("Paragraph", [paragraphSentence("この法律は、公布の日から施行する。")]),
+        ],
+        { AmendLawNum: "平成一一年一二月八日法律第一五一号", Extract: "true" },
+      ),
+    ]);
+
+    expect(findNode(nodes, "SupplementaryProvision", "supplementary-provision:1")).toEqual(
+      expect.objectContaining({
+        title: "附　則",
+        amendLawNumber: "平成一一年一二月八日法律第一五一号",
+        isExtract: true,
+      }),
+    );
+  });
+
+  it("omits the amending law number for the supplementary provision of the original enactment", () => {
+    const nodes = normalizeLawBody([
+      lawTextNode("SupplProvision", [
+        lawTextNode("SupplProvisionLabel", ["附　則"]),
+        lawTextNode("Paragraph", [paragraphSentence("この法律は、公布の日から施行する。")]),
+      ]),
+    ]);
+    const supplementaryProvisionNode = findNode(
+      nodes,
+      "SupplementaryProvision",
+      "supplementary-provision:1",
+    );
+
+    expect(supplementaryProvisionNode).not.toHaveProperty("amendLawNumber");
+    expect(supplementaryProvisionNode).not.toHaveProperty("isExtract");
+  });
+
   it("omits caption when the paragraph has no caption", () => {
     const nodes = normalizeLawBody([article("第一条")]);
 

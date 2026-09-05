@@ -84,6 +84,45 @@ describe("lawToc", () => {
     ]);
   });
 
+  // 目次には同じ「附則」が並ぶため、改正法令番号と抄を目次項目にも持たせる。
+  it("carries the amending law number and the extract flag of supplementary provisions", () => {
+    const toc = buildLawTableOfContents([
+      node({
+        id: "supplementary:1",
+        type: "SupplementaryProvision",
+        path: "supplementary-provision:1",
+        title: "附　則",
+      }),
+      node({
+        id: "supplementary:2",
+        type: "SupplementaryProvision",
+        path: "supplementary-provision:2",
+        title: "附　則",
+        amendLawNumber: "平成一一年一二月八日法律第一五一号",
+        isExtract: true,
+      }),
+    ]);
+
+    expect(toc).toEqual([
+      {
+        id: "supplementary:1",
+        title: "附　則",
+        type: "SupplementaryProvision",
+        depth: 1,
+        children: [],
+      },
+      {
+        id: "supplementary:2",
+        title: "附　則",
+        type: "SupplementaryProvision",
+        depth: 1,
+        amendLawNumber: "平成一一年一二月八日法律第一五一号",
+        isExtract: true,
+        children: [],
+      },
+    ]);
+  });
+
   it("only exposes article numbers for URL-addressable main body articles", () => {
     const toc = buildLawTableOfContents([
       node({
