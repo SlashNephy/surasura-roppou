@@ -228,4 +228,30 @@ export const readabilityTransformFixtures = [
     input: "第一義的な解釈に限らない。",
     expected: "第一義的な解釈に限らない。",
   },
+  // e-Gov の法令番号や日付は「一一」「一〇」のような位取りの漢数字で書かれる。
+  // 読めないと成分ごとの変換が空振りし、「一二月8日」のように一部だけ算用数字になる。
+  {
+    name: "positional kanji era date",
+    mode: "date",
+    input: "平成一一年一二月八日",
+    expected: "平成11年12月8日",
+  },
+  {
+    name: "positional kanji law number",
+    mode: "law-number",
+    input: "平成一一年法律第一五一号",
+    expected: "平成11年法律第151号",
+  },
+  {
+    name: "positional kanji article number",
+    mode: "article-number",
+    input: "第一〇条",
+    expected: "第10条",
+  },
+  {
+    name: "positional kanji item number",
+    mode: "article-number",
+    input: "第一六〇号",
+    expected: "第160号",
+  },
 ] satisfies ReadabilityTransformFixture[];

@@ -93,7 +93,7 @@ describe("LawTableOfContents", () => {
       within(navigation)
         .getAllByRole("listitem")
         .map((item) => item.textContent),
-    ).toEqual(["附　則", "附　則（平成一一年一二月八日法律第一五一号）　抄"]);
+    ).toEqual(["附　則", "附　則（平成11年12月8日法律第151号）　抄"]);
   });
 
   it("renders nested items as readable text by default", () => {
