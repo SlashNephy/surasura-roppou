@@ -79,8 +79,10 @@ const TocItem = ({
   const isArticle = articleNumber !== undefined;
   const isActiveArticle = articleNumber === activeArticleNumber;
   const displayTitle = applyLawHeadingTextDisplayMode(item.title, displayMode);
-  // 附則の改正法令番号は法令番号として漢数字が正式表記であるため、見やすい表示でも原文のまま添える。
-  const headingSuffix = supplementaryProvisionHeadingSuffix(item);
+  // 附則の改正法令番号は原文の見出しに含まれないため、表示の変換を別に掛けて後ろに添える。
+  const suffix = supplementaryProvisionHeadingSuffix(item);
+  const headingSuffix =
+    suffix === undefined ? undefined : applyLawHeadingTextDisplayMode(suffix, displayMode);
   // 条見出し（例:「（親告罪）」）。条番号の隣に控えめに添える。
   const displayCaption =
     item.caption === undefined

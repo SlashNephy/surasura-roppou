@@ -2,6 +2,7 @@ export type ReadabilityTransformMode =
   "article-number" | "date" | "law-number" | "parentheses" | "quantity" | "unchanged" | "all";
 
 const digitByKanji = new Map([
+  ["〇", 0],
   ["一", 1],
   ["二", 2],
   ["三", 3],
@@ -19,9 +20,14 @@ const unitByKanji = new Map([
   ["千", 1_000],
 ]);
 
-const kanjiNumberPattern = "[一二三四五六七八九十百千]+";
+// e-Gov の法令番号や条番号は「一〇」「一一」のような位取りの漢数字でも書かれるため、
+// 〇 を含めて拾う。位取りとして読むかどうかは変換側（allowPositional）が決める。
+const kanjiNumberPattern = "[〇一二三四五六七八九十百千]+";
 const eraYearPattern = `${kanjiNumberPattern}|元`;
 const branchNumberPattern = `${kanjiNumberPattern}(?:の${kanjiNumberPattern})*`;
+const kanjiNumberOnlyRegex = new RegExp(`^${kanjiNumberPattern}$`, "u");
+// 号は条・項と同じ規則で扱う。法令番号のうち法律以外（政令・勅令など）は法令番号の規則が
+// 拾わないため、「政令第三百号」のような号数はこの規則が算用数字にする。
 const articleNumberRegex = new RegExp(`第(${kanjiNumberPattern})(条|項|号)`, "g");
 // 本文中の「第四章の二つ」などとの曖昧さを避け、e-Gov の見出し形式である先頭の構造番号と区切りがそろう場合だけ変換する。
 const structuralHeadingPrefixRegex = new RegExp(
@@ -51,8 +57,11 @@ const eraDateRegex = new RegExp(
   `(令和|平成|昭和|大正|明治)(${eraYearPattern})年(${kanjiNumberPattern})月(${kanjiNumberPattern})日`,
   "g",
 );
+// 改正附則の法令番号（AmendLawNum）は「平成一一年一二月八日法律第一五一号」のように
+// 公布年月日を挟む。年月日と号数を別々に変換すると、どちらかが読めないときに混在するため
+// 一つの単位として扱う。
 const lawNumberRegex = new RegExp(
-  `(令和|平成|昭和|大正|明治)(${eraYearPattern})年法律第(${kanjiNumberPattern})号`,
+  `(令和|平成|昭和|大正|明治)(${eraYearPattern})年(?:(${kanjiNumberPattern})月(${kanjiNumberPattern})日)?法律第(${kanjiNumberPattern})号`,
   "g",
 );
 const quantityLimitPattern = "以上|以下|以内|未満|を超え|を越え|をこえ|を経過";
@@ -107,8 +116,11 @@ const rateRegex = new RegExp(
   "g",
 );
 const monthDayRegex = new RegExp(`(${kanjiNumberPattern})月(${kanjiNumberPattern})日`, "g");
+// 「一二月八日」のように月日の並びが monthDayRegex で読めなかったときに、日だけが
+// 助数詞として変換されると「一二月8日」と混ざる。月日の並びは monthDayRegex に任せる。
+const monthPrefixPattern = `(?<!${kanjiNumberPattern}月)`;
 const quantityUnitRegex = new RegExp(
-  `${nonQuantityPrefixPattern}(${kanjiNumberPattern})(${quantityUnitPattern})`,
+  `${nonQuantityPrefixPattern}${monthPrefixPattern}(${kanjiNumberPattern})(${quantityUnitPattern})`,
   "g",
 );
 // 「一又は二以上」は後半だけ変換すると「一又は2以上」と不揃いになるため、対にして扱う。
@@ -122,8 +134,31 @@ const boundedQuantityRegex = new RegExp(
   "g",
 );
 
-export const toArabicNumber = (kanjiNumber: string): number | undefined => {
-  if (!/^[一二三四五六七八九十百千]+$/.test(kanjiNumber)) {
+// 「一一」「一六〇」のような位取り表記は、法令番号・日付・条番号では 11・160 と読める。
+// 一方で数量の「二三日」（二、三日）や「一一人」は位取りではないため、
+// 位取りとして読んでよい文脈からのみ allowPositional を渡す。
+export const toArabicNumber = (
+  kanjiNumber: string,
+  { allowPositional = false }: { allowPositional?: boolean } = {},
+): number | undefined => {
+  if (!kanjiNumberOnlyRegex.test(kanjiNumber)) {
+    return undefined;
+  }
+
+  const chars = Array.from(kanjiNumber);
+
+  if (chars.every((char) => digitByKanji.has(char))) {
+    // 位取り表記は桁をそのまま並べて読む。単位語（十・百・千）を伴わない 1 桁は
+    // 従来どおり読めるため、位取りを許さない文脈でも変換できる。
+    if (!allowPositional && (chars.length > 1 || chars[0] === "〇")) {
+      return undefined;
+    }
+
+    return Number(chars.map((char) => String(digitByKanji.get(char))).join(""));
+  }
+
+  if (chars.includes("〇")) {
+    // 「一〇十」のように位取りと単位語が混じった表記は読み方が定まらない。
     return undefined;
   }
 
@@ -163,11 +198,35 @@ export const toArabicNumber = (kanjiNumber: string): number | undefined => {
   return result < 10_000 ? result : undefined;
 };
 
-const replaceKanjiNumber = (kanjiNumber: string): string => {
-  const arabicNumber = toArabicNumber(kanjiNumber);
+const replaceKanjiNumber = (kanjiNumber: string, allowPositional = false): string => {
+  const arabicNumber = toArabicNumber(kanjiNumber, { allowPositional });
 
   return arabicNumber === undefined ? kanjiNumber : String(arabicNumber);
 };
+
+// 法令番号・日付・条番号のように、位取り表記として読んでよい文脈で使う。
+const replaceNumberingKanji = (kanjiNumber: string): string =>
+  replaceKanjiNumber(kanjiNumber, true);
+
+// 成分が一つでも読めなければ、部分的に算用数字へ変えず原文のまま残す。
+// 「平成十十年一二月八日」を「平成十十年一二月8日」と混在させると、かえって読みにくい。
+const replaceKanjiNumbersAll = (
+  values: string[],
+  allowPositional = false,
+): string[] | undefined => {
+  const replaced = values.map((value) => toArabicNumber(value, { allowPositional }));
+
+  return replaced.every((value) => value !== undefined)
+    ? replaced.map((value) => String(value))
+    : undefined;
+};
+
+const replaceNumberingKanjiAll = (values: string[]): string[] | undefined =>
+  replaceKanjiNumbersAll(values, true);
+
+// 元号の「元年」は算用数字にできないため、そのまま元年として残す。
+const replaceEraYear = (year: string): string | undefined =>
+  year === "元" ? year : toArabicNumber(year, { allowPositional: true })?.toString();
 
 // 見やすい表示では丸括弧を全角に揃える。法令本文は全角が既定で、半角が混じるのは
 // 出典側の揺れであるため、半角を全角へ寄せて表示を統一する。
@@ -180,11 +239,11 @@ const transformFullWidthDigits = (text: string): string =>
   text.replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xff10 + 0x30));
 
 const replaceLegalNumber = (_match: string, kanjiNumber: string, suffix: string): string => {
-  return `第${replaceKanjiNumber(kanjiNumber)}${suffix}`;
+  return `第${replaceNumberingKanji(kanjiNumber)}${suffix}`;
 };
 
 const replaceBranchNumbers = (_match: string, prefix: string, branchNumbers: string): string =>
-  `${prefix}の${branchNumbers.split("の").map(replaceKanjiNumber).join("の")}`;
+  `${prefix}の${branchNumbers.split("の").map(replaceNumberingKanji).join("の")}`;
 
 const replaceStructuralNumber = (
   match: string,
@@ -192,7 +251,7 @@ const replaceStructuralNumber = (
   suffix: string,
   branchNumbers: string,
 ): string => {
-  const arabicNumber = toArabicNumber(kanjiNumber);
+  const arabicNumber = toArabicNumber(kanjiNumber, { allowPositional: true });
 
   // 構造番号が読めないときは枝番も変換しない。「第十十章の二」のように番号が
   // 壊れている参照は、原文のまま残したほうが誤読を招かない。
@@ -200,14 +259,14 @@ const replaceStructuralNumber = (
     return match;
   }
 
-  return `第${String(arabicNumber)}${suffix}${branchNumbers.split("の").map(replaceKanjiNumber).join("の")}`;
+  return `第${String(arabicNumber)}${suffix}${branchNumbers.split("の").map(replaceNumberingKanji).join("の")}`;
 };
 
 const transformArticleNumbers = (text: string): string =>
   text
     .replace(articleNumberRegex, replaceLegalNumber)
     .replace(appendixTableNumberRegex, (_match, prefix: string, tableNumber: string) => {
-      return `${prefix}${replaceKanjiNumber(tableNumber)}`;
+      return `${prefix}${replaceNumberingKanji(tableNumber)}`;
     })
     .replace(branchNumberRegex, replaceBranchNumbers)
     .replace(structuralNumberRegex, replaceStructuralNumber);
@@ -216,7 +275,7 @@ const transformStructuralHeadingNumber = (text: string): string =>
   text.replace(
     structuralHeadingPrefixRegex,
     (match, kanjiNumber: string, suffix: string, branchNumbers: string | undefined) => {
-      const arabicNumber = toArabicNumber(kanjiNumber);
+      const arabicNumber = toArabicNumber(kanjiNumber, { allowPositional: true });
 
       if (arabicNumber === undefined) {
         return match;
@@ -225,21 +284,46 @@ const transformStructuralHeadingNumber = (text: string): string =>
       const displayBranchNumbers =
         branchNumbers === undefined
           ? ""
-          : `の${branchNumbers.split("の").map(replaceKanjiNumber).join("の")}`;
+          : `の${branchNumbers.split("の").map(replaceNumberingKanji).join("の")}`;
 
       return `第${String(arabicNumber)}${suffix}${displayBranchNumbers}`;
     },
   );
 
 const transformDates = (text: string): string =>
-  text.replace(eraDateRegex, (_match, era: string, year: string, month: string, day: string) => {
-    return `${era}${replaceKanjiNumber(year)}年${replaceKanjiNumber(month)}月${replaceKanjiNumber(day)}日`;
+  text.replace(eraDateRegex, (match, era: string, year: string, month: string, day: string) => {
+    const displayYear = replaceEraYear(year);
+    const replaced = replaceNumberingKanjiAll([month, day]);
+
+    return displayYear === undefined || replaced === undefined
+      ? match
+      : `${era}${displayYear}年${replaced[0]}月${replaced[1]}日`;
   });
 
 const transformLawNumbers = (text: string): string =>
-  text.replace(lawNumberRegex, (_match, era: string, year: string, lawNumber: string) => {
-    return `${era}${replaceKanjiNumber(year)}年法律第${replaceKanjiNumber(lawNumber)}号`;
-  });
+  text.replace(
+    lawNumberRegex,
+    (
+      match,
+      era: string,
+      year: string,
+      month: string | undefined,
+      day: string | undefined,
+      lawNumber: string,
+    ) => {
+      const displayYear = replaceEraYear(year);
+      const dateParts = month === undefined || day === undefined ? [] : [month, day];
+      const replaced = replaceNumberingKanjiAll([...dateParts, lawNumber]);
+
+      if (displayYear === undefined || replaced === undefined) {
+        return match;
+      }
+
+      const displayDate = dateParts.length === 0 ? "" : `${replaced[0]}月${replaced[1]}日`;
+
+      return `${era}${displayYear}年${displayDate}法律第${replaced.at(-1) ?? ""}号`;
+    },
+  );
 
 // 分数 → 歩合 → 月日 → 助数詞 → 裸の数量の順に適用する。
 // 「三分の二以上」は分数を先に処理しないと「三分の2以上」で止まり、
@@ -247,29 +331,33 @@ const transformLawNumbers = (text: string): string =>
 // 「前三条」「前二項」のような条項の相対参照は、法律書の慣行に合わせて漢数字のまま残す。
 const transformQuantities = (text: string): string =>
   text
-    .replace(
-      fractionRegex,
-      (_match, denominator: string, numerator: string) =>
-        `${replaceKanjiNumber(denominator)}分の${replaceKanjiNumber(numerator)}`,
-    )
-    .replace(
-      rateRegex,
-      (_match, tenths: string, hundredths: string) =>
-        `${replaceKanjiNumber(tenths)}割${replaceKanjiNumber(hundredths)}分`,
-    )
-    .replace(
-      monthDayRegex,
-      (_match, month: string, day: string) =>
-        `${replaceKanjiNumber(month)}月${replaceKanjiNumber(day)}日`,
-    )
+    .replace(fractionRegex, (match, denominator: string, numerator: string) => {
+      const replaced = replaceKanjiNumbersAll([denominator, numerator]);
+
+      return replaced === undefined ? match : `${replaced[0]}分の${replaced[1]}`;
+    })
+    .replace(rateRegex, (match, tenths: string, hundredths: string) => {
+      const replaced = replaceKanjiNumbersAll([tenths, hundredths]);
+
+      return replaced === undefined ? match : `${replaced[0]}割${replaced[1]}分`;
+    })
+    // 「○月○日」は日付として読めるため、位取りの漢数字（「一二月八日」）も変換する。
+    .replace(monthDayRegex, (match, month: string, day: string) => {
+      const replaced = replaceNumberingKanjiAll([month, day]);
+
+      return replaced === undefined ? match : `${replaced[0]}月${replaced[1]}日`;
+    })
     .replace(
       quantityUnitRegex,
       (_match, kanjiNumber: string, unit: string) => `${replaceKanjiNumber(kanjiNumber)}${unit}`,
     )
     .replace(
       pairedBoundedQuantityRegex,
-      (_match, first: string, conjunction: string, second: string) =>
-        `${replaceKanjiNumber(first)}${conjunction}${replaceKanjiNumber(second)}`,
+      (match, first: string, conjunction: string, second: string) => {
+        const replaced = replaceKanjiNumbersAll([first, second]);
+
+        return replaced === undefined ? match : `${replaced[0]}${conjunction}${replaced[1]}`;
+      },
     )
     .replace(boundedQuantityRegex, (_match, kanjiNumber: string) =>
       replaceKanjiNumber(kanjiNumber),

@@ -375,9 +375,12 @@ const LawNodeBlock = ({
         ? chapterAnchorId(headingPosition.partNumber, headingPosition.chapterNumber)
         : undefined;
   const displayTitle = getDisplayHeadingInlineText(node.title, displayMode);
-  // 附則の改正法令番号は見出しの一部ではないため、見やすい表示の変換にも本文の除去にも通さず、
-  // 原文のまま見出しの後ろに添える。
-  const headingSuffix = supplementaryProvisionHeadingSuffix(node);
+  // 附則の改正法令番号は原文の見出しに含まれないため、本文の除去（stripLeadingMarker）には
+  // 通さず、表示の変換だけを掛けて見出しの後ろに添える。
+  const headingSuffix = getDisplayHeadingInlineText(
+    supplementaryProvisionHeadingSuffix(node),
+    displayMode,
+  );
   const bodyText = stripLeadingMarker(
     applyLawHeadingTextDisplayMode(
       stripTrailingChildPlainTexts(getDisplayText(node, displayMode), children, displayMode),

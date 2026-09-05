@@ -31,6 +31,51 @@ describe("readability", () => {
     expect(transformReadableHeadingText(input)).toBe(expected);
   });
 
+  // e-Gov の法令番号は位取りの漢数字で書かれる。読めないと成分ごとの変換が空振りし、
+  // 「一二月8日」のように一部だけ算用数字になる（issue #265 の附則見出しで顕在化）。
+  it.each([
+    [
+      "附　則（平成一一年一二月八日法律第一五一号）　抄",
+      "附　則（平成11年12月8日法律第151号）　抄",
+    ],
+    ["平成一一年一二月八日法律第一五一号", "平成11年12月8日法律第151号"],
+  ])("converts positional kanji numbers in a law number: %s", (input, expected) => {
+    expect(transformReadableText(input)).toBe(expected);
+  });
+
+  // 位取りとして読める並びでも、数量は「二三日」（二、三日）のような慣用と区別できないため
+  // 漢数字のまま残す。
+  it.each([
+    ["二三日のうちに二三の例外を除く。", "二三日のうちに二三の例外を除く。"],
+    ["一一人が出席する。", "一一人が出席する。"],
+  ])("keeps colloquial quantities in kanji digits: %s", (input, expected) => {
+    expect(transformReadableText(input)).toBe(expected);
+  });
+
+  // 元年は算用数字にできないため、他の成分だけを変換して元年のまま残す。
+  it.each([
+    ["令和元年一二月八日", "令和元年12月8日"],
+    ["平成元年法律第一一号", "平成元年法律第11号"],
+  ])("keeps the first year of an era as 元年: %s", (input, expected) => {
+    expect(transformReadableText(input)).toBe(expected);
+  });
+
+  // 一つの規則が扱う成分は揃えて変換する。元号が読めない法令番号は法令番号として扱わず、
+  // 号数だけが号の規則（政令・勅令の号数と同じ扱い）で算用数字になる。
+  it("converts only the components a rule can read", () => {
+    expect(transformReadableText("平成十十年法律第一五一号のうち")).toBe(
+      "平成十十年法律第151号のうち",
+    );
+  });
+
+  // 元号を伴わない月日も日付として位取りの漢数字を読む。
+  it.each([
+    ["一二月八日", "12月8日"],
+    ["一月一〇日", "1月10日"],
+  ])("converts positional kanji numbers in a month and day: %s", (input, expected) => {
+    expect(transformReadableText(input)).toBe(expected);
+  });
+
   it.each([
     ["第十十章の二　第一条", "第十十章の二　第1条"],
     ["第四章の十十　第一条", "第4章の十十　第1条"],
@@ -232,6 +277,34 @@ describe("readability", () => {
   it.each(["", "〇", "零", "壱", "一2"])("returns undefined for unsupported number %s", (input) => {
     expect(toArabicNumber(input)).toBeUndefined();
   });
+
+  // 法令番号や条番号は「一〇」「一一」のような位取りの漢数字でも書かれる。
+  // 数量の「二三日」（二、三日）と区別できないため、読んでよい文脈だけで許可する。
+  it.each([
+    ["〇", 0],
+    ["一〇", 10],
+    ["一一", 11],
+    ["一五一", 151],
+    ["一六〇", 160],
+    ["十一", 11],
+  ])("converts positional kanji number %s when allowed", (input, expected) => {
+    expect(toArabicNumber(input, { allowPositional: true })).toBe(expected);
+  });
+
+  it.each(["一一", "一五一", "一〇"])(
+    "returns undefined for positional kanji number %s when not allowed",
+    (input) => {
+      expect(toArabicNumber(input)).toBeUndefined();
+    },
+  );
+
+  // 位取りと単位語が混じった表記は読み方が定まらない。
+  it.each(["一〇十", "十〇", "〇十"])(
+    "returns undefined for a mixed positional and unit number %s",
+    (input) => {
+      expect(toArabicNumber(input, { allowPositional: true })).toBeUndefined();
+    },
+  );
 
   it.each(["十十", "九千九千", "十百", "百百"])(
     "returns undefined for malformed kanji number %s",

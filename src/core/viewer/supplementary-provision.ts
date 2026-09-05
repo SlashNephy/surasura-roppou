@@ -2,7 +2,7 @@ import type { LawNode } from "@/core/domain";
 
 // e-Gov の附則見出しはどれも「附則」で、制定時の附則か改正附則かを見分けられない。
 // e-Gov の表示と同じく、改正法令番号と抄を見出しの後ろに添えて区別する。
-// 法令番号は漢数字が正式表記であるため、見やすい表示でも原文のまま添える。
+// 表示モードに応じた変換（漢数字→算用数字）は、見出しを描画する呼び出し側で掛ける。
 export const supplementaryProvisionHeadingSuffix = ({
   amendLawNumber,
   isExtract,
