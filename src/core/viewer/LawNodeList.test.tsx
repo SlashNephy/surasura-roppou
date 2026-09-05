@@ -353,6 +353,33 @@ describe("LawNodeList", () => {
     expect(screen.getByText("項目")).toBeInTheDocument();
   });
 
+  // 改正附則は見出しがどれも「附則」で揃う。改正法令番号を添えないと、いつ加わった
+  // 附則か本文でも区別できない。法令番号は漢数字が正式表記なので原文のまま示す。
+  it("shows the amending law number and 抄 in the supplementary provision heading", () => {
+    render(
+      <LawNodeList
+        lawId="405AC0000000088"
+        nodes={[
+          node({
+            id: "supplementary:amend",
+            type: "SupplementaryProvision",
+            path: "supplementary-provision:2",
+            title: "附　則",
+            amendLawNumber: "平成一一年一二月八日法律第一五一号",
+            isExtract: true,
+            plainText: "附　則 この法律は、公布の日から施行する。",
+          }),
+        ]}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "附　則（平成一一年一二月八日法律第一五一号）　抄" }),
+    ).toBeInTheDocument();
+    // 見出しの除去は原文の「附則」で行うため、本文に見出しが二重に出ない。
+    expect(screen.getByText("この法律は、公布の日から施行する。")).toBeInTheDocument();
+  });
+
   it.each([
     ["SupplementaryProvision", "supplementary-provision:1", "附　則"],
     ["AppdxTable", "appdx-table:1", "別表第一"],

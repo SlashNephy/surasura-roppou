@@ -428,6 +428,79 @@ describe("normalizeEgovLawText", () => {
     );
   });
 
+  // e-Gov では改正附則も見出しが「附則」で揃うため、改正法令番号を持たせないと
+  // どの改正で加わった附則か区別できない。制定時の附則は属性を持たない。
+  it.each([
+    {
+      name: "amending supplementary provision",
+      attr: { AmendLawNum: "平成一一年一二月八日法律第一五一号", Extract: "true" },
+      expected: { amendLawNumber: "平成一一年一二月八日法律第一五一号", isExtract: true },
+    },
+    {
+      name: "amending supplementary provision that is not an extract",
+      attr: { AmendLawNum: "平成一一年一二月八日法律第一五一号", Extract: "false" },
+      expected: { amendLawNumber: "平成一一年一二月八日法律第一五一号" },
+    },
+    {
+      name: "extracted supplementary provision without an amending law number",
+      attr: { Extract: "true" },
+      expected: { isExtract: true },
+    },
+    {
+      name: "empty amending law number",
+      attr: { AmendLawNum: "" },
+      expected: {},
+    },
+    {
+      name: "supplementary provision of the original enactment",
+      attr: {},
+      expected: {},
+    },
+  ])(
+    "extracts the amending law number and the extract flag: $name",
+    ({ attr, expected }: { attr: EgovLawTextNode["attr"]; expected: Partial<LawNode> }) => {
+      const nodes = normalizeLawBody([
+        lawTextNode(
+          "SupplProvision",
+          [
+            lawTextNode("SupplProvisionLabel", ["附　則"]),
+            lawTextNode("Paragraph", [paragraphSentence("この法律は、公布の日から施行する。")]),
+          ],
+          attr,
+        ),
+      ]);
+      const supplementaryProvisionNode = findNode(
+        nodes,
+        "SupplementaryProvision",
+        "supplementary-provision:1",
+      );
+
+      expect(supplementaryProvisionNode).toEqual(
+        expect.objectContaining({ title: "附　則", ...expected }),
+      );
+      if (expected.amendLawNumber === undefined) {
+        expect(supplementaryProvisionNode).not.toHaveProperty("amendLawNumber");
+      }
+      if (expected.isExtract === undefined) {
+        expect(supplementaryProvisionNode).not.toHaveProperty("isExtract");
+      }
+    },
+  );
+
+  // 改正法令番号は附則だけに付く属性であり、他の種別のノードへは持ち込まない。
+  it("ignores the amending law number attribute on a node that is not a supplementary provision", () => {
+    const nodes = normalizeLawBody([
+      lawTextNode("Article", [lawTextNode("ArticleTitle", ["第一条"]), paragraph()], {
+        AmendLawNum: "平成一一年一二月八日法律第一五一号",
+        Extract: "true",
+      }),
+    ]);
+    const articleNode = findNode(nodes, "Article", "article:1");
+
+    expect(articleNode).not.toHaveProperty("amendLawNumber");
+    expect(articleNode).not.toHaveProperty("isExtract");
+  });
+
   it("omits caption when the paragraph has no caption", () => {
     const nodes = normalizeLawBody([article("第一条")]);
 

@@ -61,6 +61,41 @@ const noopSelectArticle = () => {
 };
 
 describe("LawTableOfContents", () => {
+  // 目次に同じ「附則」が並ぶと、どの改正の附則か選べない。
+  it("distinguishes supplementary provisions by their amending law number", () => {
+    render(
+      <LawTableOfContents
+        items={[
+          {
+            id: "supplementary:1",
+            title: "附　則",
+            type: "SupplementaryProvision",
+            depth: 1,
+            children: [],
+          },
+          {
+            id: "supplementary:2",
+            title: "附　則",
+            type: "SupplementaryProvision",
+            depth: 1,
+            amendLawNumber: "平成一一年一二月八日法律第一五一号",
+            isExtract: true,
+            children: [],
+          },
+        ]}
+        onSelectArticle={noopSelectArticle}
+      />,
+    );
+
+    const navigation = screen.getByRole("navigation", { name: "法令目次" });
+
+    expect(
+      within(navigation)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["附　則", "附　則（平成一一年一二月八日法律第一五一号）　抄"]);
+  });
+
   it("renders nested items as readable text by default", () => {
     render(<LawTableOfContents items={items} onSelectArticle={noopSelectArticle} />);
 

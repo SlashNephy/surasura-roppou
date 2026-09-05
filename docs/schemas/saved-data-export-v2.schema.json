@@ -121,6 +121,8 @@
         "number": { "type": "string" },
         "title": { "type": "string" },
         "caption": { "type": "string" },
+        "amendLawNumber": { "type": "string" },
+        "isExtract": { "type": "boolean" },
         "rawText": { "type": "string" },
         "plainText": { "type": "string" },
         "normalizedText": { "type": "string" },

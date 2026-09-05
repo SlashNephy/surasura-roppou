@@ -31,6 +31,7 @@ import {
   type ReferenceLinkSegment,
   type ReferenceLinkTarget,
 } from "./reference-links";
+import { supplementaryProvisionHeadingSuffix } from "./supplementary-provision";
 
 interface LawNodeListProps {
   lawId: string;
@@ -374,6 +375,9 @@ const LawNodeBlock = ({
         ? chapterAnchorId(headingPosition.partNumber, headingPosition.chapterNumber)
         : undefined;
   const displayTitle = getDisplayHeadingInlineText(node.title, displayMode);
+  // 附則の改正法令番号は見出しの一部ではないため、見やすい表示の変換にも本文の除去にも通さず、
+  // 原文のまま見出しの後ろに添える。
+  const headingSuffix = supplementaryProvisionHeadingSuffix(node);
   const bodyText = stripLeadingMarker(
     applyLawHeadingTextDisplayMode(
       stripTrailingChildPlainTexts(getDisplayText(node, displayMode), children, displayMode),
@@ -391,6 +395,11 @@ const LawNodeBlock = ({
             annotations={node.rubyAnnotations}
             text={displayTitle}
           />
+          {headingSuffix === undefined ? null : (
+            <span className="ml-2 text-base font-normal text-secondary-foreground">
+              {headingSuffix}
+            </span>
+          )}
         </Heading>
       ) : null}
       {bodyText !== "" ? (

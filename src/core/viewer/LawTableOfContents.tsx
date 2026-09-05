@@ -3,6 +3,7 @@ import { cn } from "@/shared/utils/cn";
 
 import { applyLawHeadingTextDisplayMode, type LawTextDisplayMode } from "./displayMode";
 import type { LawTocItem } from "./lawToc";
+import { supplementaryProvisionHeadingSuffix } from "./supplementary-provision";
 
 interface LawTableOfContentsProps {
   items: LawTocItem[];
@@ -78,6 +79,8 @@ const TocItem = ({
   const isArticle = articleNumber !== undefined;
   const isActiveArticle = articleNumber === activeArticleNumber;
   const displayTitle = applyLawHeadingTextDisplayMode(item.title, displayMode);
+  // 附則の改正法令番号は法令番号として漢数字が正式表記であるため、見やすい表示でも原文のまま添える。
+  const headingSuffix = supplementaryProvisionHeadingSuffix(item);
   // 条見出し（例:「（親告罪）」）。条番号の隣に控えめに添える。
   const displayCaption =
     item.caption === undefined
@@ -112,6 +115,9 @@ const TocItem = ({
       ) : (
         <span className="block min-w-0 px-2 py-1.5 font-law text-sm leading-display font-medium text-foreground break-words">
           {displayTitle}
+          {headingSuffix === undefined ? null : (
+            <span className="font-normal text-muted-foreground">{headingSuffix}</span>
+          )}
         </span>
       )}
       {item.children.length > 0 ? (
