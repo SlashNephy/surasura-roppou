@@ -10,10 +10,10 @@ importers:
     dependencies:
       '@fontsource-variable/noto-sans-jp':
         specifier: ^5.3.0
-        version: 5.3.0
+        version: 5.3.1
       '@fontsource-variable/noto-serif-jp':
         specifier: ^5.3.0
-        version: 5.3.0
+        version: 5.3.1
       '@fontsource/biz-udgothic':
         specifier: ^5.3.0
         version: 5.3.0
@@ -22,7 +22,7 @@ importers:
         version: 5.3.0
       '@fontsource/zen-old-mincho':
         specifier: ^5.3.0
-        version: 5.3.0
+        version: 5.3.1
       '@tanstack/react-router':
         specifier: ^1.170.17
         version: 1.170.42(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -784,11 +784,11 @@ packages:
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
 
-  '@fontsource-variable/noto-sans-jp@5.3.0':
-    resolution: {integrity: sha512-XVL9GfGBRjj523v9w3Bctu4mNq7E5rUa+AMZm8DK1EM3LAGlKC3DZMvuqkLn4DB4TwwoAjcsJUCiRpUTDzzOkw==}
+  '@fontsource-variable/noto-sans-jp@5.3.1':
+    resolution: {integrity: sha512-/anGvJFc5y36f8DJ+3TSh2+KAvaRLA9PaLUMvneeY5s4j8m+8X4F3lE/sjTuG9YI5BX4sykvCk4TuJMG7ecMRQ==}
 
-  '@fontsource-variable/noto-serif-jp@5.3.0':
-    resolution: {integrity: sha512-+kD6gj7RhZ8bjA8WxT5UxnwqWUCcFhCaM2t30zjKTS1sAXbDmJEdj+mrCEYIof1SjDy43VElQQCITouTvrGNuA==}
+  '@fontsource-variable/noto-serif-jp@5.3.1':
+    resolution: {integrity: sha512-quU5uIezSqZFgPaDDI2C3hQfIJHzyXVYuvMZsDDF++og8yechsAwcmCkLLdofPboUB1xHOWV3xohJyIVBi3b4g==}
 
   '@fontsource/biz-udgothic@5.3.0':
     resolution: {integrity: sha512-1jccDNmjsrgfxXa4MiBQzvhg+z8McslunaiSUl3OWB9QrUYzbp88tD78soiwqp2U5ZFXG/BvBT1Rhgd6tOgGwQ==}
@@ -796,8 +796,8 @@ packages:
   '@fontsource/biz-udmincho@5.3.0':
     resolution: {integrity: sha512-DwzJNIix6VqGnqDHX7Umv+lPNwoB3aGSc+wbWpFjE+o93liywBw0IkLeMUGYI9R/Fl97h/odZzaUpf3PexW/ew==}
 
-  '@fontsource/zen-old-mincho@5.3.0':
-    resolution: {integrity: sha512-pNvegTkx6rOQRaBMcUoxxeNoIRJajdY0TeX4ngf/26KrtsVoqY11ho6WlwPWDYHi7PY65vf88TV2xjIO+YxQ8Q==}
+  '@fontsource/zen-old-mincho@5.3.1':
+    resolution: {integrity: sha512-wahFUlw1s0zKkxiTRj9jJiyVrdNT5uHNYWakr6cDEIgp91YoP/LOvfD2+JVIKiXIwTChDM1oW1yqXJbdtlI56w==}
 
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
@@ -4832,15 +4832,15 @@ snapshots:
 
   '@floating-ui/utils@0.2.12': {}
 
-  '@fontsource-variable/noto-sans-jp@5.3.0': {}
+  '@fontsource-variable/noto-sans-jp@5.3.1': {}
 
-  '@fontsource-variable/noto-serif-jp@5.3.0': {}
+  '@fontsource-variable/noto-serif-jp@5.3.1': {}
 
   '@fontsource/biz-udgothic@5.3.0': {}
 
   '@fontsource/biz-udmincho@5.3.0': {}
 
-  '@fontsource/zen-old-mincho@5.3.0': {}
+  '@fontsource/zen-old-mincho@5.3.1': {}
 
   '@humanfs/core@0.19.2':
     dependencies:
