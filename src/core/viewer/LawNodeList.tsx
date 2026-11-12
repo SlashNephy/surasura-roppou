@@ -4,6 +4,8 @@ import {
   buildLawArticleUrl,
   type LawNode,
   type LawNodeType,
+  type LawTable,
+  type LawTableText,
   type RubyAnnotation,
 } from "@/core/domain";
 import type { ResolvedLawNumber } from "@/core/jump";
@@ -175,7 +177,7 @@ const LawNodeBlock = ({
       const isActiveArticle = isUrlAddressableArticle && node.number === activeArticleNumber;
       const displayTitle = getDisplayInlineText(node.title ?? node.number, displayMode);
       const displayCaption = getDisplayInlineText(node.caption, displayMode);
-      const displayText = getDisplayText(node, displayMode);
+      const { text: displayText, tables } = getDisplayBody(node, displayMode);
       const childPosition = isUrlAddressableArticle
         ? { ...position, articleNumber: node.number }
         : { ...position, articleNumber: undefined };
@@ -231,18 +233,28 @@ const LawNodeBlock = ({
                 renderArticleActions,
               })
             ) : (
-              <p
-                data-law-node-id={node.id}
-                className="indent-[1em] font-law leading-display font-medium text-foreground break-words"
-              >
-                {renderLinkedText(
-                  displayText,
-                  linking,
-                  childPosition,
-                  isUrlAddressableArticleContext,
-                  node.rubyAnnotations,
-                )}
-              </p>
+              <>
+                <p
+                  data-law-node-id={node.id}
+                  className="indent-[1em] font-law leading-display font-medium text-foreground break-words"
+                >
+                  {renderLinkedText(
+                    displayText,
+                    linking,
+                    childPosition,
+                    isUrlAddressableArticleContext,
+                    node.rubyAnnotations,
+                  )}
+                </p>
+                {tables.map((table) => (
+                  <LawTableBlock
+                    key={table.rawText}
+                    annotations={node.rubyAnnotations}
+                    displayMode={displayMode}
+                    table={table}
+                  />
+                ))}
+              </>
             )}
           </div>
         </article>
@@ -264,11 +276,12 @@ const LawNodeBlock = ({
           : (node.title ?? node.number);
       const displayMarker = getDisplayInlineText(marker, displayMode);
       const displayCaption = getDisplayInlineText(node.caption, displayMode);
+      const { text: displayText, tables } = getDisplayBody(node, displayMode);
       // 見出し → 項番号の順に本文の先頭から取り除く。plainText はこの順で連結されており、
       // 見出しを残したままだと項番号の除去が空振りして番号が二重に出る。
       const bodyText = stripLeadingMarker(
         stripLeadingMarker(
-          stripTrailingChildPlainTexts(getDisplayText(node, displayMode), children, displayMode),
+          stripTrailingChildPlainTexts(displayText, children, displayMode),
           displayCaption,
         ),
         displayMarker,
@@ -350,6 +363,7 @@ const LawNodeBlock = ({
           )}
           {renderChildBlocks({
             activeArticleNumber,
+            annotations: node.rubyAnnotations,
             children,
             depth,
             displayMode,
@@ -358,6 +372,7 @@ const LawNodeBlock = ({
             nodeById,
             position: childPosition,
             renderArticleActions,
+            tables,
           })}
         </div>
       );
@@ -381,9 +396,10 @@ const LawNodeBlock = ({
     supplementaryProvisionHeadingSuffix(node),
     displayMode,
   );
+  const { text: displayText, tables } = getDisplayBody(node, displayMode);
   const bodyText = stripLeadingMarker(
     applyLawHeadingTextDisplayMode(
-      stripTrailingChildPlainTexts(getDisplayText(node, displayMode), children, displayMode),
+      stripTrailingChildPlainTexts(displayText, children, displayMode),
       displayMode,
     ),
     displayTitle,
@@ -421,6 +437,7 @@ const LawNodeBlock = ({
       ) : null}
       {renderChildBlocks({
         activeArticleNumber,
+        annotations: node.rubyAnnotations,
         children,
         depth,
         displayMode,
@@ -429,6 +446,7 @@ const LawNodeBlock = ({
         nodeById,
         position: headingPosition,
         renderArticleActions,
+        tables,
       })}
     </section>
   );
@@ -459,8 +477,10 @@ const computeHeadingPosition = (
   return node.type === "Chapter" ? { ...position, chapterNumber: node.number } : position;
 };
 
+// 子ノードを描き、親ノードの表は原文と同じく子ノードの間の位置に差し込む。
 const renderChildBlocks = ({
   activeArticleNumber,
+  annotations,
   children,
   depth,
   displayMode,
@@ -469,8 +489,10 @@ const renderChildBlocks = ({
   nodeById,
   position,
   renderArticleActions,
+  tables = [],
 }: {
   activeArticleNumber: string | undefined;
+  annotations?: RubyAnnotation[] | undefined;
   children: LawNode[];
   depth: number;
   displayMode: LawTextDisplayMode;
@@ -481,21 +503,36 @@ const renderChildBlocks = ({
   // 附則・別表の中では条アンカーが無いため undefined のまま伝える。
   position: ReferencePosition;
   renderArticleActions: ((article: LawNode) => ReactNode) | undefined;
+  tables?: LawTable[];
 }) =>
-  children.map((child) => (
-    <LawNodeBlock
-      key={child.id}
-      activeArticleNumber={activeArticleNumber}
-      depth={depth + 1}
-      displayMode={displayMode}
-      isUrlAddressableArticleContext={isUrlAddressableArticleContext}
-      linking={linking}
-      node={child}
-      nodeById={nodeById}
-      position={position}
-      renderArticleActions={renderArticleActions}
-    />
-  ));
+  Array.from({ length: children.length + 1 }, (_, index) => [
+    ...tables
+      .filter((table) => Math.min(table.precedingChildCount, children.length) === index)
+      .map((table, tableIndex) => (
+        <LawTableBlock
+          key={`table:${String(index)}:${String(tableIndex)}`}
+          annotations={annotations}
+          displayMode={displayMode}
+          table={table}
+        />
+      )),
+    ...children
+      .slice(index, index + 1)
+      .map((child) => (
+        <LawNodeBlock
+          key={child.id}
+          activeArticleNumber={activeArticleNumber}
+          depth={depth + 1}
+          displayMode={displayMode}
+          isUrlAddressableArticleContext={isUrlAddressableArticleContext}
+          linking={linking}
+          node={child}
+          nodeById={nodeById}
+          position={position}
+          renderArticleActions={renderArticleActions}
+        />
+      )),
+  ]).flat();
 
 // 条（Article）直下の項は第2項以降で番号を示す。ただし ParagraphNum が空の旧番号形式
 // （例: 日本国憲法）は title を持たないため、Num 由来の number で番号を補完する。
@@ -545,6 +582,123 @@ const getDisplayText = (node: LawNode, displayMode: LawTextDisplayMode): string 
 
   return applyLawTextDisplayMode(text, displayMode);
 };
+
+// ノードの本文から表の部分を取り除いた表示文字列と、表として描く表を返す。
+// 表の文字列は本文と同じ規則で作った部分文字列なので、表示変換の前に原文のまま取り除く。
+// 本文中に見つからない表は描かず本文に残す（表と本文の二重表示を避ける）。
+const getDisplayBody = (
+  node: LawNode,
+  displayMode: LawTextDisplayMode,
+): { text: string; tables: LawTable[] } => {
+  const usesRawText = displayMode === "original" && node.rawText !== "";
+  let text = usesRawText ? node.rawText : node.plainText;
+  const tables: LawTable[] = [];
+
+  for (const table of [...(node.tables ?? [])].reverse()) {
+    const tableText = usesRawText ? table.rawText : table.plainText;
+    const index = tableText === "" ? -1 : text.lastIndexOf(tableText);
+
+    if (index === -1) {
+      continue;
+    }
+
+    text = joinAroundRemovedTable(
+      text.slice(0, index),
+      text.slice(index + tableText.length),
+      usesRawText,
+    );
+    tables.unshift(table);
+  }
+
+  return { text: applyLawTextDisplayMode(text, displayMode), tables };
+};
+
+// plainText は表の前後を半角空白 1 つで区切って連結しているため、取り除いた跡の区切りを 1 つにまとめる。
+// rawText は区切りなしで連結しているので、そのままつなぐ。
+const joinAroundRemovedTable = (before: string, after: string, usesRawText: boolean): string => {
+  if (usesRawText) {
+    return before + after;
+  }
+
+  const trimmedBefore = before.endsWith(" ") ? before.slice(0, -1) : before;
+  const trimmedAfter = after.startsWith(" ") ? after.slice(1) : after;
+
+  return trimmedBefore === "" || trimmedAfter === ""
+    ? trimmedBefore + trimmedAfter
+    : `${trimmedBefore} ${trimmedAfter}`;
+};
+
+const getTableDisplayText = (text: LawTableText, displayMode: LawTextDisplayMode): string =>
+  applyLawTextDisplayMode(
+    displayMode === "original" && text.rawText !== "" ? text.rawText : text.plainText,
+    displayMode,
+  );
+
+// 表は欄の区切りを保つため <table> で描く。狭い画面では表だけを横スクロールさせる。
+const LawTableBlock = ({
+  annotations,
+  displayMode,
+  table,
+}: {
+  annotations: RubyAnnotation[] | undefined;
+  displayMode: LawTextDisplayMode;
+  table: LawTable;
+}) => (
+  <div className="grid min-w-0 gap-2">
+    {table.title === undefined ? null : (
+      <p className="font-law leading-display font-medium break-words text-foreground">
+        <LawTextWithRuby
+          annotations={annotations}
+          displayMode={displayMode}
+          text={getTableDisplayText(table.title, displayMode)}
+        />
+      </p>
+    )}
+    <div className="overflow-x-auto">
+      <table className="border-collapse font-law text-sm leading-relaxed text-foreground">
+        <tbody>
+          {table.rows.map((row, rowIndex) => (
+            <tr key={String(rowIndex)}>
+              {row.cells.map((cell, cellIndex) => {
+                const Cell = cell.isHeader === true ? "th" : "td";
+
+                return (
+                  <Cell
+                    key={String(cellIndex)}
+                    rowSpan={cell.rowSpan}
+                    colSpan={cell.colSpan}
+                    className={cn(
+                      "min-w-[4em] border border-border px-3 py-2 text-left align-top break-words",
+                      cell.isHeader === true && "bg-muted font-medium",
+                    )}
+                  >
+                    <LawTextWithRuby
+                      annotations={annotations}
+                      displayMode={displayMode}
+                      text={getTableDisplayText(cell, displayMode)}
+                    />
+                  </Cell>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+    {table.remarks.map((remark, remarkIndex) => (
+      <p
+        key={String(remarkIndex)}
+        className="font-law text-sm leading-display break-words text-secondary-foreground"
+      >
+        <LawTextWithRuby
+          annotations={annotations}
+          displayMode={displayMode}
+          text={getTableDisplayText(remark, displayMode)}
+        />
+      </p>
+    ))}
+  </div>
+);
 
 const getDisplayInlineText = (
   text: string | undefined,

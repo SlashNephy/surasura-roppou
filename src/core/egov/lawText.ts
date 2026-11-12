@@ -1,4 +1,12 @@
-import type { LawNode, LawNodeType, RubyAnnotation } from "@/core/domain";
+import type {
+  LawNode,
+  LawNodeType,
+  LawTable,
+  LawTableCell,
+  LawTableRow,
+  LawTableText,
+  RubyAnnotation,
+} from "@/core/domain";
 
 export interface EgovLawTextNode {
   tag: string;
@@ -96,6 +104,7 @@ export const normalizeEgovLawText = (
     const caption = rawCaption === undefined || rawCaption.trim() === "" ? undefined : rawCaption;
     const plainText = collectPlainText(apiNode);
     const rubyAnnotations = collectRubyAnnotations(apiNode);
+    const tables = collectTables(apiNode);
     const lawNode: LawNode = {
       id: nodeId,
       lawId,
@@ -110,6 +119,7 @@ export const normalizeEgovLawText = (
       plainText,
       normalizedText: plainText,
       ...(rubyAnnotations.length === 0 ? {} : { rubyAnnotations }),
+      ...(tables.length === 0 ? {} : { tables }),
       children: [],
       ...(parentId === undefined ? {} : { parentId }),
     };
@@ -329,6 +339,113 @@ const collectRubyAnnotations = (node: EgovLawTextNode): RubyAnnotation[] => {
   walk(node);
 
   return [...annotations.values()];
+};
+
+// 表（TableStruct）を行と欄の構造として取り出す。ルビと同じく、子の LawNode に属する表は
+// 子ノード側で収集する。表の欄の中に項や号（LawNode）がある場合は、表として描くと
+// 子ノードの本文と二重に出るため取り出さず、従来どおり本文テキストのまま扱う。
+const tableStructTag = "TableStruct";
+
+const collectTables = (node: EgovLawTextNode): LawTable[] => {
+  const tables: LawTable[] = [];
+  let precedingChildCount = 0;
+
+  const walk = (current: EgovLawTextNode): void => {
+    if (current.tag === tableStructTag) {
+      if (!containsLawNode(current)) {
+        tables.push(buildTable(current, precedingChildCount));
+      }
+
+      return;
+    }
+
+    current.children.forEach((child) => {
+      if (typeof child === "string") {
+        return;
+      }
+
+      if (nodeTypeByTag[child.tag] === undefined) {
+        walk(child);
+      } else {
+        precedingChildCount += 1;
+      }
+    });
+  };
+
+  walk(node);
+
+  return tables;
+};
+
+const containsLawNode = (node: EgovLawTextNode): boolean =>
+  node.children.some(
+    (child) =>
+      typeof child !== "string" &&
+      (nodeTypeByTag[child.tag] !== undefined || containsLawNode(child)),
+  );
+
+const toTableText = (node: EgovLawTextNode): LawTableText => ({
+  rawText: collectRawText(node),
+  plainText: collectPlainText(node),
+});
+
+const findChildren = (node: EgovLawTextNode, tag: string): EgovLawTextNode[] =>
+  node.children.filter(
+    (child): child is EgovLawTextNode => typeof child !== "string" && child.tag === tag,
+  );
+
+const buildTable = (tableStruct: EgovLawTextNode, precedingChildCount: number): LawTable => {
+  const title = findChildren(tableStruct, "TableStructTitle").at(0);
+  const rows = findChildren(tableStruct, "Table").flatMap((table) =>
+    table.children.flatMap((row): LawTableRow[] => {
+      if (typeof row === "string") {
+        return [];
+      }
+
+      if (row.tag === "TableHeaderRow") {
+        return [
+          {
+            cells: findChildren(row, "TableHeaderColumn").map((column) => ({
+              ...toTableText(column),
+              isHeader: true,
+            })),
+          },
+        ];
+      }
+
+      if (row.tag === "TableRow") {
+        return [{ cells: findChildren(row, "TableColumn").map(buildTableCell) }];
+      }
+
+      return [];
+    }),
+  );
+
+  return {
+    ...toTableText(tableStruct),
+    precedingChildCount,
+    ...(title === undefined ? {} : { title: toTableText(title) }),
+    rows,
+    remarks: findChildren(tableStruct, "Remarks").map(toTableText),
+  };
+};
+
+const buildTableCell = (column: EgovLawTextNode): LawTableCell => {
+  const rowSpan = parseSpan(column.attr.rowspan);
+  const colSpan = parseSpan(column.attr.colspan);
+
+  return {
+    ...toTableText(column),
+    ...(rowSpan === undefined ? {} : { rowSpan }),
+    ...(colSpan === undefined ? {} : { colSpan }),
+  };
+};
+
+// 結合数は 2 以上のときだけ持たせる。1 は結合なしと同じ意味なので省く。
+const parseSpan = (value: string | number | boolean | undefined): number | undefined => {
+  const span = Number(stringifyAttribute(value));
+
+  return Number.isInteger(span) && span > 1 ? span : undefined;
 };
 
 const collectPlainText = (node: EgovLawTextNode): string => {

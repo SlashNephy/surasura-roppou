@@ -558,4 +558,117 @@ describe("normalizeEgovLawText", () => {
       expect.objectContaining(expected),
     );
   });
+
+  describe("tables", () => {
+    const tableColumn = (
+      children: (EgovLawTextNode | string)[],
+      attr: EgovLawTextNode["attr"] = {},
+    ) => lawTextNode("TableColumn", [lawTextNode("Sentence", children)], attr);
+
+    // 家畜伝染病予防法第二条第一項のように、項の本文の後に表が続く形。
+    const tableStruct = lawTextNode("TableStruct", [
+      lawTextNode("TableStructTitle", ["表の題名"]),
+      lawTextNode("Table", [
+        lawTextNode("TableHeaderRow", [
+          lawTextNode("TableHeaderColumn", ["種類"]),
+          lawTextNode("TableHeaderColumn", ["家畜"]),
+        ]),
+        lawTextNode("TableRow", [
+          tableColumn(
+            ["一\u3000口", lawTextNode("Ruby", ["蹄", lawTextNode("Rt", ["てい"])]), "疫"],
+            {
+              rowspan: "2",
+            },
+          ),
+          tableColumn(["牛、豚"], { colspan: "1" }),
+        ]),
+        lawTextNode("TableRow", [tableColumn(["馬"])]),
+      ]),
+      lawTextNode("Remarks", [lawTextNode("Sentence", ["備考の本文。"])]),
+    ]);
+
+    it("extracts the table structure from a paragraph", () => {
+      const nodes = normalizeLawBody([
+        article("第二条", [paragraph([paragraphSentence("次の表に掲げる。"), tableStruct])]),
+      ]);
+      const node = findNode(nodes, "Paragraph", "article:2/paragraph:1");
+
+      expect(node.tables).toEqual([
+        {
+          rawText: "表の題名種類家畜一\u3000口蹄疫牛、豚馬備考の本文。",
+          plainText: "表の題名 種類家畜 一\u3000口蹄疫 牛、豚 馬 備考の本文。",
+          precedingChildCount: 0,
+          title: { rawText: "表の題名", plainText: "表の題名" },
+          rows: [
+            {
+              cells: [
+                { rawText: "種類", plainText: "種類", isHeader: true },
+                { rawText: "家畜", plainText: "家畜", isHeader: true },
+              ],
+            },
+            {
+              cells: [
+                { rawText: "一\u3000口蹄疫", plainText: "一\u3000口蹄疫", rowSpan: 2 },
+                { rawText: "牛、豚", plainText: "牛、豚" },
+              ],
+            },
+            { cells: [{ rawText: "馬", plainText: "馬" }] },
+          ],
+          remarks: [{ rawText: "備考の本文。", plainText: "備考の本文。" }],
+        },
+      ]);
+      // 表の文字列は本文にもそのまま残り、表示時に取り除ける部分文字列になっている。
+      expect(node.rawText).toBe(`次の表に掲げる。${node.tables?.[0]?.rawText ?? ""}`);
+      expect(node.plainText).toBe(`次の表に掲げる。 ${node.tables?.[0]?.plainText ?? ""}`);
+      expect(node.rubyAnnotations).toEqual([{ base: "蹄", text: "てい" }]);
+    });
+
+    it("leaves tables of child nodes to the child", () => {
+      const nodes = normalizeLawBody([
+        article("第二条", [
+          paragraph([
+            paragraphSentence("本文。"),
+            item("一", [itemSentence("号の本文。"), tableStruct]),
+          ]),
+        ]),
+      ]);
+
+      expect(findNode(nodes, "Paragraph", "article:2/paragraph:1")).not.toHaveProperty("tables");
+      expect(findNode(nodes, "Item", "article:2/paragraph:1/item:1").tables).toHaveLength(1);
+    });
+
+    it("records how many child nodes precede the table", () => {
+      const nodes = normalizeLawBody([
+        lawTextNode("AppdxTable", [
+          lawTextNode("AppdxTableTitle", ["別表第一"]),
+          item("１"),
+          item("２"),
+          tableStruct,
+        ]),
+      ]);
+
+      expect(findNode(nodes, "AppdxTable", "appdx-table:1").tables).toEqual([
+        expect.objectContaining({ precedingChildCount: 2 }),
+      ]);
+    });
+
+    it("keeps a table containing law nodes as plain text", () => {
+      const nodes = normalizeLawBody([
+        article("第二条", [
+          paragraph([
+            paragraphSentence("本文。"),
+            lawTextNode("TableStruct", [
+              lawTextNode("Table", [
+                lawTextNode("TableRow", [
+                  lawTextNode("TableColumn", [item("一", [itemSentence("欄の中の号。")])]),
+                ]),
+              ]),
+            ]),
+          ]),
+        ]),
+      ]);
+
+      expect(findNode(nodes, "Paragraph", "article:2/paragraph:1")).not.toHaveProperty("tables");
+    });
+  });
 });
