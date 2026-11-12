@@ -623,6 +623,31 @@ describe("normalizeEgovLawText", () => {
       expect(node.rubyAnnotations).toEqual([{ base: "蹄", text: "てい" }]);
     });
 
+    it("separates sentences in a table cell with line breaks", () => {
+      const nodes = normalizeLawBody([
+        lawTextNode("AppdxTable", [
+          lawTextNode("AppdxTableTitle", ["別表第一"]),
+          lawTextNode("TableStruct", [
+            lawTextNode("Table", [
+              lawTextNode("TableRow", [
+                lawTextNode("TableColumn", [
+                  lawTextNode("Sentence", ["次に掲げる区分に応じる。"]),
+                  lawTextNode("Sentence", ["十万円以下のもの\u3000二百円"]),
+                ]),
+              ]),
+            ]),
+          ]),
+        ]),
+      ]);
+
+      expect(findNode(nodes, "AppdxTable", "appdx-table:1").tables?.[0]?.rows[0]?.cells).toEqual([
+        {
+          rawText: "次に掲げる区分に応じる。\n十万円以下のもの\u3000二百円",
+          plainText: "次に掲げる区分に応じる。\n十万円以下のもの\u3000二百円",
+        },
+      ]);
+    });
+
     it("leaves tables of child nodes to the child", () => {
       const nodes = normalizeLawBody([
         article("第二条", [

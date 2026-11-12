@@ -668,7 +668,9 @@ const LawTableBlock = ({
                     rowSpan={cell.rowSpan}
                     colSpan={cell.colSpan}
                     className={cn(
-                      "min-w-[4em] border border-border px-3 py-2 text-left align-top break-words",
+                      // 狭い画面で欄が数文字幅まで潰れないよう最小幅を取り、収まらない分は横スクロールさせる。
+                      // 欄の中の文は改行で区切られているので、改行をそのまま表示する。
+                      "min-w-[7em] border border-border px-3 py-2 text-left align-top break-words whitespace-pre-line",
                       cell.isHeader === true && "bg-muted font-medium",
                     )}
                   >

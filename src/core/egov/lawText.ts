@@ -389,6 +389,23 @@ const toTableText = (node: EgovLawTextNode): LawTableText => ({
   plainText: collectPlainText(node),
 });
 
+// 欄の中の文（Sentence など）は e-Gov の表示と同じく行を分けるため、改行で区切る。
+// 欄の文字列は本文からの除去には使わないので、本文と同じ連結規則に揃える必要はない。
+const tableCellLineSeparator = "\n";
+
+const toTableCellText = (column: EgovLawTextNode): LawTableText => {
+  const lines = column.children.map((child) =>
+    typeof child === "string" ? { rawText: child, plainText: child.trim() } : toTableText(child),
+  );
+  const join = (texts: string[]) =>
+    texts.filter((text) => text !== "").join(tableCellLineSeparator);
+
+  return {
+    rawText: join(lines.map((line) => line.rawText)),
+    plainText: join(lines.map((line) => line.plainText)),
+  };
+};
+
 const findChildren = (node: EgovLawTextNode, tag: string): EgovLawTextNode[] =>
   node.children.filter(
     (child): child is EgovLawTextNode => typeof child !== "string" && child.tag === tag,
@@ -406,7 +423,7 @@ const buildTable = (tableStruct: EgovLawTextNode, precedingChildCount: number): 
         return [
           {
             cells: findChildren(row, "TableHeaderColumn").map((column) => ({
-              ...toTableText(column),
+              ...toTableCellText(column),
               isHeader: true,
             })),
           },
@@ -435,7 +452,7 @@ const buildTableCell = (column: EgovLawTextNode): LawTableCell => {
   const colSpan = parseSpan(column.attr.colspan);
 
   return {
-    ...toTableText(column),
+    ...toTableCellText(column),
     ...(rowSpan === undefined ? {} : { rowSpan }),
     ...(colSpan === undefined ? {} : { colSpan }),
   };
