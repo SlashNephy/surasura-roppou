@@ -41,6 +41,33 @@ export interface RubyAnnotation {
   text: string;
 }
 
+// 表（e-Gov の TableStruct）の文字列。rawText・plainText は、表を含むノードの
+// rawText・plainText に連結されている部分文字列と一致するように同じ規則で作る。
+export interface LawTableText {
+  rawText: string;
+  plainText: string;
+}
+
+export interface LawTableCell extends LawTableText {
+  isHeader?: boolean;
+  rowSpan?: number;
+  colSpan?: number;
+}
+
+export interface LawTableRow {
+  cells: LawTableCell[];
+}
+
+// 表は本文テキストへ平坦化すると欄の区切りが失われるため、行と欄の構造を別に持つ。
+// rawText・plainText（表全体）は、表示時に本文から表の部分を取り除くために使う。
+export interface LawTable extends LawTableText {
+  // 原文で表より前に現れる子ノードの数。表を子ノードの間の正しい位置に描くために使う。
+  precedingChildCount: number;
+  title?: LawTableText;
+  rows: LawTableRow[];
+  remarks: LawTableText[];
+}
+
 export interface LawNode {
   id: string;
   lawId: string;
@@ -59,6 +86,9 @@ export interface LawNode {
   plainText: string;
   normalizedText?: string;
   rubyAnnotations?: RubyAnnotation[];
+  // このノードの本文に直接含まれる表。子ノードに属する表は子ノード側に持たせる。
+  // rawText・plainText にも表の文字列は残すため、検索やハイライトの照合には影響しない。
+  tables?: LawTable[];
   children: string[];
   parentId?: string;
 }

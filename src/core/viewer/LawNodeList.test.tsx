@@ -3,6 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import type { LawNode, LawNodeType } from "@/core/domain";
+import { normalizeEgovLawText } from "@/core/egov";
+import type { EgovLawTextNode } from "@/core/egov";
 
 import { LawNodeList } from "./LawNodeList";
 import {
@@ -1370,5 +1372,149 @@ describe("LawNodeList の編・章参照", () => {
     for (const href of hrefs) {
       expect(container.querySelector(href ?? "")).not.toBeNull();
     }
+  });
+});
+
+describe("LawNodeList の表", () => {
+  const egov = (
+    tag: string,
+    children: (EgovLawTextNode | string)[] = [],
+    attr: EgovLawTextNode["attr"] = {},
+  ): EgovLawTextNode => ({ tag, attr, children });
+  const sentence = (...children: (EgovLawTextNode | string)[]) => egov("Sentence", children);
+  const column = (...children: (EgovLawTextNode | string)[]) =>
+    egov("TableColumn", [sentence(...children)]);
+
+  // 家畜伝染病予防法第二条の形を縮めたもの。項の本文の後に表、続いて号が並ぶ。
+  const tableNodes = normalizeEgovLawText(
+    egov("Law", [
+      egov("LawBody", [
+        egov("MainProvision", [
+          egov("Article", [
+            egov("ArticleCaption", ["（定義）"]),
+            egov("ArticleTitle", ["第二条"]),
+            egov("Paragraph", [
+              egov("ParagraphNum"),
+              egov("ParagraphSentence", [sentence("次の表に掲げるものをいう。")]),
+              egov("TableStruct", [
+                egov("Table", [
+                  egov("TableRow", [column("伝染性疾病の種類"), column("家畜の種類")]),
+                  egov("TableRow", [
+                    column("三\u3000口", egov("Ruby", ["蹄", egov("Rt", ["てい"])]), "疫"),
+                    column("牛、めん羊、山羊、豚"),
+                  ]),
+                  egov("TableRow", [column("二十八\u3000腐蛆病"), column("蜜蜂")]),
+                ]),
+              ]),
+              egov("Item", [
+                egov("ItemTitle", ["一"]),
+                egov("ItemSentence", [sentence("号の本文。")]),
+              ]),
+            ]),
+          ]),
+        ]),
+        // 印紙税法別表第一のように、通則の号が並んだ後に表が続く形。
+        egov("AppdxTable", [
+          egov("AppdxTableTitle", ["別表第一"]),
+          egov("Item", [
+            egov("ItemTitle", ["１"]),
+            egov("ItemSentence", [sentence("通則の本文。")]),
+          ]),
+          egov("TableStruct", [
+            egov("Table", [egov("TableRow", [column("課税物件"), column("税率")])]),
+          ]),
+        ]),
+      ]),
+    ]),
+    "326AC1000000166",
+    "REVISION",
+  );
+
+  it.each(["readable", "original"] as const)(
+    "renders the paragraph table as a grid without repeating its text in the body (%s)",
+    (displayMode) => {
+      const { container } = render(
+        <LawNodeList displayMode={displayMode} lawId="326AC1000000166" nodes={tableNodes} />,
+      );
+
+      const article = screen.getByRole("article", { name: "第二条" });
+      const [paragraphTable] = within(article).getAllByRole("table");
+      const rows = within(paragraphTable).getAllByRole("row");
+
+      expect(rows).toHaveLength(3);
+      expect(
+        within(rows[0])
+          .getAllByRole("cell")
+          .map((cell) => cell.textContent),
+      ).toEqual(["伝染性疾病の種類", "家畜の種類"]);
+      expect(
+        within(rows[2])
+          .getAllByRole("cell")
+          .map((cell) => cell.textContent),
+      ).toEqual(["二十八\u3000腐蛆病", "蜜蜂"]);
+      // ルビは表の欄の中でも復元する。
+      expect(rows[1].querySelector("ruby")?.textContent).toBe("蹄てい");
+      // 表の文字列は本文に残さず、表としてだけ一度描く。
+      expect(container.textContent.split("蜜蜂")).toHaveLength(2);
+      expect(
+        container.querySelector('[data-law-node-id$="article:2/paragraph:1"]')?.textContent,
+      ).toBe("次の表に掲げるものをいう。");
+      // 表の後の号は従来どおり子ノードとして描く。
+      expect(within(article).getByText("号の本文。")).toBeInTheDocument();
+    },
+  );
+
+  it("renders the appendix table under its heading", () => {
+    render(<LawNodeList lawId="326AC1000000166" nodes={tableNodes} />);
+
+    const heading = screen.getByRole("heading", { name: "別表1" });
+    const section = heading.closest("section");
+
+    expect(section).not.toBeNull();
+    if (section === null) {
+      return;
+    }
+
+    expect(
+      within(section)
+        .getAllByRole("cell")
+        .map((cell) => cell.textContent),
+    ).toEqual(["課税物件", "税率"]);
+    expect(section.textContent.split("課税物件")).toHaveLength(2);
+    // 原文どおり、通則の号の後に表を描く。
+    const itemText = within(section).getByText("通則の本文。");
+    const table = within(section).getByRole("table");
+
+    expect(itemText.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("keeps the table as body text when its text is not found in the body", () => {
+    render(
+      <LawNodeList
+        lawId="129AC0000000089"
+        nodes={[
+          node({
+            id: "article:1",
+            type: "Article",
+            path: "article:1",
+            number: "1",
+            title: "第一条",
+            plainText: "本文 甲 乙",
+            tables: [
+              {
+                rawText: "丙丁",
+                plainText: "丙 丁",
+                precedingChildCount: 0,
+                rows: [{ cells: [{ rawText: "丙", plainText: "丙" }] }],
+                remarks: [],
+              },
+            ],
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.getByText("本文 甲 乙")).toBeInTheDocument();
   });
 });
